@@ -1084,7 +1084,7 @@ static inline void fuse_freezer_count(void) {}
 #define fuse_wait_event(wq, condition)						\
 ({										\
 	fuse_freezer_do_not_count();						\
-	wait_event(wq, condition);						\
+	wait_event_freezable(wq, condition);						\
 	fuse_freezer_count();							\
 })
 
