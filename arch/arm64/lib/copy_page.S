@@ -107,3 +107,4 @@ alternative_else_nop_endif
 #endif
 	ret
 ENDPROC(copy_page)
+EXPORT_SYMBOL(copy_page)
