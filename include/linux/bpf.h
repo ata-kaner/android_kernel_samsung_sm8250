@@ -273,9 +273,14 @@ struct bpf_verifier_ops {
 };
 
 struct bpf_prog_offload_ops {
+	/* verifier basic callbacks */
 	int (*insn_hook)(struct bpf_verifier_env *env,
 			 int insn_idx, int prev_insn_idx);
 	int (*finalize)(struct bpf_verifier_env *env);
+	/* verifier optimization callbacks (called after .finalize) */
+	int (*replace_insn)(struct bpf_verifier_env *env, u32 off,
+			    struct bpf_insn *insn);
+	int (*remove_insns)(struct bpf_verifier_env *env, u32 off, u32 cnt);
 };
 
 struct bpf_prog_offload {
@@ -285,6 +290,7 @@ struct bpf_prog_offload {
 	struct list_head	offloads;
 	bool			dev_state;
 	const struct bpf_prog_offload_ops *dev_ops;
+	bool			opt_failed;
 	void			*jited_image;
 	u32			jited_len;
 };
