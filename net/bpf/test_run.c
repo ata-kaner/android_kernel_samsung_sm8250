@@ -384,7 +384,6 @@ int bpf_prog_test_run_flow_dissector(struct bpf_prog *prog,
 	u32 repeat = kattr->test.repeat;
 	struct bpf_flow_keys flow_keys;
 	u64 time_start, time_spent = 0;
-	struct bpf_skb_data_end *cb;
 	const struct ethhdr *eth;
 	u32 retval, duration;
 	void *data;
@@ -405,9 +404,6 @@ int bpf_prog_test_run_flow_dissector(struct bpf_prog *prog,
 		return PTR_ERR(data);
 
 	eth = (struct ethhdr *)data;
-
-	cb = (struct bpf_skb_data_end *)skb->cb;
-	cb->qdisc_cb.flow_keys = &flow_keys;
 
 	if (!repeat)
 		repeat = 1;
