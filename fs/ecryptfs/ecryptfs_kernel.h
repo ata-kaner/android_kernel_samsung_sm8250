@@ -64,7 +64,6 @@
 #define ECRYPTFS_XATTR_NAME "user.ecryptfs"
 
 #define SEC_ECRYPTFS_HMAC_KEY_SIZE   32
-void ecryptfs_dump_auth_tok(struct ecryptfs_auth_tok *auth_tok);
 static inline void
 ecryptfs_to_hex(char *dst, char *src, size_t src_size)
 {
@@ -635,7 +634,13 @@ int ecryptfs_encrypt_and_encode_filename(
 	struct ecryptfs_mount_crypt_stat *mount_crypt_stat,
 	const char *name, size_t name_size);
 struct dentry *ecryptfs_lower_dentry(struct dentry *this_dentry);
+#ifdef CONFIG_DEBUG_KERNEL
+void ecryptfs_dump_auth_tok(struct ecryptfs_auth_tok *auth_tok);
 void ecryptfs_dump_hex(char *data, int bytes);
+#else
+static inline void ecryptfs_dump_auth_tok(struct ecryptfs_auth_tok *auth_tok) {}
+static inline void ecryptfs_dump_hex(char *data, int bytes) {}
+#endif
 int virt_to_scatterlist(const void *addr, int size, struct scatterlist *sg,
 			int sg_size);
 int ecryptfs_compute_root_iv(struct ecryptfs_crypt_stat *crypt_stat);
