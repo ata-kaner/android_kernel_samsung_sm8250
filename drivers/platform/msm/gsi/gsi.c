@@ -2630,7 +2630,7 @@ int gsi_write_channel_scratch2_reg(unsigned long chan_hdl,
 EXPORT_SYMBOL(gsi_write_channel_scratch2_reg);
 
 static void __gsi_read_channel_scratch(unsigned long chan_hdl,
-		union gsi_channel_scratch * val)
+		union gsi_channel_scratch *val)
 {
 	val->data.word1 = gsi_readl(gsi_ctx->base +
 		GSI_EE_n_GSI_CH_k_SCRATCH_0_OFFS(chan_hdl,
