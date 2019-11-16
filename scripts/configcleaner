@@ -1,0 +1,27 @@
+#!/bin/sh
+# ----------------------------------------------------------------------
+# configcleaner 1.0 - removes the input CONFIG values from .config cleanly.
+#
+# Usage : scripts/configupdater "CONFIG_VALUE"
+#
+# Multiple values can be processed with new-line
+# ex:
+#
+# scripts/configcleaner "
+# CONFIG_VALUE1
+# CONFIG_VALUE2
+# CONFIG_VALUE3
+# "
+#
+# (c) 2013 Park Ju Hyung <qkrwngud825@gmail.com>
+# ----------------------------------------------------------------------
+
+cat .config | grep -v "$(
+echo "$@" | while read configcleaner
+do
+if [ ! -z $configcleaner ]; then
+echo "$configcleaner="
+echo "# $configcleaner is not set"
+fi
+done | sed ':a;N;$!ba;s/\n/\\|/g')" > tempconfig
+mv tempconfig .config
