@@ -177,7 +177,6 @@ unsigned int sched_capacity_margin_down_boosted[CPU_NR] = {
 	3658, 3658, 3658, 3658, 3658, 3658, 3658, 3658
 }; /* not used for small cores, 72% margin for big, 72% margin for big+ */
 
-#ifdef CONFIG_SCHED_WALT
 /* 1ms default for 20ms window size scaled to 1024 */
 unsigned int sysctl_sched_min_task_util_for_boost = 51;
 /* 0.68ms default for 20ms window size scaled to 1024 */
@@ -186,7 +185,6 @@ __read_mostly unsigned int sysctl_sched_prefer_spread;
 unsigned int sysctl_walt_rtg_cfs_boost_prio = 99; /* disabled by default */
 unsigned int sysctl_walt_low_latency_task_threshold; /* disabled by default */
 __read_mostly unsigned int sysctl_sched_force_lb_enable = 1;
-#endif
 
 static inline void update_load_add(struct load_weight *lw, unsigned long inc)
 {
@@ -11098,7 +11096,9 @@ no_move:
 				busiest->active_balance = 1;
 				busiest->push_cpu = this_cpu;
 				active_balance = 1;
+#ifdef CONFIG_SCHED_WALT
 				mark_reserved(this_cpu);
+#endif
 			}
 			raw_spin_unlock_irqrestore(&busiest->lock, flags);
 
