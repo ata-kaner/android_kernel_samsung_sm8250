@@ -142,3 +142,8 @@ out/
 *.pyc
 *.out
 zImage
+
+#
+#Ignoring Android.bp link file
+#
+Android.bp
