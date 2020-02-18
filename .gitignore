@@ -141,3 +141,8 @@ out/
 *.gz
 *.pyc
 *.out
+
+#
+#Ignoring Android.bp link file
+#
+Android.bp
