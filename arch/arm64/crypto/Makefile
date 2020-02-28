@@ -12,6 +12,8 @@ ccflags-y += $(DISABLE_LTO_CLANG) $(DISABLE_CFI_CLANG) -fno-data-sections -fno-f
 #FIPS_140_2
 obj-$(CONFIG_CRYPTO_FIPS) += fips140_first_file_asm.o
 
+ccflags-y += -O3
+
 obj-$(CONFIG_CRYPTO_SHA1_ARM64_CE) += sha1-ce.o
 sha1-ce-y := sha1-ce-glue.o sha1-ce-core.o
 
