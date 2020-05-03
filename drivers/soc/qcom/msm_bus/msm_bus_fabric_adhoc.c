@@ -11,7 +11,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <soc/qcom/rpm-smd.h>
-#include <trace/events/trace_msm_bus.h>
 #include "msm_bus_core.h"
 #include "msm_bus_adhoc.h"
 #include "msm_bus_noc.h"
@@ -247,9 +246,6 @@ static int send_rpm_msg(struct msm_bus_node_device_type *ndev, int ctx)
 				 ndev->node_info->mas_rpm_id);
 			goto exit_send_rpm_msg;
 		}
-		trace_bus_agg_bw(ndev->node_info->id,
-			ndev->node_info->mas_rpm_id, rpm_ctx,
-			ndev->node_bw[ctx].sum_ab);
 	}
 
 	if (ndev->node_info->slv_rpm_id != -1) {
@@ -264,9 +260,6 @@ static int send_rpm_msg(struct msm_bus_node_device_type *ndev, int ctx)
 				ndev->node_info->slv_rpm_id);
 			goto exit_send_rpm_msg;
 		}
-		trace_bus_agg_bw(ndev->node_info->id,
-			ndev->node_info->slv_rpm_id, rpm_ctx,
-			ndev->node_bw[ctx].sum_ab);
 	}
 exit_send_rpm_msg:
 	return ret;
@@ -403,6 +396,50 @@ static int msm_bus_agg_fab_clks(struct msm_bus_node_device_type *bus_dev)
 		}
 	}
 	return ret;
+}
+
+static void msm_bus_log_fab_max_votes(struct msm_bus_node_device_type *bus_dev)
+{
+	int ctx;
+	uint32_t vrail_comp = 0;
+	struct msm_bus_node_device_type *node;
+	uint64_t max_ib, max_ib_temp[NUM_CTX];
+
+	for (ctx = 0; ctx < NUM_CTX; ctx++) {
+		max_ib_temp[ctx] = 0;
+		bus_dev->node_bw[ctx].max_ib = 0;
+		bus_dev->node_bw[ctx].max_ab = 0;
+		bus_dev->node_bw[ctx].max_ib_cl_name = NULL;
+		bus_dev->node_bw[ctx].max_ab_cl_name = NULL;
+	}
+
+	list_for_each_entry(node, &bus_dev->devlist, dev_link) {
+		for (ctx = 0; ctx < NUM_CTX; ctx++) {
+			max_ib = node->node_bw[ctx].max_ib;
+			vrail_comp = node->node_bw[ctx].vrail_used;
+
+			if (vrail_comp && (vrail_comp != 100)) {
+				max_ib *= 100;
+				max_ib = msm_bus_div64(vrail_comp, max_ib);
+			}
+
+			if (max_ib > max_ib_temp[ctx]) {
+				max_ib_temp[ctx] = max_ib;
+				bus_dev->node_bw[ctx].max_ib =
+					node->node_bw[ctx].max_ib;
+				bus_dev->node_bw[ctx].max_ib_cl_name =
+					node->node_bw[ctx].max_ib_cl_name;
+			}
+
+			if (node->node_bw[ctx].max_ab >
+					bus_dev->node_bw[ctx].max_ab) {
+				bus_dev->node_bw[ctx].max_ab =
+					node->node_bw[ctx].max_ab;
+				bus_dev->node_bw[ctx].max_ab_cl_name =
+					node->node_bw[ctx].max_ab_cl_name;
+			}
+		}
+	}
 }
 
 int msm_bus_commit_data(struct list_head *clist)
