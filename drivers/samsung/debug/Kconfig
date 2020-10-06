@@ -23,17 +23,16 @@ config SEC_LOG_BUF
 
 if SEC_LOG_BUF
 choice
-	bool "Select sec_log_buf type"
+	prompt "Select sec_log_buf type"
+	default SEC_LOG_BUF_NO_CONSOLE
 
 config SEC_LOG_BUF_NO_CONSOLE
 	bool "Direct copying form __log_buf"
-	default y
 	help
 	  Kernel log will be copied directly from __log_buf.
 
 config SEC_LOG_BUF_CONSOLE
-	bool "Console based implementaion (EXPERIMENTAL)"
-	default n
+	bool "Console based implementation (EXPERIMENTAL)"
 	help
 	  sec_log_buf will be registered as a console.
 

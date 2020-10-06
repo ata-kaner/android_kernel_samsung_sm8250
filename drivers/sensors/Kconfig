@@ -62,8 +62,9 @@ config SENSORS_FW_VENDOR
 	bool "Locate the Firmware on Vendor"
 	default n
 	help
-	  To use the module automatic system, 
+	  To use the module automatic system,
 	  locate the firmware on vendor side.
+
 config SENSORS_SX9360_SUB3
 	depends on I2C
 	tristate "SX9360_SUB3 driver"
@@ -151,7 +152,7 @@ config SENSORS_FW_VENDOR
 	bool "Locate the Firmware on Vendor"
 	default n
 	help
-	  To use the module automatic system, 
+	  To use the module automatic system,
 	  locate the firmware on vendor side.
 
 config SENSOR_A96T3X6_LDO_SHARE

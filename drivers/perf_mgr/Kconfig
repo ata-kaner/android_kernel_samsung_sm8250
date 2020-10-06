@@ -1,8 +1,9 @@
-menu "samsung Performace manager"
+menu "samsung Performance manager"
 
 config PERF_MGR
-        tristate "performance manager Driver"
-        default n
-        help
-            samsung performance manager driver
+		tristate "performance manager Driver"
+		default n
+		help
+		  samsung performance manager driver
+
 endmenu
