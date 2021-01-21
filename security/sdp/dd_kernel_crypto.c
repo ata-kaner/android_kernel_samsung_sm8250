@@ -495,8 +495,8 @@ static int get_dd_file_key(struct dd_crypt_context *crypt_context,
 
 	dd_dump("ddar file key", raw_key, mode->keysize);
 out:
-    if (rc)
-        dd_error("file key derivation failed\n");
+	if (rc)
+		dd_error("file key derivation failed\n");
 
 	crypto_free_aead(key_aead);
 	if (cipher_file_encryption_key) kfree(cipher_file_encryption_key);
@@ -585,9 +585,9 @@ int dd_sec_crypt_page(struct dd_info *info, dd_crypto_direction_t rw,
 	sg_set_page(&src, src_page, PAGE_SIZE, 0);
 	skcipher_request_set_crypt(req, &src, &dst, PAGE_SIZE, iv);
 	if (rw == DD_DECRYPT)
-	    rc = crypto_wait_req(crypto_skcipher_decrypt(req), &wait);
+		rc = crypto_wait_req(crypto_skcipher_decrypt(req), &wait);
 	else
-	    rc = crypto_wait_req(crypto_skcipher_encrypt(req), &wait);
+		rc = crypto_wait_req(crypto_skcipher_encrypt(req), &wait);
 
 	skcipher_request_free(req);
 	if (rc) {
@@ -599,12 +599,12 @@ int dd_sec_crypt_page(struct dd_info *info, dd_crypto_direction_t rw,
 
 int dd_sec_crypt_bio_pages(struct dd_info *info, struct bio *orig,
 		struct bio *clone, dd_crypto_direction_t rw) {
-    struct bvec_iter iter_backup;
-    int rc = 0;
+	struct bvec_iter iter_backup;
+	int rc = 0;
 
 	BUG_ON(rw == DD_ENCRYPT && !clone);
-    // back up bio iterator. restore before submitting it to block layer
-    memcpy(&iter_backup, &orig->bi_iter, sizeof(struct bvec_iter));
+	// back up bio iterator. restore before submitting it to block layer
+	memcpy(&iter_backup, &orig->bi_iter, sizeof(struct bvec_iter));
 
 	while (orig->bi_iter.bi_size) {
 		if (rw == DD_ENCRYPT) {
@@ -622,11 +622,11 @@ int dd_sec_crypt_bio_pages(struct dd_info *info, struct bio *orig,
 			}
 			dd_dump("dd_crypto_bio_pages::encryption finished", page_address(ciphertext_page), PAGE_SIZE);
 
-            bio_advance_iter(orig, &orig->bi_iter, 1 << PAGE_SHIFT);
-            bio_advance_iter(clone, &clone->bi_iter, 1 << PAGE_SHIFT);
+			bio_advance_iter(orig, &orig->bi_iter, 1 << PAGE_SHIFT);
+			bio_advance_iter(clone, &clone->bi_iter, 1 << PAGE_SHIFT);
 		} else {
-            struct bio_vec orig_bv = bio_iter_iovec(orig, orig->bi_iter);
-            struct page *ciphertext_page = orig_bv.bv_page;
+			struct bio_vec orig_bv = bio_iter_iovec(orig, orig->bi_iter);
+			struct page *ciphertext_page = orig_bv.bv_page;
 
 			BUG_ON(info->ino != orig_bv.bv_page->mapping->host->i_ino);
 			dd_dump("dd_crypto_bio_pages::decryption start", page_address(ciphertext_page), PAGE_SIZE);
@@ -637,13 +637,13 @@ int dd_sec_crypt_bio_pages(struct dd_info *info, struct bio *orig,
 			}
 			dd_dump("dd_crypto_bio_pages::decryption finished", page_address(ciphertext_page), PAGE_SIZE);
 
-            bio_advance_iter(orig, &orig->bi_iter, 1 << PAGE_SHIFT);
+			bio_advance_iter(orig, &orig->bi_iter, 1 << PAGE_SHIFT);
 		}
-    }
+	}
 
-    memcpy(&orig->bi_iter, &iter_backup, sizeof(struct bvec_iter));
-    if (rw == DD_ENCRYPT)
-        memcpy(&clone->bi_iter, &iter_backup, sizeof(struct bvec_iter));
+	memcpy(&orig->bi_iter, &iter_backup, sizeof(struct bvec_iter));
+	if (rw == DD_ENCRYPT)
+		memcpy(&clone->bi_iter, &iter_backup, sizeof(struct bvec_iter));
 
 	return 0;
 }
