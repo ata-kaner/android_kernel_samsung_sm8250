@@ -3365,10 +3365,10 @@ void ss_send_ub_uevent(struct samsung_display_driver_data *vdd)
 
 	LCD_INFO("[%s] send uvent \n", vdd->ndx == PRIMARY_DISPLAY_NDX ? "UB_CONNECT" : "UB_CONNECT_SUB");
 
-    if (vdd->ndx == PRIMARY_DISPLAY_NDX)
-        kobject_uevent_env(&vdd->lcd_dev->dev.kobj, KOBJ_CHANGE, envp);
-    else
-        kobject_uevent_env(&vdd->lcd_dev->dev.kobj, KOBJ_CHANGE, envp_sub);
+	if (vdd->ndx == PRIMARY_DISPLAY_NDX)
+		kobject_uevent_env(&vdd->lcd_dev->dev.kobj, KOBJ_CHANGE, envp);
+	else
+		kobject_uevent_env(&vdd->lcd_dev->dev.kobj, KOBJ_CHANGE, envp_sub);
 
 	return;
 }

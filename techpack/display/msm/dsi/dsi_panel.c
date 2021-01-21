@@ -576,9 +576,9 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 		gpio_set_value(panel->reset_config.disp_en_gpio, 0);
 
 #if defined(CONFIG_DISPLAY_SAMSUNG)
-    if (vdd->dtsi_data.samsung_dsi_off_reset_delay)
-        usleep_range(vdd->dtsi_data.samsung_dsi_off_reset_delay,
-                vdd->dtsi_data.samsung_dsi_off_reset_delay);
+	if (vdd->dtsi_data.samsung_dsi_off_reset_delay)
+		usleep_range(vdd->dtsi_data.samsung_dsi_off_reset_delay,
+				vdd->dtsi_data.samsung_dsi_off_reset_delay);
 
 	/*
 		AOT disable on factory binary.
