@@ -102,7 +102,7 @@ struct ak09970_digital_hall_data {
 };
 static struct ak09970_digital_hall_data *pdata;
 
-void init_digital_hall_data()
+void init_digital_hall_data(void)
 {
 	int i;
 
