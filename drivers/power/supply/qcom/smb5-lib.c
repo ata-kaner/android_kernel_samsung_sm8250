@@ -3449,7 +3449,7 @@ int smblib_get_prop_usb_voltage_now(struct smb_charger *chg,
 {
 	union power_supply_propval pval = {0, };
 	int rc, ret = 0;
-	u8 reg, adc_ch_reg;
+	u8 reg, adc_ch_reg = 0;
 
 	mutex_lock(&chg->adc_lock);
 
@@ -7184,7 +7184,7 @@ static void smblib_pr_swap_detach_work(struct work_struct *work)
 	struct smb_charger *chg = container_of(work, struct smb_charger,
 						pr_swap_detach_work.work);
 	int rc;
-	u8 stat;
+	u8 stat = 0;
 
 	rc = smblib_read(chg, TYPE_C_STATE_MACHINE_STATUS_REG, &stat);
 	if (rc < 0) {
