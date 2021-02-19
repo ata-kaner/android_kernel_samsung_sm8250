@@ -13,23 +13,23 @@ config GPS_BCM4752
 config GPS_BCM47521
     tristate "GPS_BCM47521 Broadcom GNSS chipset support"
 	default n
-        help
+	help
 	  Say yes here to support for Broadcom GPS_BCM47521 chipset.
 
 config GPS_BCM4753
     tristate "GPS_BCM4753 Broadcom GNSS chipset support"
 	default n
-        help
+	help
 	  Say yes here to support for Broadcom GPS_BCM4753 chipset.
 
 config GPS_BCM47531
     tristate "GPS_BCM47531 Broadcom GNSS chipset support"
 	default n
-        help
+	help
 	  Say yes here to support for Broadcom GPS_BCM47531 chipset.
 
 config GPS_BCM4773
     tristate "GPS_BCM4773 Broadcom GNSS chipset support"
 	default n
-        help
+	help
 	  Say yes here to support for Broadcom GPS_BCM4773 chipset.
