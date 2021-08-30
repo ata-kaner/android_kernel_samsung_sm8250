@@ -124,8 +124,6 @@ source "drivers/staging/gasket/Kconfig"
 
 source "drivers/staging/axis-fifo/Kconfig"
 
-source "drivers/staging/erofs/Kconfig"
-
 source "drivers/staging/samsung/sec_notifier/Kconfig"
 
 source "drivers/staging/sti/Kconfig"
