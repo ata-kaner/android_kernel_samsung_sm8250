@@ -25,7 +25,7 @@ msm_kgsl_core-$(CONFIG_QCOM_KGSL_IOMMU) += kgsl_iommu.o
 #msm_kgsl_core-$(CONFIG_DEBUG_FS) += kgsl_debugfs.o
 msm_kgsl_core-$(CONFIG_SYNC_FILE) += kgsl_sync.o
 msm_kgsl_core-$(CONFIG_COMPAT) += kgsl_compat.o
-msm_kgsl_core-$(CONFIG_PROCESS_RECLAIM) += kgsl_reclaim.o
+msm_kgsl_core-$(CONFIG_KGSL_PROCESS_RECLAIM) += kgsl_reclaim.o
 
 msm_adreno-y += \
 	adreno_ioctl.o \

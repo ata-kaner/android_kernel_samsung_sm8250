@@ -13,7 +13,7 @@
 /* Process foreground/background state. Set if process is in foreground */
 #define KGSL_PROC_STATE 1
 
-#ifdef CONFIG_PROCESS_RECLAIM
+#ifdef CONFIG_KGSL_PROCESS_RECLAIM
 int kgsl_reclaim_init(struct kgsl_device *device);
 void kgsl_reclaim_close(void);
 int kgsl_reclaim_to_pinned_state(struct kgsl_process_private *priv);

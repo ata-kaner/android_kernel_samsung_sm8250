@@ -26,3 +26,6 @@ config QCOM_ADRENO_DEFAULT_GOVERNOR
 config QCOM_KGSL_IOMMU
 	bool
 	default y if QCOM_KGSL && (MSM_IOMMU || ARM_SMMU)
+
+config KGSL_PROCESS_RECLAIM
+	bool "QCOM Retardness"
