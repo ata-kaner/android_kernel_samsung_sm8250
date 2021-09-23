@@ -726,7 +726,8 @@ else
 KBUILD_CFLAGS	+= -O2
 ifeq ($(CONFIG_LTO_CLANG),y)
 ifeq ($(CONFIG_LD_IS_LLD), y)
-LDFLAGS += --lto-O2
+KBUILD_LDFLAGS	+= -O3 --lto-O3
+LDFLAGS	+= -O3 --lto-O3
 endif
 endif
 endif
