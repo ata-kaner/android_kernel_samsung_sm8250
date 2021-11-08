@@ -886,7 +886,6 @@ static ssize_t get_lp_dump(struct device *dev, struct device_attribute *attr, ch
 				snprintf(ibuff, sizeof(ibuff), "%03d: %04x%04x%04x%04x%04x\n",
 						i + (info->sponge_dump_event * dump_area),
 						edata[0], edata[1], edata[2], edata[3], edata[4]);
-				sec_tsp_sponge_log(ibuff);
 			}
 		}
 
