@@ -638,7 +638,7 @@ static struct region_ops rc_region_ops = {
 	.evict = rc_evict_cb
 };
 
-static int __init rc_sysfs_init(void);
+static int rc_sysfs_init(void);
 
 int init_rbincache(unsigned long pfn, unsigned long nr_pages)
 {
@@ -743,7 +743,7 @@ static struct attribute_group rc_attr_group = {
 	.name = "rbincache",
 };
 
-static int __init rc_sysfs_init(void)
+static int rc_sysfs_init(void)
 {
 	int err;
 
@@ -755,16 +755,16 @@ static int __init rc_sysfs_init(void)
 	return 0;
 }
 
-static void __exit rc_sysfs_exit(void)
+static void rc_sysfs_exit(void)
 {
 	sysfs_remove_group(mm_kobj, &rc_attr_group);
 }
 #else
-static int __init rc_sysfs_init(void)
+static int rc_sysfs_init(void)
 {
 	return 0;
 }
-static void __exit rc_sysfs_exit(void)
+static void rc_sysfs_exit(void)
 {
 }
 #endif
