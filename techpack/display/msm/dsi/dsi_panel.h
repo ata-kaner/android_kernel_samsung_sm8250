@@ -229,6 +229,8 @@ struct dsi_panel {
 #endif
     struct brightness_alpha_pair *fod_dim_lut;
 	unsigned int fod_dim_lut_len;
+	u8 fod_dim_alpha;
+	bool fod_hbm_enabled;
 
 	enum dsi_dms_mode dms_mode;
 
