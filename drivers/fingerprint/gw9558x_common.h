@@ -19,14 +19,12 @@
 #include <linux/version.h>
 #include <linux/pm_qos.h>
 #include <linux/cpufreq.h>
-#ifdef ENABLE_SENSORS_FPRINT_SECURE
 #include <linux/clk.h>
 #include <linux/pm_runtime.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_dma.h>
 #include <linux/amba/bus.h>
-#endif
 #include <linux/of.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
@@ -45,24 +43,6 @@
 #define GF_DEV_MAJOR 0	/* assigned */
 #define GF_CLASS_NAME "goodix_fp"
 
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-struct gf_ioc_transfer {
-	u8 cmd;    /* spi read = 0, spi  write = 1 */
-	u8 reserved;
-	u16 addr;
-	u32 len;
-	u8 *buf;
-};
-
-struct gf_ioc_transfer_raw {
-	u32 len;
-	u8 *read_buf;
-	u8 *write_buf;
-	uint32_t high_time;
-	uint32_t bits_per_word;
-};
-#endif
-
 /* define commands */
 #define GF_IOC_INIT             		_IOR(GF_IOC_MAGIC, 0, u8)
 #define GF_IOC_RESET            		_IO(GF_IOC_MAGIC, 2)
@@ -71,12 +51,7 @@ struct gf_ioc_transfer_raw {
 #define GF_IOC_ENABLE_POWER     		_IO(GF_IOC_MAGIC, 7)
 #define GF_IOC_DISABLE_POWER 			_IO(GF_IOC_MAGIC, 8)
 #define GF_IOC_GET_FW_INFO 				_IOR(GF_IOC_MAGIC, 11, u8)
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-#define GF_IOC_TRANSFER_CMD 			_IOWR(GF_IOC_MAGIC, 15, struct gf_ioc_transfer)
-#define GF_IOC_TRANSFER_RAW_CMD 		_IOWR(GF_IOC_MAGIC, 16, struct gf_ioc_transfer_raw)
-#else
 #define GF_IOC_SET_SENSOR_TYPE 			_IOW(GF_IOC_MAGIC, 18, unsigned int)
-#endif
 #define GF_IOC_POWER_CONTROL 			_IOW(GF_IOC_MAGIC, 19, unsigned int)
 #define GF_IOC_SPEEDUP 					_IOW(GF_IOC_MAGIC, 20, unsigned int)
 #define GF_MODEL_INFO 					_IOR(GF_IOC_MAGIC, 23, unsigned int)
@@ -107,16 +82,9 @@ struct gf_device {
 	struct work_struct work_debug;
 	struct workqueue_struct *wq_dbg;
 	struct timer_list dbg_timer;
-#ifdef ENABLE_SENSORS_FPRINT_SECURE
 	bool enabled_clk;
 	struct clk *fp_spi_pclk;
 	struct clk *fp_spi_sclk;
-#else
-	u8 *spi_buffer;
-	u8 *tx_buf;
-	u8 *rx_buf;
-	struct mutex buf_lock;
-#endif
 	u32 spi_speed;
 	int sensortype;
 	int reset_count;
@@ -147,18 +115,5 @@ int gw9558_pin_control(struct gf_device *gf_dev, bool pin_set);
 int gw9558_register_platform_variable(struct gf_device *gf_dev);
 int gw9558_unregister_platform_variable(struct gf_device *gf_dev);
 int gw9558_set_cpu_speedup(struct gf_device *gf_dev, int onoff);
-
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-int gw9558_spi_read_bytes(struct gf_device *gf_dev, u16 addr,
-		u32 data_len, u8 *rx_buf);
-int gw9558_spi_write_bytes(struct gf_device *gf_dev, u16 addr,
-		u32 data_len, u8 *tx_buf);
-int gw9558_spi_read_byte(struct gf_device *gf_dev, u16 addr, u8 *value);
-int gw9558_spi_write_byte(struct gf_device *gf_dev, u16 addr, u8 value);
-int gw9558_ioctl_transfer_raw_cmd(struct gf_device *gf_dev,
-		unsigned long arg, unsigned int bufsiz);
-int gw9558_init_buffer(struct gf_device *gf_dev);
-int gw9558_free_buffer(struct gf_device *gf_dev);
-#endif
 
 #endif	/* __GF_SPI_DRIVER_H */

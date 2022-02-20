@@ -469,7 +469,6 @@ static inline void in6_ifa_hold(struct inet6_ifaddr *ifp)
 	refcount_inc(&ifp->refcnt);
 }
 
-
 /*
  *	compute link-local solicited-node multicast address
  */
