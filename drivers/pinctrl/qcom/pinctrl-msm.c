@@ -664,11 +664,9 @@ bool msm_gpio_is_valid(int gpionum)
 	if (gpionum < 0 || gpionum >= total_pin_count)
 		return 0;
 
-#ifdef ENABLE_SENSORS_FPRINT_SECURE
 	if (gpionum >= CONFIG_SENSORS_FP_SPI_GPIO_START
 			&& gpionum <= CONFIG_SENSORS_FP_SPI_GPIO_END)
 		return 0;
-#endif
 #ifdef CONFIG_ESE_SECURE
         if (gpionum >= CONFIG_ESE_SPI_GPIO_START
                         && gpionum <= CONFIG_ESE_SPI_GPIO_END)
