@@ -97,7 +97,6 @@ endif
 LOG_ENABLE = TRUE
 
 ifeq "$(LOG_ENABLE)" "TRUE"
-  $(warning LOG_ENABLE=$(LOG_ENABLE))
   ccflags-y += -DVL53L5_KERNEL_LOG
 endif
 
@@ -127,11 +126,6 @@ ifeq "$(BUILD_TYPE)" "DEBUG"
   $(warning BUILD_TYPE=$(BUILD_TYPE))
   ccflags-y += -DDEBUG
 endif
-
-ifeq "$(BUILD_TYPE)" "RELEASE"
-  $(warning BUILD_TYPE=$(BUILD_TYPE))
-endif
-
 
 KERNEL_DRIVER_OBJS = \
 			src/vl53l5_k_ioctl_controls.o \
@@ -180,9 +174,7 @@ ifeq "$(RANGE_SERVICING)" "WORKER"
 endif
 
 ifeq "$(LOG_ENABLE)" "TRUE"
-  $(warning LOG_ENABLE=$(LOG_ENABLE))
   ccflags-y += -DVL53L5_KERNEL_LOG
-
 endif
 
 ifeq "$(TCDM_DUMP_ENABLE)" "TRUE"
