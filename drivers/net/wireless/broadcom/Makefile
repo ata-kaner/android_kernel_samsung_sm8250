@@ -10,8 +10,6 @@ CONFIG_BCM4389=y
 CONFIG_BCM4375=n
 endif
 endif
-$(warning CONFIG_BCM4389 = $(CONFIG_BCM4389))
-$(warning CONFIG_BCM4375 = $(CONFIG_BCM4375))
 
 ifeq ($(CONFIG_BCM4389),y)
 obj-$(CONFIG_BCM4389)   += bcmdhd_101_10/

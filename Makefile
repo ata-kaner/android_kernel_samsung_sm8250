@@ -1020,28 +1020,6 @@ CHECKFLAGS += $(if $(CONFIG_CPU_BIG_ENDIAN),-mbig-endian,-mlittle-endian)
 # the checker needs the correct machine size
 CHECKFLAGS += $(if $(CONFIG_64BIT),-m64,-m32)
 
-USE_SECGETSPF := $(shell echo $(PATH))
-ifneq ($(findstring buildscript/build_common/core/bin, $(USE_SECGETSPF)),)
-  ifneq ($(shell secgetspf SEC_PRODUCT_FEATURE_BIOAUTH_CONFIG_FINGERPRINT_TZ), false)
-    ifeq ($(CONFIG_SENSORS_FINGERPRINT), y)
-      ifneq ($(SEC_FACTORY_BUILD), true)
-        export KBUILD_FP_SENSOR_CFLAGS := -DENABLE_SENSORS_FPRINT_SECURE
-      endif
-    endif
-  endif
-else
-  ifeq ($(CONFIG_SENSORS_FINGERPRINT), y)
-    ifneq ($(SEC_FACTORY_BUILD), true)
-      export KBUILD_FP_SENSOR_CFLAGS := -DENABLE_SENSORS_FPRINT_SECURE
-    endif
-  endif
-endif
-ifneq ($(shell secgetspf SEC_PRODUCT_FEATURE_COMMON_CONFIG_SEP_VERSION),)
-      SEP_MAJOR_VERSION := $(shell secgetspf SEC_PRODUCT_FEATURE_COMMON_CONFIG_SEP_VERSION | cut -f1 -d.)
-      SEP_MINOR_VERSION := $(shell secgetspf SEC_PRODUCT_FEATURE_COMMON_CONFIG_SEP_VERSION | cut -f2 -d.)
-      export KBUILD_SEP_VERSION := -DSEP_KVERSION=$(SEP_MAJOR_VERSION)$(SEP_MINOR_VERSION)
-endif
-
 # Default kernel image to build when no specific target is given.
 # KBUILD_IMAGE may be overruled on the command line or
 # set in the environment

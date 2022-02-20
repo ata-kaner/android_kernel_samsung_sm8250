@@ -138,15 +138,6 @@ static long gw9558_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			retval = -EFAULT;
 		}
 		break;
-
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-	case GF_IOC_TRANSFER_RAW_CMD:
-		mutex_lock(&gf_dev->buf_lock);
-		retval = gw9558_ioctl_transfer_raw_cmd(gf_dev, arg, (unsigned int)TANSFER_MAX_LEN);
-		mutex_unlock(&gf_dev->buf_lock);
-		break;
-#endif /* !ENABLE_SENSORS_FPRINT_SECURE */
-#ifdef ENABLE_SENSORS_FPRINT_SECURE
 	case GF_IOC_SET_SENSOR_TYPE:
 		if (copy_from_user(&onoff, (void __user *)arg,
 				   sizeof(onoff)) != 0) {
@@ -167,7 +158,6 @@ static long gw9558_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			gf_dev->sensortype = SENSOR_UNKNOWN;
 		}
 		break;
-#endif
 	case GF_IOC_SPEEDUP:
 		if (copy_from_user(&onoff, (void __user *)arg,
 				   sizeof(onoff)) != 0) {
@@ -287,11 +277,7 @@ static void gw9558_disable_debug_timer(struct gf_device *gf_dev)
 	cancel_work_sync(&g_data->work_debug);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
-static void gw9558_timer_func(unsigned long ptr)
-#else
 static void gw9558_timer_func(struct timer_list *t)
-#endif
 {
 	queue_work(g_data->wq_dbg, &g_data->work_debug);
 	mod_timer(&g_data->dbg_timer,
@@ -300,11 +286,7 @@ static void gw9558_timer_func(struct timer_list *t)
 
 static int gw9558_set_timer(struct gf_device *gf_dev)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
-	setup_timer(&gf_dev->dbg_timer, gw9558_timer_func, (unsigned long)gf_dev);
-#else
 	timer_setup(&gf_dev->dbg_timer, gw9558_timer_func, 0);
-#endif
 	gf_dev->wq_dbg = create_singlethread_workqueue("gw9558_debug_wq");
 	if (!gf_dev->wq_dbg) {
 		pr_err("could not create workqueue\n");
@@ -452,19 +434,6 @@ int gw9558_get_gpio_dts_info(struct device *dev, struct gf_device *gf_dev)
 		pr_err("failed pinctrl_get\n");
 		return -EINVAL;
 	}
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-	gf_dev->pins_poweroff = pinctrl_lookup_state(gf_dev->p, "pins_poweroff");
-	if (IS_ERR(gf_dev->pins_poweroff)) {
-		pr_err("could not get pins sleep_state (%li)\n",
-			PTR_ERR(gf_dev->pins_poweroff));
-	}
-
-	gf_dev->pins_poweron = pinctrl_lookup_state(gf_dev->p, "pins_poweron");
-	if (IS_ERR(gf_dev->pins_poweron)) {
-		pr_err("could not get pins idle_state (%li)\n",
-			PTR_ERR(gf_dev->pins_poweron));
-	}
-#endif
 	return retval;
 }
 
@@ -483,43 +452,6 @@ void gw9558_cleanup_info(struct gf_device *gf_dev)
 		pr_debug("remove regulator\n");
 	}
 }
-
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-int gw9558_type_check(struct gf_device *gf_dev)
-{
-	int retval = -ENODEV;
-	unsigned char mcuid[4] = {0x00, 0x00, 0x00, 0x00};
-	u32 mcuid32 = 0;
-
-	gw9558_hw_power_enable(gf_dev, 1);
-	usleep_range(4950, 5000);
-	gw9558_hw_reset(gf_dev, 50);
-
-	gw9558_spi_read_bytes(gf_dev, 0x0000, 4, mcuid);
-	mcuid32 = (mcuid[2] << 24 | mcuid[3] << 16 |
-			mcuid[0] << 8 | mcuid[1]);
-	pr_info("Sensor read : %x %x %x %x\n",
-			mcuid[0], mcuid[1], mcuid[2], mcuid[3]);
-	pr_info("Sensor read : 0x%8x\n", mcuid32);
-	if (mcuid32 == G3_MCU_ID) {
-		gf_dev->sensortype = SENSOR_GOODIXOPTICAL;
-		pr_info("sensor type is G3 %s\n",
-				sensor_status[gf_dev->sensortype + 2]);
-		retval = 0;
-	} else if (mcuid32 == GX_MCU_ID) {
-		gf_dev->sensortype = SENSOR_GOODIXOPTICAL;
-		pr_info("sensor type is G3X %s\n",
-				sensor_status[gf_dev->sensortype + 2]);
-		retval = 0;
-	} else {
-		gf_dev->sensortype = SENSOR_FAILED;
-		pr_err("sensor type is FAILED 0x%8x\n", mcuid32);
-	}
-	gw9558_hw_power_enable(gf_dev, 0);
-
-	return retval;
-}
-#endif
 
 static ssize_t gw9558_bfs_values_show(struct device *dev,
 				      struct device_attribute *attr, char *buf)
@@ -642,9 +574,7 @@ static struct device_attribute *fp_attrs[] = {
 static int gw9558_probe_common(struct device *dev, struct gf_device *gf_dev)
 {
 	int retval = -EINVAL;
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-	int retry = 0;
-#endif
+
 	pr_info("Entry\n");
 
 	spin_lock_init(&gf_dev->spi_lock);
@@ -709,16 +639,6 @@ static int gw9558_probe_common(struct device *dev, struct gf_device *gf_dev)
 		pr_info("device create success.\n");
 	}
 
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-	do {
-		retval = gw9558_type_check(gf_dev);
-		pr_info("type (%u), retry (%d)\n", gf_dev->sensortype, retry);
-	} while (!gf_dev->sensortype && ++retry < 3);
-
-	if (retval == -ENODEV)
-		pr_err("type_check failed\n");
-#endif
-
 	/* create sysfs */
 	retval = fingerprint_register(gf_dev->fp_device,
 		gf_dev, fp_attrs, "fingerprint");
@@ -765,7 +685,6 @@ gw9558_probe_get_gpio:
 	return retval;
 }
 
-#ifdef ENABLE_SENSORS_FPRINT_SECURE
 static int gw9558_probe(struct platform_device *pdev)
 {
 	int retval = 0;
@@ -795,62 +714,6 @@ gw9558_platform_probe_failed:
 	pr_err("is failed : %d\n", retval);
 	return retval;
 }
-#else
-static int gw9558_probe(struct spi_device *spi)
-{
-	int retval = 0;
-	struct gf_device *gf_dev;
-
-	pr_info("spi_driver Entry\n");
-	/* Allocate driver data */
-	gf_dev = kzalloc(sizeof(struct gf_device), GFP_KERNEL);
-	if (!gf_dev)
-		return -ENOMEM;
-
-	spi->mode = SPI_MODE_0;
-	spi->max_speed_hz = GW9558_SPI_BAUD_RATE;
-	spi->bits_per_word = 8;
-	gf_dev->spi_speed = GW9558_SPI_BAUD_RATE;
-	gf_dev->prev_bits_per_word = 8;
-	gf_dev->tz_mode = false;
-	gf_dev->spi = spi;
-	spi_set_drvdata(spi, gf_dev);
-	mutex_init(&gf_dev->buf_lock);
-
-	if (spi_setup(gf_dev->spi)) {
-		pr_err("failed to setup spi conf\n");
-		goto gw9558_spi_probe_spi_setup;
-	} else {
-		pr_info("setup spi success.\n");
-	}
-
-	/* init transfer buffer */
-	retval = gw9558_init_buffer(gf_dev);
-	if (retval < 0) {
-		pr_err("Failed to Init transfer buffer.\n");
-		goto gw9558_spi_probe_transfer_buffer_init;
-	}
-
-	retval = gw9558_probe_common(&spi->dev, gf_dev);
-	if(retval)
-		goto gw9558_spi_probe_failed;
-
-	pr_info("is successful\n");
-	return retval;
-
-gw9558_spi_probe_failed:
-	gw9558_free_buffer(gf_dev);
-gw9558_spi_probe_transfer_buffer_init:
-gw9558_spi_probe_spi_setup:
-	mutex_destroy(&gf_dev->buf_lock);
-	spi_set_drvdata(spi, NULL);
-	gf_dev->spi = NULL;
-	kfree(gf_dev);
-	gf_dev = NULL;
-	pr_err("is failed : %d\n", retval);
-	return retval;
-}
-#endif
 
 static int gw9558_remove_common(struct device *dev)
 {
@@ -873,7 +736,6 @@ static int gw9558_remove_common(struct device *dev)
 	return 0;
 }
 
-#ifdef ENABLE_SENSORS_FPRINT_SECURE
 static int gw9558_remove(struct platform_device *pdev)
 {
 	struct gf_device *gf_dev = dev_get_drvdata(&pdev->dev);
@@ -884,24 +746,6 @@ static int gw9558_remove(struct platform_device *pdev)
 	gf_dev = NULL;
 	return 0;
 }
-#else
-static int gw9558_remove(struct spi_device *spi)
-{
-	struct gf_device *gf_dev = spi_get_drvdata(spi);
-
-	gw9558_free_buffer(gf_dev);
-	gw9558_remove_common(&spi->dev);
-
-	mutex_destroy(&gf_dev->buf_lock);
-	spin_lock_irq(&gf_dev->spi_lock);
-	spi_set_drvdata(spi, NULL);
-	gf_dev->spi = NULL;
-	spin_unlock_irq(&gf_dev->spi_lock);
-	kfree(gf_dev);
-	gf_dev = NULL;
-	return 0;
-}
-#endif
 
 static int gw9558_pm_suspend(struct device *dev)
 {
@@ -926,16 +770,9 @@ static const struct dev_pm_ops gw9558_pm_ops = {
 	.resume = gw9558_pm_resume
 };
 
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-static struct spi_driver gw9558_spi_driver = {
-#else
 static struct platform_driver gw9558_spi_driver = {
-#endif
 	.driver = {
 		.name = GF_DEV_NAME,
-/*#ifndef ENABLE_SENSORS_FPRINT_SECURE
-		.bus = &spi_bus_type,
-#endif*/
 		.owner = THIS_MODULE,
 		.pm = &gw9558_pm_ops,
 		.of_match_table = gw9558_of_match,
@@ -949,11 +786,7 @@ static int __init gw9558_init(void)
 	int retval = 0;
 
 	pr_info("Entry\n");
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-	retval = spi_register_driver(&gw9558_spi_driver);
-#else
 	retval = platform_driver_register(&gw9558_spi_driver);
-#endif
 	if (retval < 0) {
 		pr_err("Failed to register SPI driver.\n");
 		return -EINVAL;
@@ -965,11 +798,7 @@ module_init(gw9558_init);
 static void __exit gw9558_exit(void)
 {
 	pr_info("Entry\n");
-#ifndef ENABLE_SENSORS_FPRINT_SECURE
-	spi_unregister_driver(&gw9558_spi_driver);
-#else
 	platform_driver_unregister(&gw9558_spi_driver);
-#endif
 }
 module_exit(gw9558_exit);
 
