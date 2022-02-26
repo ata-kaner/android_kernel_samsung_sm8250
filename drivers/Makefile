@@ -224,9 +224,6 @@ obj-$(CONFIG_ICD)		+= security/samsung/icdrv/
 # uH
 obj-$(CONFIG_UH)        += uh/
 
-# OLOG
-obj-y				+= kperfmon/
-
 # streamline
 ifeq ($(CONFIG_GATOR), y)
 	obj-$(CONFIG_GATOR)				+= gator/
