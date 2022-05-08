@@ -5865,18 +5865,11 @@ static struct snd_soc_ops msm_fe_qos_ops = {
 
 static int msm_ull_fe_qos_prepare(struct snd_pcm_substream *substream)
 {
-	cpumask_t mask;
-
 	if (pm_qos_request_active(&substream->latency_pm_qos_req))
 		pm_qos_remove_request(&substream->latency_pm_qos_req);
 
 	pr_info("%s:\n", __func__);
-	cpumask_clear(&mask);
-	cpumask_set_cpu(0, &mask); /* affine to core 0 */
-	cpumask_set_cpu(1, &mask); /* affine to core 1 */
-	cpumask_set_cpu(2, &mask); /* affine to core 2 */
-	cpumask_set_cpu(3, &mask); /* affine to core 3 */
-	cpumask_copy(&substream->latency_pm_qos_req.cpus_affine, &mask);
+	atomic_set(&substream->latency_pm_qos_req.cpus_affine, BIT(0) | BIT(1) | BIT(2) | BIT(3));
 
 	substream->latency_pm_qos_req.type = PM_QOS_REQ_AFFINE_CORES;
 
