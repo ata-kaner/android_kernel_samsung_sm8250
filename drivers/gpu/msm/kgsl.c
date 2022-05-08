@@ -5395,11 +5395,7 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 #ifdef CONFIG_SMP
 #ifdef CONFIG_DISPLAY_SAMSUNG
 	device->pwrctrl.pm_qos_req_dma.type = PM_QOS_REQ_AFFINE_CORES;
-	cpumask_empty(&device->pwrctrl.pm_qos_req_dma.cpus_affine);
-	for_each_possible_cpu(cpu) {
-		if ((1 << cpu) & 0xf)
-			cpumask_set_cpu(cpu, &device->pwrctrl.pm_qos_req_dma.cpus_affine);
-	}
+	atomic_set(&device->pwrctrl.pm_qos_req_dma.cpus_affine, 0xf);
 #else
 	device->pwrctrl.pm_qos_req_dma.type = PM_QOS_REQ_AFFINE_IRQ;
 	device->pwrctrl.pm_qos_req_dma.irq = device->pwrctrl.interrupt_num;
