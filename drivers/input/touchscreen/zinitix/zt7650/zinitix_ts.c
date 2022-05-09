@@ -3578,8 +3578,8 @@ static irqreturn_t zt_touch_work(int irq, void *data)
 
 			info->hover_event = prox_data;
 
-			input_info(true, &client->dev, "PROXIMITY DETECT. LVL = %d \n", prox_data);
-			input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, prox_data);
+			input_info(true, &client->dev, "PROXIMITY DETECT. LVL = %d \n", !prox_data);
+			input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, !prox_data);
 			input_sync(info->input_dev_proximity);
 			break;
 		}
