@@ -261,9 +261,11 @@ int mhi_ready_state_transition(struct mhi_controller *mhi_cntrl)
 #ifdef CONFIG_SEC_DEBUG_MDM_FILE_INFO
     snprintf(mdmerr_info, sizeof(mdmerr_info), 
 				"%x\n", mhi_cntrl->session_id);
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
     sec_set_mdm_summary_info(mdmerr_info);
 
 	MHI_ERR("MDM session ID : %s\n", mdmerr_info);
+#endif
 #endif
 
 	MHI_CNTRL_LOG("Waiting to enter READY state\n");
@@ -1085,8 +1087,9 @@ void mhi_control_error(struct mhi_controller *mhi_cntrl)
 					"%x, Failure reason: %s\n", 
 					mhi_cntrl->session_id,
 					mhi_get_restart_reason(mhi_cntrl->name));
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
 		sec_set_mdm_summary_info(mdmerr_info);
-
+#endif
 		MHI_ERR("MDM session ID : %s\n", mdmerr_info);
 	}
 #endif
