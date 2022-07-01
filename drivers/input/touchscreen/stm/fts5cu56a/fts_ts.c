@@ -1807,10 +1807,11 @@ static u8 fts_event_handler_type_b(struct fts_ts_info *info)
 			if (p_event_status->stype == FTS_EVENT_STATUSTYPE_VENDORINFO) {
 				if (info->board->support_ear_detect) {
 					if (p_event_status->status_id == 0x6A) {
+						p_event_status->status_data_1 = p_event_status->status_data_1 == 5 || !p_event_status->status_data_1;
 						info->hover_event = p_event_status->status_data_1;
-						input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, !p_event_status->status_data_1);
+						input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, p_event_status->status_data_1);
 						input_sync(info->input_dev_proximity);
-						input_info(true, &info->client->dev, "%s: proximity: %d\n", __func__, !p_event_status->status_data_1);
+						input_info(true, &info->client->dev, "%s: proximity: %d\n", __func__, p_event_status->status_data_1);
 					}
 				}
 			}
