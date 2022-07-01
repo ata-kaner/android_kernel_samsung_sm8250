@@ -106,12 +106,18 @@ static ssize_t fts_secure_touch_enable_store(struct device *dev,
 static ssize_t fts_secure_touch_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 
+static ssize_t fts_fod_pressed_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+
 static struct device_attribute attrs[] = {
 	__ATTR(secure_touch_enable, (0664),
 			fts_secure_touch_enable_show,
 			fts_secure_touch_enable_store),
 	__ATTR(secure_touch, (0444),
 			fts_secure_touch_show,
+			NULL),
+	__ATTR(fod_pressed, (0444),
+			fts_fod_pressed_show,
 			NULL),
 };
 
@@ -285,6 +291,14 @@ static void fts_secure_touch_stop(struct fts_ts_info *info, int blocking)
 			wait_for_completion_interruptible(&info->st_powerdown);
 	}
 	mutex_unlock(&info->st_lock);
+}
+
+static ssize_t fts_fod_pressed_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", info->fod_pressed);
 }
 
 static irqreturn_t fts_filter_interrupt(struct fts_ts_info *info)
@@ -2111,9 +2125,13 @@ static u8 fts_event_handler_type_b(struct fts_ts_info *info)
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD;
 						input_info(true, &info->client->dev, "%s: FOD %sPRESS\n",
 								__func__, p_gesture_status->gesture_id ? "" : "LONG");
+						info->fod_pressed = true;
+						sysfs_notify(&info->input_dev->dev.kobj, NULL, "fod_pressed");
 					} else if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_RELEASE) {
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD_RELEASE;
 						input_info(true, &info->client->dev, "%s: FOD RELEASE\n", __func__);
+						info->fod_pressed = false;
+						sysfs_notify(&info->input_dev->dev.kobj, NULL, "fod_pressed");
 					} else if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_OUT) {
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD_OUT;
 						input_info(true, &info->client->dev, "%s: FOD OUT\n", __func__);
