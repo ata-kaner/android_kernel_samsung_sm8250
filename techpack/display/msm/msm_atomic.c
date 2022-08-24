@@ -106,6 +106,19 @@ static inline bool _msm_seamless_for_conn(struct drm_connector *connector,
 	return false;
 }
 
+/* clear specified crtcs (no longer pending update)
+ */
+static void end_atomic(struct msm_drm_private *priv, uint32_t crtc_mask,
+			uint32_t plane_mask)
+{
+	spin_lock(&priv->pending_crtcs_event.lock);
+	DBG("end: %08x", crtc_mask);
+	priv->pending_crtcs &= ~crtc_mask;
+	priv->pending_planes &= ~plane_mask;
+	wake_up_all_locked(&priv->pending_crtcs_event);
+	spin_unlock(&priv->pending_crtcs_event.lock);
+}
+
 static void msm_atomic_wait_for_commit_done(
 		struct drm_device *dev,
 		struct drm_atomic_state *old_state)
