@@ -612,7 +612,7 @@ void cam_smmu_set_client_page_fault_handler(int handle,
 	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 }
 
-void cam_smmu_check_user_mappings()
+void cam_smmu_check_user_mappings(void)
 {
 	int idx;
 

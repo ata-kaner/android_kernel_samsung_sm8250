@@ -175,7 +175,7 @@ void input_booster_init_vendor(int* release_val)
 	}
 }
 
-void input_booster_exit_vendor()
+void input_booster_exit_vendor(void)
 {
 	//msm_bus_scale_unregister_client(bus_hdl);
 	pm_qos_remove_request(&lpm_bias_pm_qos_request);
