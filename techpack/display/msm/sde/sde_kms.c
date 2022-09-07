@@ -139,7 +139,7 @@ struct reg_log_value {
 static bool g_init_done = false;
 static bool g_cont_splash = true;
 
-static void _reg_log_init()
+static void _reg_log_init(void)
 {
 	int index = 0;
 
