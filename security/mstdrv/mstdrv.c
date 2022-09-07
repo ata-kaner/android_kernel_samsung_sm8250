@@ -858,7 +858,7 @@ static int sec_mst_gpio_init(struct device *dev)
 }
 
 #if defined(CONFIG_MFC_CHARGER)
-static int mfc_get_chip_id()
+static int mfc_get_chip_id(void)
 {
 	u8 chip_id = 0;
 	int retry_cnt = 9;

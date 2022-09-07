@@ -19,7 +19,7 @@
 static struct cam_mem_table tbl;
 static atomic_t cam_mem_mgr_state = ATOMIC_INIT(CAM_MEM_MGR_UNINITIALIZED);
 
-static void cam_mem_mgr_print_tbl()
+static void cam_mem_mgr_print_tbl(void)
 {
 	int i;
 	uint64_t ms, tmp, hrs, min, sec;
