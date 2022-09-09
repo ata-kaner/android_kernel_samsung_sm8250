@@ -520,23 +520,13 @@ static struct dentry *f2fs_lookup(struct inode *dir, struct dentry *dentry,
 	}
 
 	ino = le32_to_cpu(de->ino);
+	f2fs_put_page(page, 0);
 
 	inode = f2fs_iget(dir->i_sb, ino);
 	if (IS_ERR(inode)) {
-		if (PTR_ERR(inode) != -ENOMEM) {
-			struct f2fs_sb_info *sbi = F2FS_I_SB(dir);
-
-			printk_ratelimited(KERN_ERR "F2FS-fs: Invalid inode referenced: %u"
-					"at parent inode : %lu\n",ino, dir->i_ino);
-			print_block_data(sbi->sb, page->index,
-					page_address(page), 0, F2FS_BLKSIZE);
-			f2fs_bug_on(sbi, 1);
-		}
-		f2fs_put_page(page, 0);
 		err = PTR_ERR(inode);
 		goto out;
 	}
-	f2fs_put_page(page, 0);
 
 	if ((dir->i_ino == root_ino) && f2fs_has_inline_dots(dir)) {
 		err = __recover_dot_dentries(dir, root_ino);
@@ -933,9 +923,11 @@ static int f2fs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct f2fs_dir_entry *old_entry;
 	struct f2fs_dir_entry *new_entry;
 	int err;
+
 #ifdef CONFIG_FS_HPB
 	struct inode *hpb_inode;
 #endif
+
 	if (unlikely(f2fs_cp_error(sbi)))
 		return -EIO;
 	if (!f2fs_is_checkpoint_ready(sbi))

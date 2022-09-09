@@ -92,8 +92,7 @@ static bool __is_cp_guaranteed(struct page *page)
 			inode->i_ino ==  F2FS_NODE_INO(sbi) ||
 			S_ISDIR(inode->i_mode) ||
 			(S_ISREG(inode->i_mode) &&
-			(f2fs_is_atomic_file(inode) || IS_NOQUOTA(inode) ||
-			IS_ATOMIC_WRITTEN_PAGE(page))) ||
+			(f2fs_is_atomic_file(inode) || IS_NOQUOTA(inode))) ||
 			is_cold_data(page))
 		return true;
 	return false;
@@ -354,11 +353,10 @@ static void f2fs_write_end_io(struct bio *bio)
 				}
 #endif
 				f2fs_stop_checkpoint(sbi, true);
-				f2fs_bug_on_endio(sbi, 1);
 			}
 		}
 
-		f2fs_bug_on_endio(sbi, page->mapping == NODE_MAPPING(sbi) &&
+		f2fs_bug_on(sbi, page->mapping == NODE_MAPPING(sbi) &&
 					page->index != nid_of_node(page));
 
 		dec_page_count(sbi, type);
@@ -520,7 +518,6 @@ static inline void __submit_bio(struct f2fs_sb_info *sbi,
 			set_sbi_flag(sbi, SBI_NEED_CP);
 	}
 submit_io:
-
 	if (is_read_io(bio_op(bio)))
 		trace_f2fs_submit_read_bio(sbi->sb, type, bio);
 	else
@@ -550,7 +547,7 @@ static void __submit_merged_bio(struct f2fs_bio_info *io)
 	if (!io->bio)
 		return;
 
-	bio_set_op_attrs(io->bio, fio->op, fio->op_flags | io->bio->bi_opf);
+	bio_set_op_attrs(io->bio, fio->op, fio->op_flags);
 
 	if (is_read_io(fio->op))
 		trace_f2fs_prepare_read_bio(io->sbi->sb, fio->type, io->bio);
@@ -790,6 +787,7 @@ static int add_ipu_page(struct f2fs_io_info *fio, struct bio **bio,
 				continue;
 
 			found = true;
+
 			f2fs_bug_on(sbi, !page_is_mergeable(sbi, *bio,
 							    *fio->last_block,
 							    fio->new_blkaddr));
@@ -2593,14 +2591,6 @@ got_it:
 		err = -EFSCORRUPTED;
 		goto out_writepage;
 	}
-
-	if (file_is_hot(inode))
-		F2FS_I_SB(inode)->sec_stat.hot_file_written_blocks++;
-	else if (file_is_cold(inode))
-		F2FS_I_SB(inode)->sec_stat.cold_file_written_blocks++;
-	else
-		F2FS_I_SB(inode)->sec_stat.warm_file_written_blocks++;
-
 	/*
 	 * If current allocation needs SSR,
 	 * it had better in-place writes for updated data.
@@ -2703,8 +2693,6 @@ int f2fs_write_single_data_page(struct page *page, int *submitted,
 	};
 
 	trace_f2fs_writepage(page, DATA);
-
-	f2fs_cond_set_fua(&fio);
 
 	/* we should bypass data pages to proceed the kworkder jobs */
 	if (unlikely(f2fs_cp_error(sbi))) {
@@ -3191,12 +3179,6 @@ static int f2fs_write_data_pages(struct address_space *mapping,
 {
 	struct inode *inode = mapping->host;
 
-	/* W/A - prevent panic while shutdown */
-	if (unlikely(ignore_fs_panic)) {
-		//pr_err("%s: Ignore panic\n", __func__);
-		return -EIO;
-	}
-
 	return __f2fs_write_data_pages(mapping, wbc,
 			F2FS_I(inode)->cp_task == current ?
 			FS_CP_DATA_IO : FS_DATA_IO);
@@ -3563,6 +3545,7 @@ static ssize_t f2fs_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	enum rw_hint hint = iocb->ki_hint;
 	int whint_mode = F2FS_OPTION(sbi).whint_mode;
 	bool do_opu;
+
 	int dio_flags = DIO_LOCKING | DIO_SKIP_HOLES;
 	err = check_direct_IO(inode, iter, offset);
 	if (err)
@@ -3605,7 +3588,7 @@ static ssize_t f2fs_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	err = __blockdev_direct_IO(iocb, inode, inode->i_sb->s_bdev,
 			iter, rw == WRITE ? get_data_block_dio_write :
 			get_data_block_dio, NULL, f2fs_dio_submit_bio,
-			dio_flags);
+			DIO_LOCKING | DIO_SKIP_HOLES);
 
 	if (do_opu)
 		up_read(&fi->i_gc_rwsem[READ]);
