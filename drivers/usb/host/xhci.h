@@ -438,7 +438,7 @@ struct xhci_op_regs {
 #define PORT_BESLD(p)(((p) & 0xf) << 10)
 
 /* use 128 microseconds as USB2 LPM L1 default timeout. */
-#define XHCI_L1_TIMEOUT		128
+#define XHCI_L1_TIMEOUT		512
 
 /* Set default HIRD/BESL value to 4 (350/400us) for USB2 L1 LPM resume latency.
  * Safe to use with mixed HIRD and BESL systems (host and device) and is used
@@ -450,7 +450,7 @@ struct xhci_op_regs {
  * e.g. not program values > '4' if BLC = '1' and a HIRD device is attached,
  * or not program values < '4' if BLC = '0' and a BESL device is attached.
  */
-#define XHCI_DEFAULT_BESL	0
+#define XHCI_DEFAULT_BESL	4
 
 /*
  * USB3 specification define a 360ms tPollingLFPSTiemout for USB3 ports

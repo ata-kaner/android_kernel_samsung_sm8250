@@ -9,6 +9,7 @@
 #include "cvp_core_hfi.h"
 #include "cvp_hfi_helper.h"
 
+
 struct cvp_power_level {
 	unsigned long core_sum;
 	unsigned long op_core_sum;
@@ -25,7 +26,7 @@ void print_internal_buffer(u32 tag, const char *str,
 		dprintk(tag,
 		"%s: %x : idx %2d fd %d off %d %s size %d flags %#x iova %#x",
 		str, hash32_ptr(inst->session), cbuf->buf.index, cbuf->buf.fd,
-		cbuf->buf.offset, cbuf->smem.dma_buf->buf_name, cbuf->buf.size,
+		cbuf->buf.offset, cbuf->smem.dma_buf->name, cbuf->buf.size,
 		cbuf->buf.flags, cbuf->smem.device_addr);
 	} else {
 		dprintk(tag,
@@ -438,7 +439,7 @@ static int msm_cvp_map_buf_user_persist(struct msm_cvp_inst *inst,
 
 	dprintk(CVP_DBG,
 	"%s: %x : fd %d %s size %d", "map persist", hash32_ptr(inst->session),
-	cbuf->smem.fd, cbuf->smem.dma_buf->buf_name, cbuf->smem.size);
+	cbuf->smem.fd, cbuf->smem.dma_buf->name, cbuf->smem.size);
 	return rc;
 
 exit:
@@ -718,7 +719,8 @@ static int msm_cvp_map_user_persist(struct msm_cvp_inst *inst,
 		return 0;
 
 	for (i = 0; i < buf_num; i++) {
-		buf_ptr = (struct cvp_buf_desc *)&in_pkt->pkt_data[offset];
+		buf_ptr = (struct cvp_buf_desc *)
+				&in_pkt->pkt_data[offset];
 
 		offset += sizeof(*new_buf) >> 2;
 		new_buf = (struct cvp_buf_type *)buf_ptr;
@@ -904,7 +906,6 @@ static int msm_cvp_session_process_hfi(
 	unsigned int offset, buf_num, signal;
 	struct cvp_session_queue *sq;
 	struct msm_cvp_inst *s;
-	unsigned int max_buf_num;
 
 	if (!inst || !inst->core || !in_pkt) {
 		dprintk(CVP_ERR, "%s: invalid params\n", __func__);
@@ -948,16 +949,6 @@ static int msm_cvp_session_process_hfi(
 		offset = in_offset;
 		buf_num = in_buf_num;
 	}
-
-	max_buf_num = sizeof(struct cvp_kmd_hfi_packet)
-			/ sizeof(struct cvp_buf_type);
-
-	if (buf_num > max_buf_num)
-		return -EINVAL;
-
-	if ((offset + buf_num * sizeof(struct cvp_buf_type)) >
-					sizeof(struct cvp_kmd_hfi_packet))
-		return -EINVAL;
 
 	if (in_pkt->pkt_data[1] == HFI_CMD_SESSION_CVP_SET_PERSIST_BUFFERS)
 		rc = msm_cvp_map_user_persist(inst, in_pkt, offset, buf_num);
@@ -1378,12 +1369,18 @@ static int msm_cvp_session_process_hfi_fence(
 	max_buf_num = sizeof(struct cvp_kmd_hfi_packet)
 						/ sizeof(struct cvp_buf_type);
 
-	if (buf_num > max_buf_num)
-		return -EINVAL;
+	if (buf_num > max_buf_num) {
+		rc = -EINVAL;
+		goto free_and_exit;
+	}
 
-	if ((offset + buf_num * sizeof(struct cvp_buf_type)) >
-					sizeof(struct cvp_kmd_hfi_packet))
-		return -EINVAL;
+
+	if ((offset + buf_num * sizeof(struct cvp_buf_type))
+		> sizeof(struct cvp_kmd_hfi_packet)) {
+		rc = -EINVAL;
+		goto free_and_exit;
+	}
+
 
 	rc = msm_cvp_map_buf(inst, in_pkt, offset, buf_num);
 	if (rc)
@@ -2347,7 +2344,7 @@ int msm_cvp_session_deinit(struct msm_cvp_inst *inst)
 				"remove from frame list",
 				hash32_ptr(inst->session),
 				buf->fd, buf->offset, buf->size,
-				buf->dbuf->buf_name);
+				buf->dbuf->name);
 
 			list_del(&frame_buf->list);
 			kmem_cache_free(cvp_driver->frame_buf_cache,

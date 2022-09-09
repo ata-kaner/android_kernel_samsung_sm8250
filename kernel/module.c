@@ -67,6 +67,10 @@
 #include <uapi/linux/module.h>
 #include "module-internal.h"
 
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
@@ -74,6 +78,15 @@
 #define ARCH_SHF_SMALL 0
 #endif
 
+#ifdef CONFIG_UH_LKM_BLOCK
+/* Return codes for lkm_block */
+#define	RET_UH_LKM_OK					0x00000000
+#define	RET_UH_LKM_BLOCK_FORCE			0x00000002
+
+/* Return codes for lkm_block function */
+#define	RET_LKM_BLOCK_SUCCESS				0
+#define	RET_LKM_BLOCK_FAIL				-1
+#endif
 /*
  * Modules' sections will be aligned on page boundaries
  * to ensure complete separation of code and data
@@ -156,6 +169,29 @@ static struct mod_tree_root {
 
 #define module_addr_min mod_tree.addr_min
 #define module_addr_max mod_tree.addr_max
+
+#ifdef CONFIG_SEC_DEBUG_MODULE_INFO
+void sec_debug_coreinfo_module(void)
+{
+	SUMMARY_COREINFO_SYMBOL(mod_tree);
+	SUMMARY_COREINFO_OFFSET(mod_tree_root, root);
+	SUMMARY_COREINFO_OFFSET(mod_tree_root, addr_min);
+	SUMMARY_COREINFO_OFFSET(mod_tree_root, addr_max);
+	SUMMARY_COREINFO_OFFSET(module_layout, base);
+	SUMMARY_COREINFO_OFFSET(module_layout, size);
+	SUMMARY_COREINFO_OFFSET(module_layout, text_size);
+	SUMMARY_COREINFO_OFFSET(module_layout, mtn);
+	SUMMARY_COREINFO_OFFSET(mod_tree_node, node);
+	SUMMARY_COREINFO_OFFSET(module, init_layout);
+	SUMMARY_COREINFO_OFFSET(module, core_layout);
+	SUMMARY_COREINFO_OFFSET(module, state);
+	SUMMARY_COREINFO_OFFSET(module, name);
+	SUMMARY_COREINFO_OFFSET(module, kallsyms);
+	SUMMARY_COREINFO_OFFSET(mod_kallsyms, symtab);
+	SUMMARY_COREINFO_OFFSET(mod_kallsyms, num_symtab);
+	SUMMARY_COREINFO_OFFSET(mod_kallsyms, strtab);
+}
+#endif
 
 static noinline void __mod_tree_insert(struct mod_tree_node *node)
 {
@@ -2748,6 +2784,13 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)
 }
 #endif /* CONFIG_KALLSYMS */
 
+#ifdef CONFIG_UH_LKM_BLOCK
+static int lkm_block()
+{
+	return RET_UH_LKM_BLOCK_FORCE;
+}
+#endif
+
 static void dynamic_debug_setup(struct module *mod, struct _ddebug *debug, unsigned int num)
 {
 	if (!debug)
@@ -2851,6 +2894,12 @@ static int elf_header_check(struct load_info *info)
 		info->len - info->hdr->e_shoff))
 		return -ENOEXEC;
 
+#ifdef CONFIG_UH_LKM_BLOCK
+	if (lkm_block() != RET_LKM_BLOCK_SUCCESS) {
+		pr_warn("UH: LKM is not allowed by Samsung security policy.\n");
+		return -ENOEXEC;
+	}
+#endif
 	return 0;
 }
 

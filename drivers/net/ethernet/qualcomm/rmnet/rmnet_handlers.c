@@ -305,7 +305,9 @@ rmnet_map_ingress_handler(struct sk_buff *skb,
 	struct sk_buff *skbn;
 	int (*rmnet_perf_core_deaggregate)(struct sk_buff *skb,
 					   struct rmnet_port *port);
-
+	struct napi_struct *napi;
+	bool dl_marker = port->data_format &
+					RMNET_INGRESS_FORMAT_DL_MARKER;
 	if (skb->dev->type == ARPHRD_ETHER) {
 		if (pskb_expand_head(skb, ETH_HLEN, 0, GFP_ATOMIC)) {
 			kfree_skb(skb);
@@ -347,11 +349,30 @@ rmnet_map_ingress_handler(struct sk_buff *skb,
 
 		skb_shinfo(skb)->frag_list = NULL;
 		while ((skbn = rmnet_map_deaggregate(skb, port)) != NULL) {
+			static u32 curr_count;
+			
 			__rmnet_map_ingress_handler(skbn, port);
-
+			curr_count++;
+			
+			napi = get_current_napi_context();
+			/* flush when the configured flush
+			 * count reached
+			 */
+#if defined(CONFIG_RMNET_ARGOS)
+			if (dl_marker && napi && config_flushcount &&
+			    !(curr_count % config_flushcount))
+				napi_gro_flush(napi, false);
+#endif
+					
 			if (skbn == skb)
 				goto next_skb;
 		}
+		napi = get_current_napi_context();
+		/* flush the remaining packets
+		 * if this is the last skb in the chain
+		 */
+		if (dl_marker && napi && !skb)
+			napi_gro_flush(napi, false);
 
 		consume_skb(skb);
 next_skb:

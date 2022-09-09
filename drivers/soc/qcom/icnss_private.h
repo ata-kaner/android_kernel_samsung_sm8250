@@ -385,6 +385,8 @@ struct icnss_priv {
 	int last_updated_voltage;
 	struct work_struct soc_update_work;
 	struct workqueue_struct *soc_update_wq;
+
+	struct kobject *wifi_kobj;
 };
 
 struct icnss_reg_info {

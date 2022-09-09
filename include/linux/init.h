@@ -218,6 +218,10 @@ extern bool initcall_debug;
 #endif
 #endif
 
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_initcall(fn, id)	___define_initcall(fn, id, .deferred_initcall##id)
+#endif
+
 #define __define_initcall(fn, id) ___define_initcall(fn, id, .initcall##id)
 
 /*
@@ -313,7 +317,16 @@ void __init parse_early_param(void);
 void __init parse_early_options(char *cmdline);
 #endif /* __ASSEMBLY__ */
 
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_module_init(fn) deferred_initcall(fn, 0)
+#define deferred_module_init_sync(fn) deferred_initcall(fn, 0s)
+#endif
+
 #else /* MODULE */
+
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_module_init(fn) module_init(fn)
+#endif
 
 #define __setup_param(str, unique_id, fn)	/* nothing */
 #define __setup(str, func) 			/* nothing */

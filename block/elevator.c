@@ -560,8 +560,11 @@ void elv_bio_merged(struct request_queue *q, struct request *rq,
 #ifdef CONFIG_PM
 static void blk_pm_requeue_request(struct request *rq)
 {
-	if (rq->q->dev && !(rq->rq_flags & RQF_PM))
+	if (rq->q->dev && !(rq->rq_flags & RQF_PM)) {
 		rq->q->nr_pending--;
+		if (!rq->q->nr_pending)
+			pm_runtime_mark_last_busy(rq->q->dev);
+	}
 }
 
 static void blk_pm_add_request(struct request_queue *q, struct request *rq)
@@ -619,6 +622,8 @@ void elv_drain_elevator(struct request_queue *q)
 void __elv_add_request(struct request_queue *q, struct request *rq, int where)
 {
 	trace_block_rq_insert(q, rq);
+
+	blk_queue_io_vol_add(q, rq->cmd_flags, blk_rq_bytes(rq));
 
 	blk_pm_add_request(q, rq);
 
@@ -780,6 +785,8 @@ void elv_completed_request(struct request_queue *q, struct request *rq)
 	 */
 	if (blk_account_rq(rq)) {
 		q->in_flight[rq_is_sync(rq)]--;
+		if (!queue_in_flight(q))
+			q->in_flight_time += ktime_us_delta(ktime_get(), q->in_flight_stamp);
 		if ((rq->rq_flags & RQF_SORTED) &&
 		    e->type->ops.sq.elevator_completed_req_fn)
 			e->type->ops.sq.elevator_completed_req_fn(q, rq);

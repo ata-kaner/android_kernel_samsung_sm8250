@@ -140,6 +140,8 @@ struct sde_rsc_cmd_config {
 	u32 prefill_lines;
 };
 
+void reg_log_dump(const char *func_name, int line_num);
+
 #ifdef CONFIG_DRM_SDE_RSC
 /**
  * sde_rsc_client_create() - create the client for sde rsc.

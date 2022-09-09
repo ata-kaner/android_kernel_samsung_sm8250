@@ -574,4 +574,17 @@ static inline bool is_migrate_highatomic_page(struct page *page)
 
 void setup_zone_pageset(struct zone *zone);
 extern struct page *alloc_new_node_page(struct page *page, unsigned long node);
+
+#ifdef CONFIG_HUGEPAGE_POOL
+#include <linux/hugepage_pool.h>
+static inline struct page *alloc_from_hugepage_pool(gfp_t gfp_mask,
+		struct vm_area_struct *vma, unsigned long addr, int order) {
+	return alloc_zeroed_hugepage(gfp_mask, order, false, HPAGE_ANON);
+}
+extern void ___free_pages_ok(struct page *page, unsigned int order,
+			     bool skip_hugepage_pool);
+extern void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
+						unsigned int alloc_flags);
+void compact_node_async(void);
+#endif
 #endif	/* __MM_INTERNAL_H */

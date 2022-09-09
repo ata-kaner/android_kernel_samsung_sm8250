@@ -30,6 +30,7 @@ struct gpio_keys_button {
 	unsigned int type;
 	int wakeup;
 	int wakeup_event_action;
+	int wakeup_default;
 	int debounce_interval;
 	bool can_disable;
 	int value;
@@ -48,13 +49,14 @@ struct gpio_keys_button {
  * @name:		input device name
  */
 struct gpio_keys_platform_data {
-	const struct gpio_keys_button *buttons;
+	struct gpio_keys_button *buttons;
 	int nbuttons;
 	unsigned int poll_interval;
 	unsigned int rep:1;
 	int (*enable)(struct device *dev);
 	void (*disable)(struct device *dev);
 	const char *name;
+	bool wakeup_enable;
 };
 
 #endif

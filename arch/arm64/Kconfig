@@ -298,6 +298,7 @@ config ARCH_SUPPORTS_UPROBES
 config ARCH_PROC_KCORE_TEXT
 	def_bool y
 
+source "arch/arm64/Kconfig.projects"
 source "arch/arm64/Kconfig.platforms"
 
 menu "Bus support"
@@ -1163,6 +1164,132 @@ config ARM64_SW_TTBR0_PAN
 	  user-space memory directly by pointing TTBR0_EL1 to a reserved
 	  zeroed area and reserved ASID. The user access routines
 	  restore the valid TTBR0_EL1 temporarily.
+
+config UH
+	bool "Enable micro hypervisor feature of Samsung"
+	depends on !SEC_FACTORY
+	default n
+	help
+	  It enables a micro hypervisor.
+	  It's samsung's hypervisor and it should be combined with QC hyp.
+	  So you must check a hypX(samsung hypervisor image)
+	  RKP and etc can be loaded on it.
+
+config UH_RKP
+	bool "Enable RKP (Realtime Kernel Protection) UH feature"
+	depends on !SEC_FACTORY
+	select UH
+	default n
+	help
+		it protects a kernel text and etc.
+
+config RKP_TEST
+	bool "Enables rkp test"
+	depends on UH_RKP && !SAMSUNG_PRODUCT_SHIP
+	default n
+	help
+	  it enables rkp test.
+
+config KDP_CRED
+	bool "KDP(Kernel Data Protection) for cred structure"
+	depends on !SEC_FACTORY
+	depends on !SEC_VTS_TEST
+	depends on UH_RKP
+	default n
+	help
+	  Prevents unauthorized cred modification.
+
+config KDP_NS
+	bool "KDP(Kernel Data Protection) for namespace structure"
+	depends on KDP_CRED
+	default n
+	help
+	  Prevents unauthorized namespace modification.
+
+config KDP_DMAP
+	bool "KDP(Kernel Data Protection) to prevent page Double MAPping"
+	depends on KDP_CRED
+	default n
+	help
+	  Prevents unauthorized mapping for page table.
+
+config KDP_TEST
+	bool "Enable KDP test"
+	depends on KDP_CRED && KDP_NS && !SAMSUNG_PRODUCT_SHIP
+	default n
+	help
+	  enable KDP test.
+
+config UH_LKM_BLOCK
+	bool "Block LKM"
+	help
+	  LKM is not allowed by Samsung security policy.
+
+menu "Control Flow Protection"
+
+config CFP
+	bool "JOPP and ROPP"
+	default n
+	help
+	  Control flow protection, including both JOPP and ROPP. Please do NOT
+	  set this CONFIG, JOPP/ROPP will select it.
+
+config CFP_JOPP
+	bool "JOP Prevention"
+	depends on !SEC_FACTORY 
+	select CFP
+	default n
+	help
+	  Restrict function pointer jumps to function entry points only.
+
+config CFP_JOPP_MAGIC
+	hex
+	depends on CFP_JOPP
+	default "0x00be7bad"
+
+config CFP_ROPP
+	bool "ROP Prevention"
+	depends on !SEC_FACTORY 
+	select CFP
+	default n
+	help
+	  Return address protection.
+
+choice
+	prompt "ROPP key"
+	default CFP_ROPP_SYSREGKEY
+	depends on CFP_ROPP
+
+config CFP_ROPP_SYSREGKEY
+	bool "Use system register"
+	help
+	  Master key held by system register.
+
+config CFP_ROPP_RANDKEY
+	bool "random key"
+	help
+	  For test, no master key, per-thread-key is random.
+
+config CFP_ROPP_FIXKEY
+	bool "fixed key"
+	help
+	  For test, no master key, per-thread-key is fixed.
+
+config CFP_ROPP_ZEROKEY
+	bool "zero key"
+	help
+	  For test, no master key, per-thread-key is zero.
+
+endchoice
+
+config CFP_TEST
+	bool "test file, only include in ENG build"
+	depends on CFP
+	default n
+	help
+	  For test only.
+
+endmenu
 
 menu "ARMv8.1 architectural features"
 

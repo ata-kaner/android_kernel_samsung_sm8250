@@ -2277,6 +2277,13 @@ static struct sched_cluster init_cluster = {
 	.aggr_grp_load		=	0,
 };
 
+#ifdef CONFIG_SEC_DEBUG
+int get_num_clusters(void)
+{
+	return num_sched_clusters;
+}
+#endif
+
 void init_clusters(void)
 {
 	init_cluster.cpus = *cpu_possible_mask;

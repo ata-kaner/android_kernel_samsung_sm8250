@@ -74,6 +74,7 @@ struct qmi_sensor {
 	struct qmi_ts_instance		*ts;
 	enum qmi_ts_sensor		sens_type;
 	struct work_struct		therm_notify_work;
+	struct completion complete;
 };
 
 struct qmi_ts_instance {
@@ -211,6 +212,7 @@ static void qmi_ts_update_temperature(struct qmi_ts_instance *ts,
 			decode_qmi(ind_msg->temp) * 1000;
 		pr_debug("sensor:%s temperature:%d\n",
 				qmi_sens->qmi_name, qmi_sens->last_reading);
+		complete(&qmi_sens->complete);
 		if (!qmi_sens->tz_dev)
 			return;
 		if (notify &&
@@ -324,9 +326,11 @@ qmi_send_exit:
 static int qmi_sensor_read(void *data, int *temp)
 {
 	struct qmi_sensor *qmi_sens = (struct qmi_sensor *)data;
+	reinit_completion(&qmi_sens->complete);
 
 	if (qmi_sens->connection_active && !atomic_read(&in_suspend))
 		qmi_ts_request(qmi_sens, true);
+	wait_for_completion_timeout(&qmi_sens->complete, msecs_to_jiffies(1000));
 	*temp = qmi_sens->last_reading;
 
 	return 0;
@@ -644,6 +648,7 @@ static int of_get_qmi_ts_platform_data(struct device *dev)
 			qmi_sens->low_thresh = INT_MIN;
 			INIT_WORK(&qmi_sens->therm_notify_work,
 					qmi_ts_thresh_notify);
+			init_completion(&qmi_sens->complete);
 			list_add(&qmi_sens->ts_node, &ts[idx].ts_sensor_list);
 		}
 		idx++;

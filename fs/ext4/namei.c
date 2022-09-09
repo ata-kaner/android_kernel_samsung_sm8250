@@ -1689,11 +1689,14 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, unsi
 	inode = NULL;
 	if (bh) {
 		__u32 ino = le32_to_cpu(de->inode);
-		brelse(bh);
 		if (!ext4_valid_inum(dir->i_sb, ino)) {
+			printk(KERN_ERR "Name of directory entry has bad");
+			print_bh(dir->i_sb, bh, 0, EXT4_BLOCK_SIZE(dir->i_sb));
+			brelse(bh);
 			EXT4_ERROR_INODE(dir, "bad inode number: %u", ino);
 			return ERR_PTR(-EFSCORRUPTED);
 		}
+		brelse(bh);
 		if (unlikely(ino == dir->i_ino)) {
 			EXT4_ERROR_INODE(dir, "'%pd' linked to parent dir",
 					 dentry);
@@ -1702,8 +1705,9 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, unsi
 		inode = ext4_iget(dir->i_sb, ino, EXT4_IGET_NORMAL);
 		if (inode == ERR_PTR(-ESTALE)) {
 			EXT4_ERROR_INODE(dir,
-					 "deleted inode referenced: %u",
-					 ino);
+					"deleted inode referenced: %u"
+					"at parent inode : %lu",
+					ino, dir->i_ino);
 			return ERR_PTR(-EFSCORRUPTED);
 		}
 		if (!IS_ERR(inode) && IS_ENCRYPTED(dir) &&
@@ -1727,6 +1731,11 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, unsi
 		return NULL;
 	}
 #endif
+#ifdef CONFIG_FS_HPB
+	if (inode && __is_hpb_file(dentry->d_name.name, inode))
+		ext4_set_inode_state(inode, EXT4_STATE_HPB);
+#endif
+
 	return d_splice_alias(inode, dentry);
 }
 
@@ -2613,6 +2622,10 @@ retry:
 		err = ext4_add_nondir(handle, dentry, inode);
 		if (!err && IS_DIRSYNC(dir))
 			ext4_handle_sync(handle);
+#ifdef CONFIG_FS_HPB
+		if (__is_hpb_file(dentry->d_name.name, inode))
+			ext4_set_inode_state(inode, EXT4_STATE_HPB);
+#endif
 	}
 	if (handle)
 		ext4_journal_stop(handle);
@@ -2857,6 +2870,7 @@ bool ext4_empty_dir(struct inode *inode)
 	if (ext4_check_dir_entry(inode, NULL, de, bh, bh->b_data, bh->b_size,
 				 0) ||
 	    le32_to_cpu(de->inode) != inode->i_ino || strcmp(".", de->name)) {
+		print_bh(sb, bh, 0, EXT4_BLOCK_SIZE(sb));
 		ext4_warning_inode(inode, "directory missing '.'");
 		brelse(bh);
 		return true;
@@ -3139,6 +3153,22 @@ static int ext4_rmdir(struct inode *dir, struct dentry *dentry)
 	inode->i_size = 0;
 	ext4_orphan_add(handle, inode);
 	inode->i_ctime = dir->i_ctime = dir->i_mtime = current_time(inode);
+	/* @fs.sec -- 868333f69f69eab81cceeb26fac51f0b4de49c70 -- */
+	/* log unlinker's uid or first 4 bytes of comm
+	 * to ext4_inode->i_version_hi */
+	if (current_uid().val) {
+		u64 i_version = atomic64_read(&inode->i_version);
+
+		i_version &= 0x00000000FFFFFFFF;
+		i_version |= (u64)current_uid().val << 32;
+		inode_set_iversion_raw(inode, i_version);
+	} else {
+		u64 i_version = atomic64_read(&inode->i_version);
+		u32 *comm = (u32 *)current->comm;
+
+		i_version |= (u64)(*comm) << 32;
+		inode_set_iversion_raw(inode, i_version);
+	}
 	ext4_mark_inode_dirty(handle, inode);
 	ext4_dec_count(handle, dir);
 	ext4_update_dx_flag(dir);
@@ -3221,6 +3251,21 @@ static int ext4_unlink(struct inode *dir, struct dentry *dentry)
 	if (!inode->i_nlink)
 		ext4_orphan_add(handle, inode);
 	inode->i_ctime = current_time(inode);
+	/* log unlinker's uid or first 4 bytes of comm
+	 * to ext4_inode->i_version_hi */
+	if (current_uid().val) {
+		u64 i_version = atomic64_read(&inode->i_version);
+
+		i_version &= 0x00000000FFFFFFFF;
+		i_version |= (u64)current_uid().val << 32;
+		inode_set_iversion_raw(inode, i_version);
+	} else {
+		u64 i_version = atomic64_read(&inode->i_version);
+		u32 *comm = (u32 *)current->comm;
+
+		i_version |= (u64)(*comm) << 32;
+		inode_set_iversion_raw(inode, i_version);
+	}
 	ext4_mark_inode_dirty(handle, inode);
 
 #ifdef CONFIG_UNICODE
@@ -3673,6 +3718,9 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct inode *whiteout = NULL;
 	int credits;
 	u8 old_file_type;
+#ifdef CONFIG_FS_HPB
+	struct inode *hpb_inode;
+#endif
 
 	if (new.inode && new.inode->i_nlink == 0) {
 		EXT4_ERROR_INODE(new.inode,
@@ -3813,6 +3861,14 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
 		 */
 		ext4_rename_delete(handle, &old, force_reread);
 	}
+
+#ifdef CONFIG_FS_HPB
+	hpb_inode = (new.inode)? : old.inode;
+	if (__is_hpb_file(new_dentry->d_name.name, hpb_inode))
+		ext4_set_inode_state(hpb_inode, EXT4_STATE_HPB);
+	else
+		ext4_clear_inode_state(hpb_inode, EXT4_STATE_HPB);
+#endif
 
 	if (new.inode) {
 		ext4_dec_count(handle, new.inode);

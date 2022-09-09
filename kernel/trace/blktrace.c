@@ -1914,6 +1914,8 @@ void blk_fill_rwbs(char *rwbs, unsigned int op, int bytes)
 		rwbs[i++] = 'S';
 	if (op & REQ_META)
 		rwbs[i++] = 'M';
+	if (op & REQ_HPB_PREFER)
+		rwbs[i++] = 'P';
 
 	rwbs[i] = '\0';
 }

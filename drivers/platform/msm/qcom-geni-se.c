@@ -1290,6 +1290,9 @@ void geni_se_rx_dma_start(void __iomem *base, int rx_len, dma_addr_t *rx_dma)
 	/* RX does not have EOT bit */
 	geni_write_reg(0, base, SE_DMA_RX_ATTR);
 
+	/* Ensure that previour write is done at HW level*/
+	geni_read_reg(base, SE_DMA_RX_PTR_H);
+
 	/* Ensure that above register writes went through */
 	mb();
 	geni_write_reg(rx_len, base, SE_DMA_RX_LEN);

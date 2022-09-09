@@ -883,6 +883,7 @@ static void uaudio_disconnect_cb(struct snd_usb_audio *chip)
 		disconnect_ind.slot_id = dev->udev->slot_id;
 		disconnect_ind.controller_num = dev->usb_core_id;
 		disconnect_ind.controller_num_valid = 1;
+
 		ret = qmi_send_indication(svc->uaudio_svc_hdl, &svc->client_sq,
 				QMI_UADUIO_STREAM_IND_V01,
 				QMI_UAUDIO_STREAM_IND_MSG_V01_MAX_MSG_LEN,
@@ -1090,6 +1091,7 @@ static void handle_uaudio_stream_req(struct qmi_handle *handle,
 	}
 
 	mutex_lock(&chip->dev_lock);
+	pr_info("%s : inside mutex\n", __func__);
 	info_idx = info_idx_from_ifnum(pcm_card_num, subs->interface,
 		req_msg->enable);
 	if (atomic_read(&chip->shutdown) || !subs->stream || !subs->stream->pcm
@@ -1152,13 +1154,16 @@ static void handle_uaudio_stream_req(struct qmi_handle *handle,
 	}
 
 	ret = snd_usb_enable_audio_stream(subs, datainterval, req_msg->enable);
+	pr_info("%s : snd_usb_enable_audio_stream : ret = %d\n", __func__, ret);
 
 	if (!ret && req_msg->enable)
 		ret = prepare_qmi_response(subs, req_msg, &resp, info_idx);
 
+	pr_info("%s : prepare_qmi_response : ret = %d\n", __func__, ret);
 	mutex_unlock(&chip->dev_lock);
 
 response:
+	pr_info("%s : response : ret = %d\n", __func__, ret);
 	if (!req_msg->enable && ret != -EINVAL && ret != -ENODEV) {
 		mutex_lock(&chip->dev_lock);
 		if (info_idx >= 0) {

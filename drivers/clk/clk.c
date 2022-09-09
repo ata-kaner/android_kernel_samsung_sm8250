@@ -28,8 +28,11 @@
 #include <linux/of_platform.h>
 #include <linux/pm_opp.h>
 #include <linux/regulator/consumer.h>
+#include <trace/events/power.h>
 
 #include "clk.h"
+
+#include <linux/sec_debug.h>
 
 static DEFINE_SPINLOCK(enable_lock);
 static DEFINE_MUTEX(prepare_lock);
@@ -111,6 +114,8 @@ struct clk_core {
 	unsigned long		*rate_max;
 	int			num_rate_max;
 };
+extern unsigned int sec_debug_level(void);
+bool is_dbg_level_low;
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/clk.h>
@@ -2270,6 +2275,7 @@ static int clk_change_rate(struct clk_core *core)
 	}
 
 	trace_clk_set_rate(core, core->new_rate);
+	sec_debug_clock_rate_log(core->name, core->new_rate, raw_smp_processor_id());
 
 	if (core->new_parent && core->new_parent != core->parent) {
 		old_parent = __clk_set_parent_before(core, core->new_parent);
@@ -2301,6 +2307,7 @@ static int clk_change_rate(struct clk_core *core)
 	}
 
 	trace_clk_set_rate_complete(core, core->new_rate);
+	sec_debug_clock_rate_complete_log(core->name, core->new_rate, raw_smp_processor_id());
 
 	core->rate = clk_recalc(core, best_parent_rate);
 
@@ -3218,7 +3225,7 @@ EXPORT_SYMBOL_GPL(clk_set_flags);
 
 static struct dentry *rootdir;
 static int inited = 0;
-static u32 debug_suspend;
+static u32 debug_suspend = 1;
 static DEFINE_MUTEX(clk_debug_lock);
 static HLIST_HEAD(clk_debug_list);
 
@@ -3572,6 +3579,65 @@ do {							\
 	else						\
 		pr_info(fmt, ##__VA_ARGS__);		\
 } while (0)
+
+#if 0
+/*
+ * clock_debug_print_enabled_debug_suspend() - Print names of enabled clocks
+ * during suspend.
+ */
+#ifdef CONFIG_SEC_PM
+#define MAX_BUF_SIZE 512
+static void clock_debug_print_enabled_debug_suspend(struct seq_file *s)
+{
+	struct clk_core *core;
+	struct clk *clk;
+	char *start = "";
+	char clk_buf[MAX_BUF_SIZE];
+	ssize_t len = 0;
+	int cnt = 0;
+
+	if (!mutex_trylock(&clk_debug_lock))
+		return;
+
+	clock_debug_output(s, 0, "Enabled clocks:");
+
+	hlist_for_each_entry(core, &clk_debug_list, debug_node) {
+		if (!core || !core->prepare_count)
+			continue;
+
+		start = "";
+		clk = core->hw->clk;
+
+		do {
+			if (clk->core->vdd_class)
+				len += sprintf(clk_buf + len, "%s%s:%u:%u [%ld, %d]", start,
+						clk->core->name, clk->core->prepare_count,
+						clk->core->enable_count, clk->core->rate,
+						clk_find_vdd_level(clk->core, clk->core->rate));
+
+			else
+				len += sprintf(clk_buf + len, "%s%s:%u:%u [%ld]", start,
+						clk->core->name, clk->core->prepare_count,
+						clk->core->enable_count, clk->core->rate);
+
+			start = " -> ";
+		} while ((clk = clk_get_parent(clk)));
+
+		pr_info("%s\n", clk_buf);
+		clk_buf[0] = 0;
+		len = 0;
+		cnt++;
+	}
+
+	mutex_unlock(&clk_debug_lock);
+
+	if (cnt)
+		clock_debug_output(s, 0, "Enabled clock count: %d\n", cnt);
+	else
+		clock_debug_output(s, 0, "No clocks enabled.\n");
+}
+#endif /* CONFIG_SEC_PM */
+#endif /* Fix me */
 
 static int clock_debug_print_clock(struct clk_core *c, struct seq_file *s)
 {
@@ -3962,6 +4028,12 @@ static int __init clk_debug_init(void)
 	struct dentry *d;
 
 	rootdir = debugfs_create_dir("clk", NULL);
+
+	//ANDROID_DEBUG_LEVEL_LOW		0x4f4c
+	if (sec_debug_level() == 0x4f4c)
+		is_dbg_level_low = true;
+	else
+		is_dbg_level_low = false;
 
 	if (!rootdir)
 		return -ENOMEM;

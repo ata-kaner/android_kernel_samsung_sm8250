@@ -342,6 +342,9 @@ static int pci_call_probe(struct pci_driver *drv, struct pci_dev *dev,
 	node = dev_to_node(&dev->dev);
 	dev->is_probed = 1;
 
+#ifdef CONFIG_SEC_PCIE
+	dev->drv_probe_ready = 0;
+#endif
 	cpu_hotplug_disable();
 
 	/*
@@ -361,6 +364,11 @@ static int pci_call_probe(struct pci_driver *drv, struct pci_dev *dev,
 
 	dev->is_probed = 0;
 	cpu_hotplug_enable();
+
+#ifdef CONFIG_SEC_PCIE
+	dev->drv_probe_ready = !error;
+	dev_info(&dev->dev, "PCI probe function return:%d\n", dev->drv_probe_ready);
+#endif
 	return error;
 }
 

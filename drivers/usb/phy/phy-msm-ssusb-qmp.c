@@ -16,6 +16,12 @@
 #include <linux/clk.h>
 #include <linux/extcon.h>
 #include <linux/reset.h>
+#ifdef CONFIG_SEC_DISPLAYPORT
+#include <linux/sec_displayport.h>
+#endif
+#ifdef CONFIG_USB_MSM_SSPHY_QMP_TUNING
+#include <linux/mutex.h>
+#endif
 
 enum core_ldo_levels {
 	CORE_LEVEL_NONE = 0,
@@ -139,6 +145,9 @@ struct msm_ssphy_qmp {
 	int			reg_offset_cnt;
 	u32			*qmp_phy_init_seq;
 	int			init_seq_len;
+#ifdef CONFIG_USB_MSM_SSPHY_QMP_TUNING
+	struct mutex		phy_tune_lock;
+#endif
 };
 
 static const struct of_device_id msm_usb_id_table[] = {
@@ -160,6 +169,148 @@ static const struct of_device_id msm_usb_id_table[] = {
 	{ },
 };
 MODULE_DEVICE_TABLE(of, msm_usb_id_table);
+
+#ifdef CONFIG_USB_MSM_SSPHY_QMP_TUNING
+#define ADDRESS_START 0
+#define ADDRESS_END 0x1F58
+#define TUNE_BUF_SIZE 20
+
+u32 tune_addr;
+int tune_buf_cnt;
+int tune_buf[TUNE_BUF_SIZE][2];
+
+static void ssphy_tune_buf_init(void)
+{
+	int i;
+	for (i = 0; i < TUNE_BUF_SIZE; i++) {
+		tune_buf[i][0] = tune_buf[i][1] = 0;
+	}
+}
+
+static void ssphy_tune_set(struct msm_ssphy_qmp *phy)
+{
+	int i;
+
+	mutex_lock(&phy->phy_tune_lock);
+	for (i = 0; i < tune_buf_cnt; i++) {
+		writel_relaxed(tune_buf[i][1], phy->base + tune_buf[i][0]);
+		usleep_range(1, 10);
+		pr_info("%s(): [%d] 0x%x 0x%x (%d/%d)\n", __func__, i, tune_buf[i][0],
+			(readl_relaxed(phy->base + tune_buf[i][0]) & 0xff), tune_buf_cnt, TUNE_BUF_SIZE);
+		usleep_range(1, 2);
+	}
+	mutex_unlock(&phy->phy_tune_lock);
+}
+
+
+static ssize_t ssphy_read_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct msm_ssphy_qmp *phy = dev_get_drvdata(dev);
+
+	if (!phy) {
+		pr_err("ssphy is NULL\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "0x%x 0x%x\n", tune_addr,
+		(readl_relaxed(phy->base + tune_addr) & 0xff));
+}
+static ssize_t ssphy_read_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	u32 addr;
+
+	sscanf(buf, "%x", &addr);
+	pr_info("%s(): tuning address is set to 0x%x\n", __func__, addr);
+	if (addr >= ADDRESS_START && addr <= ADDRESS_END && !(addr & 0x3)) {
+		tune_addr = addr;
+	}
+
+	return size;
+}
+static DEVICE_ATTR(ssphy_read, 0664,
+	ssphy_read_show, ssphy_read_store);
+
+static ssize_t ssphy_set_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct msm_ssphy_qmp *phy = dev_get_drvdata(dev);
+	char str[(25 * TUNE_BUF_SIZE) + 35] = {0, };
+	int i;
+
+	if (!phy) {
+		pr_err("ssphy is NULL\n");
+		return -ENODEV;
+	}
+	mutex_lock(&phy->phy_tune_lock);
+	sprintf(str, "\n    Address Value Input [%2d/%2d]\n", tune_buf_cnt, TUNE_BUF_SIZE);
+	for (i = 0; i < tune_buf_cnt; i++) {
+		sprintf(str, "%s#%2d  0x%4x  0x%2x  0x%2x\n", str, i + 1, tune_buf[i][0],
+			(readl_relaxed(phy->base + tune_buf[i][0]) & 0xff), tune_buf[i][1]);
+	}
+	mutex_unlock(&phy->phy_tune_lock);
+
+	return sprintf(buf, "%s\n", str);
+}
+static ssize_t ssphy_set_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct msm_ssphy_qmp *phy = dev_get_drvdata(dev);
+	u32 addr, val;
+	int i;
+
+	if (!phy) {
+		pr_err("ssphy is NULL\n");
+		return -ENODEV;
+	}
+	sscanf(buf, "%x %x", &addr, &val);
+	val = val & 0xff;
+	mutex_lock(&phy->phy_tune_lock);
+	if (addr >= ADDRESS_START && addr <= ADDRESS_END && !(addr & 0x3)) {
+		for (i = 0; i < tune_buf_cnt; i++) {
+			if (tune_buf[i][0] == addr) {
+				writel_relaxed(val, phy->base + addr);
+				tune_buf[i][1] = val;
+				usleep_range(1, 2);
+				pr_info("%s(): [%d] 0x%x 0x%x (%d/%d)\n", __func__, i, addr,
+					(readl_relaxed(phy->base + addr) & 0xff), tune_buf_cnt, TUNE_BUF_SIZE);
+				mutex_unlock(&phy->phy_tune_lock);
+				return size;
+			}
+		}
+		if (tune_buf_cnt < TUNE_BUF_SIZE) {
+			writel_relaxed(val, phy->base + addr);
+			tune_buf[i][0] = addr;
+			tune_buf[i][1] = val;
+			usleep_range(1, 2);
+			pr_info("%s(): [%d] 0x%x 0x%x (%d/%d)\n", __func__, i, addr,
+				(readl_relaxed(phy->base + addr) & 0xff), tune_buf_cnt, TUNE_BUF_SIZE);
+			tune_buf_cnt++;
+		}
+		else
+			pr_info("%s(): tuning count is full\n", __func__);
+	}
+	else {
+		pr_info("%s(): tuning address is invalid : 0x%x\n", __func__, addr);
+	}
+	mutex_unlock(&phy->phy_tune_lock);
+
+	return size;
+}
+static DEVICE_ATTR(ssphy_set, 0664,
+	ssphy_set_show, ssphy_set_store);
+
+static struct attribute *ssphy_attrs[] = {
+	&dev_attr_ssphy_read.attr,
+	&dev_attr_ssphy_set.attr,
+	NULL,
+};
+
+static struct attribute_group ssphy_attr_grp = {
+	.attrs = ssphy_attrs,
+};
+#endif
 
 static void usb_qmp_powerup_phy(struct msm_ssphy_qmp *phy);
 static void msm_ssphy_qmp_enable_clks(struct msm_ssphy_qmp *phy, bool on);
@@ -516,6 +667,10 @@ static int msm_ssphy_qmp_init(struct usb_phy *uphy)
 		ret = -EBUSY;
 		goto fail;
 	};
+#ifdef CONFIG_USB_MSM_SSPHY_QMP_TUNING
+	if (tune_buf_cnt)
+		ssphy_tune_set(phy);
+#endif
 
 	return 0;
 fail:
@@ -533,6 +688,10 @@ static int msm_ssphy_qmp_dp_combo_reset(struct usb_phy *uphy)
 	struct msm_ssphy_qmp *phy = container_of(uphy, struct msm_ssphy_qmp,
 					phy);
 	int ret = 0;
+
+#ifdef CONFIG_SEC_DISPLAYPORT
+	secdp_wait_for_disconnect_complete();
+#endif
 
 	if (phy->phy.flags & PHY_USB_DP_CONCURRENT_MODE) {
 		dev_dbg(uphy->dev, "Resetting USB part of QMP phy\n");
@@ -688,6 +847,9 @@ static int msm_ssphy_qmp_set_suspend(struct usb_phy *uphy, int suspend)
 		if (phy->cable_connected) {
 			msm_ssusb_qmp_enable_autonomous(phy, 1);
 		} else {
+#ifdef CONFIG_SEC_DISPLAYPORT
+			secdp_wait_for_disconnect_complete();
+#endif
 			/* Reset phy mode to USB only if DP not connected */
 			if (uphy->type  == USB_PHY_TYPE_USB3_AND_DP &&
 				!(phy->phy.flags & PHY_USB_DP_CONCURRENT_MODE))
@@ -1130,6 +1292,18 @@ static int msm_ssphy_qmp_probe(struct platform_device *pdev)
 	if (ret)
 		goto err;
 
+#ifdef CONFIG_USB_MSM_SSPHY_QMP_TUNING
+	tune_addr = 0;
+	tune_buf_cnt = 0;
+	ssphy_tune_buf_init();
+	mutex_init(&phy->phy_tune_lock);
+	ret = sysfs_create_group(&pdev->dev.kobj, &ssphy_attr_grp);
+	if (ret) {
+		pr_err("%s: ssphy sysfs fail, ret %d", __func__, ret);
+		return ret;
+	}
+#endif
+
 	ret = usb_add_phy_dev(&phy->phy);
 
 err:
@@ -1146,6 +1320,10 @@ static int msm_ssphy_qmp_remove(struct platform_device *pdev)
 	usb_remove_phy(&phy->phy);
 	msm_ssphy_qmp_enable_clks(phy, false);
 	msm_ssusb_qmp_ldo_enable(phy, 0);
+#ifdef CONFIG_USB_MSM_SSPHY_QMP_TUNING
+	sysfs_remove_group(&pdev->dev.kobj, &ssphy_attr_grp);
+	mutex_destroy(&phy->phy_tune_lock);
+#endif
 	return 0;
 }
 

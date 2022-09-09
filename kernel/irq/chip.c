@@ -19,6 +19,8 @@
 
 #include "internals.h"
 
+#include <linux/sec_debug.h>
+
 static irqreturn_t bad_chained_irq(int irq, void *dev_id)
 {
 	WARN_ONCE(1, "Chained irq %d should not call an action\n", irq);
@@ -904,9 +906,13 @@ void handle_percpu_devid_irq(struct irq_desc *desc)
 		chip->irq_ack(&desc->irq_data);
 
 	if (likely(action)) {
+		sec_debug_irq_sched_log(irq, action->handler,
+					(char *)action->name, IRQ_ENTRY);
 		trace_irq_handler_entry(irq, action);
 		res = action->handler(irq, raw_cpu_ptr(action->percpu_dev_id));
 		trace_irq_handler_exit(irq, action, res);
+		sec_debug_irq_sched_log(irq, action->handler,
+					(char *)action->name, IRQ_EXIT);
 	} else {
 		unsigned int cpu = smp_processor_id();
 		bool enabled = cpumask_test_cpu(cpu, desc->percpu_enabled);

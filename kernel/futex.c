@@ -72,7 +72,9 @@
 #include <asm/futex.h>
 
 #include "locking/rtmutex_common.h"
-
+#ifdef CONFIG_FAST_TRACK
+#include <cpu/ftt/ftt.h>
+#endif
 /*
  * READ this before attempting to hack on futexes!
  *
@@ -2261,8 +2263,15 @@ static inline void __queue_me(struct futex_q *q, struct futex_hash_bucket *hb)
 	 * Thus, all RT-threads are woken first in priority order, and
 	 * the others are woken last, in FIFO order.
 	 */
+#ifndef CONFIG_FAST_TRACK
 	prio = min(current->normal_prio, MAX_RT_PRIO);
-
+#else
+	if (is_ftt(&current->se)) {
+		prio = current->normal_prio;
+	} else {
+		prio = DEFAULT_PRIO;
+	}
+#endif
 	plist_node_init(&q->list, prio);
 	plist_add(&q->list, &hb->chain);
 	q->task = current;

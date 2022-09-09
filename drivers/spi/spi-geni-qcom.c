@@ -840,6 +840,8 @@ static void spi_geni_set_sampling_rate(struct spi_geni_master *mas,
 	}
 
 	geni_write_reg(cfg_reg108, mas->base, SE_GENI_CFG_REG108);
+	/* Ensure reg write went through */
+	mb();
 
 	if (cpol == 0 && cpha == 0)
 		cfg_reg109 = 1;
@@ -991,7 +993,6 @@ setup_ipc:
 				"%s:Major:%d Minor:%d step:%dos%d\n",
 			__func__, major, minor, step, mas->oversampling);
 		}
-
 		if (mas->set_miso_sampling)
 			spi_geni_set_sampling_rate(mas, major, minor);
 
@@ -1593,6 +1594,12 @@ static int spi_geni_probe(struct platform_device *pdev)
 
 	rsc->geni_gpio_active = pinctrl_lookup_state(rsc->geni_pinctrl,
 							PINCTRL_DEFAULT);
+#if defined(CONFIG_NFC_FEATURE_SN100U)
+	if (of_property_read_bool(pdev->dev.of_node, "sec,pinctrl_active")) {
+		rsc->geni_gpio_active = pinctrl_lookup_state(rsc->geni_pinctrl,
+				"active");
+	}
+#endif
 	if (IS_ERR_OR_NULL(rsc->geni_gpio_active)) {
 		dev_err(&pdev->dev, "No default config specified!\n");
 		ret = PTR_ERR(rsc->geni_gpio_active);
@@ -1606,6 +1613,27 @@ static int spi_geni_probe(struct platform_device *pdev)
 		ret = PTR_ERR(rsc->geni_gpio_sleep);
 		goto spi_geni_probe_err;
 	}
+#if defined(CONFIG_SENSORS_VL53L5)
+	/* This is control pins of Range sensor to avoid MISO's floating */
+	if (of_property_read_bool(pdev->dev.of_node, "vl53l5,pinctrl_vddoff")) {
+		struct pinctrl_state *geni_gpio_vddoff = NULL;
+		dev_info(&pdev->dev, "pinctrl for vl53l5 vddoff state\n");
+		
+		geni_gpio_vddoff = pinctrl_lookup_state(rsc->geni_pinctrl,"vddoff");
+		if (IS_ERR_OR_NULL(geni_gpio_vddoff)) {
+			dev_err(&pdev->dev, "Failed pinctrl_lookup:vl53l5 vddoff\n");
+		}
+		else {
+			ret = pinctrl_select_state(rsc->geni_pinctrl, geni_gpio_vddoff);
+			if (ret)
+				dev_err(&pdev->dev, "Failed pinctrl_select:vl53l5 vddoff\n");
+		}
+	}
+	else {
+#endif
+#if defined(CONFIG_NFC_FEATURE_SN100U)
+	if (!of_property_read_bool(pdev->dev.of_node, "sec,pinctrl_skip_sleep")) {
+#endif
 
 	ret = pinctrl_select_state(rsc->geni_pinctrl,
 					rsc->geni_gpio_sleep);
@@ -1613,6 +1641,13 @@ static int spi_geni_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to set sleep configuration\n");
 		goto spi_geni_probe_err;
 	}
+
+#if defined(CONFIG_NFC_FEATURE_SN100U)
+	}
+#endif
+#if defined(CONFIG_SENSORS_VL53L5)
+	}
+#endif
 
 	rsc->se_clk = devm_clk_get(&pdev->dev, "se-clk");
 	if (IS_ERR(rsc->se_clk)) {
@@ -1674,13 +1709,13 @@ static int spi_geni_probe(struct platform_device *pdev)
 				"qcom,shared_ee");
 
 	geni_mas->set_miso_sampling = of_property_read_bool(pdev->dev.of_node,
-				"qcom,set-miso-sampling");
+			"qcom,set-miso-sampling");
 	if (geni_mas->set_miso_sampling) {
 		if (!of_property_read_u32(pdev->dev.of_node,
 				"qcom,miso-sampling-ctrl-val",
 				&geni_mas->miso_sampling_ctrl_val))
 			dev_info(&pdev->dev, "MISO_SAMPLING_SET: %d\n",
-				geni_mas->miso_sampling_ctrl_val);
+		geni_mas->miso_sampling_ctrl_val);
 	}
 
 	/* On minicore based targets like bengal, increasing the cs delay

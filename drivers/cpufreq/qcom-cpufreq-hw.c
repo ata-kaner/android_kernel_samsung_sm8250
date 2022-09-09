@@ -16,6 +16,10 @@
 #include <linux/sched.h>
 #include <linux/cpu_cooling.h>
 
+#include <linux/sec_debug.h>
+#include <linux/sec_smem.h>
+#include <trace/events/power.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/dcvsh.h>
 
@@ -29,6 +33,11 @@
 
 #define CYCLE_CNTR_OFFSET(c, m, acc_count)				\
 			(acc_count ? ((c - cpumask_first(m) + 1) * 4) : 0)
+
+
+#ifdef CONFIG_SEC_PM
+extern void *thermal_ipc_log;
+#endif
 
 enum {
 	CPUFREQ_HW_LOW_TEMP_LEVEL,
@@ -83,6 +92,10 @@ struct cpufreq_qcom {
 	char dcvsh_irq_name[MAX_FN_SIZE];
 	bool is_irq_enabled;
 	bool is_irq_requested;
+#ifdef CONFIG_SEC_PM
+	unsigned long lowest_freq;
+	bool limiting;
+#endif
 };
 
 struct cpufreq_counter {
@@ -137,6 +150,7 @@ static unsigned long limits_mitigation_notify(struct cpufreq_qcom *c,
 	struct cpufreq_policy *policy;
 	u32 cpu;
 	unsigned long freq;
+	char lmh_debug[8] = {0};
 
 	if (limit) {
 		freq = readl_relaxed(c->reg_bases[REG_DOMAIN_STATE]) &
@@ -152,8 +166,19 @@ static unsigned long limits_mitigation_notify(struct cpufreq_qcom *c,
 	}
 
 	sched_update_cpu_freq_min_max(&c->related_cpus, 0, freq);
+	snprintf(lmh_debug, 8, "lmh_%d", cpumask_first(&c->related_cpus));
+	trace_clock_set_rate(lmh_debug, freq, raw_smp_processor_id());
 	trace_dcvsh_freq(cpumask_first(&c->related_cpus), freq);
 	c->dcvsh_freq_limit = freq;
+
+#ifdef CONFIG_SEC_PM
+	if (c->limiting == false) {
+		THERMAL_IPC_LOG("Start lmh cpu%d @%lu\n",
+			cpumask_first(&c->related_cpus), freq);
+		c->lowest_freq = freq;
+		c->limiting = true;
+	}
+#endif
 
 	return freq;
 }
@@ -174,11 +199,15 @@ static void limits_dcvsh_poll(struct work_struct *work)
 	dcvsh_freq = qcom_cpufreq_hw_get(cpu);
 
 	if (freq_limit != dcvsh_freq) {
+#ifdef CONFIG_SEC_PM
+	if ((c->limiting == true) && (freq_limit < c->lowest_freq))
+			c->lowest_freq = freq_limit;
+#endif
 		mod_delayed_work(system_highpri_wq, &c->freq_poll_work,
 				msecs_to_jiffies(LIMITS_POLLING_DELAY_MS));
 	} else {
 		/* Update scheduler for throttle removal */
-		limits_mitigation_notify(c, false);
+		freq_limit = limits_mitigation_notify(c, false);
 
 		regval = readl_relaxed(c->reg_bases[REG_INTR_CLR]);
 		regval |= GT_IRQ_STATUS;
@@ -186,6 +215,13 @@ static void limits_dcvsh_poll(struct work_struct *work)
 
 		c->is_irq_enabled = true;
 		enable_irq(c->dcvsh_irq);
+#ifdef CONFIG_SEC_PM
+		THERMAL_IPC_LOG("Fin. lmh cpu%d, "
+			"lowest %lu, f_lim %lu, dcvsh %lu\n",
+			cpu, c->lowest_freq, freq_limit, dcvsh_freq);
+		c->limiting = false;
+		c->lowest_freq = UINT_MAX;
+#endif
 	}
 
 	mutex_unlock(&c->dcvsh_lock);
@@ -285,15 +321,23 @@ qcom_cpufreq_hw_target_index(struct cpufreq_policy *policy,
 {
 	struct cpufreq_qcom *c = policy->driver_data;
 	unsigned long flags;
+	unsigned int target_index = index;
 
 	if (c->skip_data.skip && index == c->skip_data.high_temp_index) {
 		spin_lock_irqsave(&c->skip_data.lock, flags);
 		writel_relaxed(c->skip_data.final_index,
 				c->reg_bases[REG_PERF_STATE]);
+		target_index = c->skip_data.final_index;
 		spin_unlock_irqrestore(&c->skip_data.lock, flags);
 	} else {
 		writel_relaxed(index, c->reg_bases[REG_PERF_STATE]);
 	}
+
+	sec_smem_clk_osm_add_log_cpufreq(policy->cpu,
+				policy->freq_table[target_index].frequency, policy->kobj.name);
+
+	sec_smem_clk_osm_add_log_cpufreq(policy->cpu,
+				policy->freq_table[index].frequency, policy->kobj.name);
 
 	arch_set_freq_scale(policy->related_cpus,
 			    policy->freq_table[index].frequency,
@@ -531,7 +575,7 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 	c->table[i].frequency = CPUFREQ_TABLE_END;
 
 	if (c->skip_data.skip) {
-		pr_info("%s Skip: Index[%u], Frequency[%u], Core Count %u, Final Index %u Actual Index %u Prev_Freq[%u] Prev_Index[%u] Prev_CC[%u]\n",
+		pr_err("%s Skip: Index[%u], Frequency[%u], Core Count %u, Final Index %u Actual Index %u Prev_Freq[%u] Prev_Index[%u] Prev_CC[%u]\n",
 				__func__, c->skip_data.high_temp_index,
 				c->skip_data.freq, c->skip_data.cc,
 				c->skip_data.final_index,
@@ -805,7 +849,7 @@ static int cpufreq_hw_register_cooling_device(struct platform_device *pdev)
 						cpu_cdev,
 						&cpufreq_hw_cooling_ops);
 				if (IS_ERR(cpu_cdev->cdev)) {
-					pr_err("Cooling register failed for %s, ret: %d\n",
+					pr_err("Cooling register failed for %s, ret: %ld\n",
 						cdev_name,
 						PTR_ERR(cpu_cdev->cdev));
 					c->skip_data.final_index =
@@ -881,3 +925,4 @@ static int __init qcom_cpufreq_hw_init(void)
 subsys_initcall(qcom_cpufreq_hw_init);
 
 MODULE_DESCRIPTION("QCOM firmware-based CPU Frequency driver");
+

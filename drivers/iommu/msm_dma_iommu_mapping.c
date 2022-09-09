@@ -156,6 +156,54 @@ static struct scatterlist *clone_sgl(struct scatterlist *sg, int nents)
 	return table.sgl;
 }
 
+/*
+static u64 get_sg_size(struct scatterlist *sgl, int nents)
+{
+	struct scatterlist *sg;
+	int i;
+	u64 total = 0;
+
+	for_each_sg(sgl, sg, nents, i) {
+		total += sg->length;
+	}
+	return total;
+}
+*/
+static void print_one_map(void *buffer, struct msm_iommu_map *map, u64 *dmalen_total)
+{
+	u64 dmalen;
+	int refcount;
+	dma_addr_t dma_addr;
+
+	dmalen = sg_dma_len(map->sgl);
+	*dmalen_total += dmalen;
+
+	refcount = kref_read(&map->ref);
+	dma_addr = sg_dma_address(map->sgl);
+
+	pr_err("ion_buffer ptr=0x%llx DMAADDR=0x%pad len=0x%x refcount=%d\n", buffer, &dma_addr, dmalen, refcount);
+}
+
+
+void msm_dma_debug_count_buffers(struct device *dev)
+{
+	u64 dmalen_total = 0;
+	struct msm_iommu_meta *meta, *tmp;
+	struct rb_root *root = &iommu_root;
+	struct msm_iommu_map *map;
+
+	mutex_lock(&msm_iommu_map_mutex);
+	rbtree_postorder_for_each_entry_safe(meta, tmp, root, node) {
+		map = msm_iommu_lookup(meta, dev);
+		if (!map)
+			continue;
+
+		print_one_map(meta->buffer, map, &dmalen_total);
+	}
+	mutex_unlock(&msm_iommu_map_mutex);
+	pr_err("DEBUG: dmalen total=0x%x\n", dmalen_total);
+}
+
 static inline int __msm_dma_map_sg(struct device *dev, struct scatterlist *sg,
 				   int nents, enum dma_data_direction dir,
 				   struct dma_buf *dma_buf,

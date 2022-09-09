@@ -107,18 +107,23 @@ static int qdss_create_buf_tbl(struct qdss_bridge_drvdata *drvdata)
 			goto err;
 
 		buf = kzalloc(drvdata->mtu, GFP_KERNEL);
+		if (!buf)
+			goto err1;
 		usb_req = kzalloc(sizeof(*usb_req), GFP_KERNEL);
+		if (!usb_req)
+			goto err2;
 
 		entry->buf = buf;
 		entry->usb_req = usb_req;
 		atomic_set(&entry->available, 1);
 		list_add_tail(&entry->link, &drvdata->buf_tbl);
-
-		if (!buf || !usb_req)
-			goto err;
 	}
 
 	return 0;
+err2:
+	kfree(buf);
+err1:
+	kfree(entry);
 err:
 	qdss_destroy_buf_tbl(drvdata);
 	return -ENOMEM;

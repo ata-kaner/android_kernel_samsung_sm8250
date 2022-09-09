@@ -645,8 +645,13 @@ static int a6xx_zap_load(struct adreno_device *adreno_dev)
 		if (IS_ERR_OR_NULL(zap)) {
 			ret = (zap == NULL) ? -ENODEV : PTR_ERR(zap);
 			zap = NULL;
-		} else
+			dev_err(adreno_dev->dev.dev,
+				"subsystem_get() for zap failed. zap = NULL\n");
+		} else {
 			adreno_dev->zap_loaded = 1;
+			dev_err(adreno_dev->dev.dev,
+				"subsystem_get() for zap succeed.\n");
+		}
 	}
 
 	return ret;

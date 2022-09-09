@@ -1313,15 +1313,13 @@ config TOUCHSCREEN_ROHM_BU21023
 config TOUCHSCREEN_ST
 	tristate "STMicroelectronics Touchscreen Driver"
 	depends on I2C
-	default y
+	default n
 	help
 	  Say Y here if you have a STMicroelectronics Touchscreen.
 
 	  If unsure, say N.
 	  To compile this driver as a module, choose M here: the
 	  module will be called st.
-
-source "drivers/input/touchscreen/st/Kconfig"
 
 config TOUCHSCREEN_SYNAPTICS_DSX
 	bool "Synaptics DSX Touchscreen Driver"
@@ -1335,7 +1333,23 @@ config TOUCHSCREEN_SYNAPTICS_DSX
 	  To compile this driver as a module, choose M here: the
 	  module will be called synaptics_dsx.
 
+config TOUCHSCREEN_DUAL_FOLDABLE
+	tristate "Dual TSP IC for Foldable"
+	depends on I2C
+	help
+	  This enables support for Dual TSP.
+
+source "drivers/input/touchscreen/sec_ts/y79a/Kconfig"
+source "drivers/input/touchscreen/sec_ts/y79a_c/Kconfig"
+source "drivers/input/touchscreen/zinitix/ztw522/Kconfig"
+source "drivers/input/touchscreen/st/Kconfig"
 source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
+source "drivers/input/touchscreen/stm/fts9cu80f_b/Kconfig"
+source "drivers/input/touchscreen/stm/fts1ba90a/Kconfig"
+source "drivers/input/touchscreen/novatek/nt36523/Kconfig"
+source "drivers/input/touchscreen/melfas/mss100/Kconfig"
+source "drivers/input/touchscreen/zinitix/zt7650/Kconfig"
+source "drivers/input/touchscreen/stm/fts5cu56a/Kconfig"
 
 config TOUCHSCREEN_SYNAPTICS_TCM
 	bool "Synaptics TCM Touchscreen Driver"

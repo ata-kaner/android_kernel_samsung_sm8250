@@ -257,7 +257,11 @@ ENDPROC(cpu_do_switch_mm)
  * This is the low-level counterpart to cpu_replace_ttbr1, and should not be
  * called by anything else. It can only be executed from a TTBR0 mapping.
  */
+#ifdef CONFIG_CFP_JOPP
+NOP_ENTRY(idmap_cpu_replace_ttbr1)
+#else
 ENTRY(idmap_cpu_replace_ttbr1)
+#endif
 	save_and_disable_daif flags=x2
 
 	__idmap_cpu_set_reserved_ttbr1 x1, x3
@@ -297,7 +301,11 @@ ENDPROC(idmap_cpu_replace_ttbr1)
  */
 __idmap_kpti_flag:
 	.long	1
+#ifdef CONFIG_CFP_JOPP
+NOP_ENTRY(idmap_kpti_install_ng_mappings)
+#else
 ENTRY(idmap_kpti_install_ng_mappings)
+#endif
 	cpu		.req	w0
 	num_cpus	.req	w1
 	swapper_pa	.req	x2
@@ -324,15 +332,27 @@ ENTRY(idmap_kpti_install_ng_mappings)
 	/* We're the boot CPU. Wait for the others to catch up */
 	sevl
 1:	wfe
+#ifdef CONFIG_CFP_ROPP
+	ldaxr	w19, [flag_ptr]
+	eor	w19, w19, num_cpus
+	cbnz	w19, 1b
+#else
 	ldaxr	w17, [flag_ptr]
 	eor	w17, w17, num_cpus
 	cbnz	w17, 1b
+#endif
 
 	/* We need to walk swapper, so turn off the MMU. */
 	pre_disable_mmu_workaround
+#ifdef CONFIG_CFP_ROPP
+	mrs	x19, sctlr_el1
+	bic	x19, x19, #SCTLR_ELx_M
+	msr	sctlr_el1, x19
+#else
 	mrs	x17, sctlr_el1
 	bic	x17, x17, #SCTLR_ELx_M
 	msr	sctlr_el1, x17
+#endif
 	isb
 
 	/* Everybody is enjoying the idmap, so we can rewrite swapper. */
@@ -355,9 +375,15 @@ skip_pgd:
 	isb
 
 	/* We're done: fire up the MMU again */
+#ifdef CONFIG_CFP_ROPP
+	mrs	x19, sctlr_el1
+	orr	x19, x19, #SCTLR_ELx_M
+	msr	sctlr_el1, x19
+#else
 	mrs	x17, sctlr_el1
 	orr	x17, x17, #SCTLR_ELx_M
 	msr	sctlr_el1, x17
+#endif
 	isb
 
 	/*
@@ -446,13 +472,22 @@ skip_pte:
 	/* Secondary CPUs end up here */
 __idmap_kpti_secondary:
 	/* Uninstall swapper before surgery begins */
+#ifdef CONFIG_CFP_ROPP
+	__idmap_cpu_set_reserved_ttbr1 x16, x19
+#else
 	__idmap_cpu_set_reserved_ttbr1 x16, x17
+#endif
 
 	/* Increment the flag to let the boot CPU we're ready */
 1:	ldxr	w16, [flag_ptr]
 	add	w16, w16, #1
+#ifdef CONFIG_CFP_ROPP
+	stxr	w19, w16, [flag_ptr]
+	cbnz	w19, 1b
+#else
 	stxr	w17, w16, [flag_ptr]
 	cbnz	w17, 1b
+#endif
 
 	/* Wait for the boot CPU to finish messing around with swapper */
 	sevl

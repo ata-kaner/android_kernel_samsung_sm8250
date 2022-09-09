@@ -304,4 +304,27 @@ config PCI_MSM_MSI
 	  masking, and affinity assigning for PCIe devices.
 
 source "drivers/pci/controller/dwc/Kconfig"
+
+config SEC_PCIE
+	depends on PCI_MSM
+	bool "SEC_PCIE feature"
+
+config SEC_PCIE_DEV
+	depends on PCI_MSM
+	bool "SEC_PCIE_DEV dev feature"
+
+config SEC_PCIE_AER
+	depends on PCI_MSM
+	bool "SEC_PCIE_AER feature"
+
+config SEC_PCIE_L1SS
+	depends on PCI_MSM
+	depends on SEC_PCIE
+	bool "SEC_PCIE_L1SS feature"
+
+config SEC_PANIC_PCIE_ERR
+	depends on PCI_MSM
+	depends on SEC_PCIE
+	bool "SEC_PANIC_PCIE_ERR feature"
+	
 endmenu

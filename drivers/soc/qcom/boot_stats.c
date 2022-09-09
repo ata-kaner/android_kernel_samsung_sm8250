@@ -16,12 +16,21 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 
+#include <linux/sec_debug.h>
+
 struct boot_stats {
 	uint32_t bootloader_start;
 	uint32_t bootloader_end;
 	uint32_t bootloader_display;
 	uint32_t bootloader_load_kernel;
 };
+
+#ifdef CONFIG_SEC_BOOTSTAT
+uint32_t bs_linuxloader_start;
+uint32_t bs_linux_start;
+uint32_t bs_uefi_start;
+uint32_t bs_bootloader_load_kernel;
+#endif
 
 static void __iomem *mpm_counter_base;
 static uint32_t mpm_counter_freq;
@@ -73,6 +82,14 @@ err1:
 
 static void print_boot_stats(void)
 {
+#ifdef CONFIG_SEC_BOOTSTAT
+	bs_uefi_start = readl_relaxed(&boot_stats->bootloader_start);
+	bs_linux_start = readl_relaxed(&boot_stats->bootloader_end);
+	bs_linuxloader_start = readl_relaxed(&boot_stats->bootloader_display);
+	bs_bootloader_load_kernel = readl_relaxed(
+					&boot_stats->bootloader_load_kernel);
+#endif
+
 	pr_info("KPI: Bootloader start count = %u\n",
 		readl_relaxed(&boot_stats->bootloader_start));
 	pr_info("KPI: Bootloader end count = %u\n",
@@ -87,6 +104,17 @@ static void print_boot_stats(void)
 		mpm_counter_freq);
 }
 
+#ifdef CONFIG_SEC_BOOTSTAT
+unsigned int __deprecated get_boot_stat_time(void)
+{
+	return readl_relaxed(mpm_counter_base);
+}
+unsigned int get_boot_stat_freq(void)
+{
+	return mpm_counter_freq;
+}
+#endif
+
 int boot_stats_init(void)
 {
 	int ret;
@@ -98,7 +126,9 @@ int boot_stats_init(void)
 	print_boot_stats();
 
 	iounmap(boot_stats);
+#ifndef CONFIG_SEC_BOOTSTAT
 	iounmap(mpm_counter_base);
+#endif
 
 	return 0;
 }

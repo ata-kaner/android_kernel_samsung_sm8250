@@ -4,6 +4,7 @@
  */
 
 #include <linux/msm-bus.h>
+#include <linux/sde_rsc.h>
 
 struct proxy_client {
 	struct msm_bus_scale_pdata *pdata;
@@ -16,6 +17,7 @@ static int msm_bus_device_proxy_client_probe(struct platform_device *pdev)
 {
 	int ret;
 
+	reg_log_dump(__func__, __LINE__);
 	proxy_client_info.pdata = msm_bus_cl_get_pdata(pdev);
 
 	if (!proxy_client_info.pdata)
@@ -33,7 +35,7 @@ static int msm_bus_device_proxy_client_probe(struct platform_device *pdev)
 					proxy_client_info.client_handle, 1);
 	if (ret)
 		dev_err(&pdev->dev, "Bandwidth update failed (%d)\n", ret);
-
+	reg_log_dump(__func__, __LINE__);
 	return ret;
 }
 

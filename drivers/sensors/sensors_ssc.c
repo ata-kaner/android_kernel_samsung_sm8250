@@ -20,12 +20,24 @@
 #include <linux/delay.h>
 #include <linux/sysfs.h>
 #include <linux/workqueue.h>
+#ifdef CONFIG_SUPPORT_SSC_SPU
+#include <linux/adsp/ssc_spu.h>
+#endif
 
 #include <soc/qcom/subsystem_restart.h>
+
+#if defined(CONFIG_SEC_FACTORY) && defined(CONFIG_SUPPORT_DUAL_6AXIS)
+static bool pretest = false;
+#endif
 
 #define IMAGE_LOAD_CMD 1
 #define IMAGE_UNLOAD_CMD 0
 #define SSR_RESET_CMD 1
+#define SET_PRETEST_SSR 2
+#define CLR_PRETEST_SSR 3
+#define SET_DHALL_SSR 4
+#define CLR_DHALL_SSR 5
+#define SSR_FORCE_RESET_CMD 9
 #define CLASS_NAME	"ssc"
 #define DRV_NAME	"sensors"
 #define DRV_VERSION	"2.00"
@@ -69,8 +81,86 @@ static struct attribute *attrs[] = {
 	NULL,
 };
 
+#ifdef CONFIG_SUPPORT_SSC_SPU
+const char *ver_info_path[SSC_CNT_MAX] = {SLPI_SPU_VER_INFO, SLPI_VER_INFO};
+int ver_buf[SSC_CNT_MAX][SSC_VC_MAX];
+int fw_idx = SSC_ORI;
+static bool slpi_need_update_spu(void)
+{
+	struct file *slpi_filp = NULL;
+	mm_segment_t old_fs;
+	int i = 0, ret = 0, vc_idx = 0;
+	char *read_buf = kzalloc(FILE_LEN * sizeof(char), GFP_KERNEL);
+
+	for (vc_idx = 0; vc_idx < SSC_CNT_MAX; vc_idx++) {
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+		pr_info("idx:%d, path:%s\n", vc_idx, ver_info_path[vc_idx]);
+		slpi_filp = filp_open(ver_info_path[vc_idx], O_RDONLY, 0440);
+		if (IS_ERR(slpi_filp)) {
+			ret = PTR_ERR(slpi_filp);
+			pr_err("%s - Can't open :%s, %d\n",
+				__func__, ver_info_path[vc_idx], ret);
+			set_fs(old_fs);
+			goto fail;
+		}
+
+		ret = vfs_read(slpi_filp, (char *)read_buf,
+			FILE_LEN * sizeof(char), &slpi_filp->f_pos);
+		if (ret < 0) {
+			pr_err("%s: fd read fail:%d\n", __func__, ret);
+			filp_close(slpi_filp, current->files);
+			set_fs(old_fs);
+			goto fail;
+		}
+
+		filp_close(slpi_filp, current->files);
+		set_fs(old_fs);
+
+		ret = sscanf(read_buf, "%d,%4d-%2d-%2d %2d:%2d:%2d.%6d",
+			&ver_buf[vc_idx][SSC_CL], &ver_buf[vc_idx][SSC_YEAR],
+			&ver_buf[vc_idx][SSC_MONTH], &ver_buf[vc_idx][SSC_DATE],
+			&ver_buf[vc_idx][SSC_HOUR], &ver_buf[vc_idx][SSC_MIN],
+			&ver_buf[vc_idx][SSC_SEC], &ver_buf[vc_idx][SSC_MSEC]);
+
+		pr_info("idx:%d, CL:%d, %d-%d-%d, %d:%d:%d.%d\n", 
+			vc_idx, ver_buf[vc_idx][SSC_CL],
+			ver_buf[vc_idx][SSC_YEAR], ver_buf[vc_idx][SSC_MONTH],
+			ver_buf[vc_idx][SSC_DATE], ver_buf[vc_idx][SSC_HOUR],
+			ver_buf[vc_idx][SSC_MIN], ver_buf[vc_idx][SSC_SEC],
+			ver_buf[vc_idx][SSC_MSEC]);
+	}
+
+	for (i = 0; i < SSC_VC_MAX; i++) {
+		if (ver_buf[SSC_ORI][i] < ver_buf[SSC_SPU][i]) {
+			pr_info("SLPI_SPU firmware laster, update!!, %d:%d,%d\n",
+				i, ver_buf[SSC_ORI][i], ver_buf[SSC_SPU][i]);
+			kfree(read_buf);
+			return true;
+		} else if (ver_buf[SSC_ORI][i] > ver_buf[SSC_SPU][i]) {
+			kfree(read_buf);
+			return false;
+		}
+	}
+        
+fail:
+	kfree(read_buf);
+
+        return false;
+}
+#endif
+
 static struct platform_device *slpi_private;
 static struct work_struct slpi_ldr_work;
+
+static unsigned int ssc_system_rev;
+
+unsigned int ssc_hw_rev(void)
+{
+	pr_info("%s - ssc_hw_rev = %u\n", __func__, ssc_system_rev);
+	return ssc_system_rev;
+}
+EXPORT_SYMBOL(ssc_hw_rev);
 
 static void slpi_load_fw(struct work_struct *slpi_ldr_work)
 {
@@ -97,6 +187,13 @@ static void slpi_load_fw(struct work_struct *slpi_ldr_work)
 		goto fail;
 	}
 
+	ret = of_property_read_u32(pdev->dev.of_node,
+		"qcom,ssc_hw_rev", &ssc_system_rev);
+	if (ret < 0)
+		pr_err("can't get ssc_hw_rev.\n");
+	else
+		pr_info("%s - ssc_hw_rev = %u\n", __func__, ssc_system_rev);
+
 	priv = platform_get_drvdata(pdev);
 	if (!priv) {
 		dev_err(&pdev->dev,
@@ -104,11 +201,32 @@ static void slpi_load_fw(struct work_struct *slpi_ldr_work)
 		goto fail;
 	}
 
-	priv->pil_h = subsystem_get_with_fwname("slpi", firmware_name);
-	if (IS_ERR(priv->pil_h)) {
-		dev_err(&pdev->dev, "%s: pil get failed,\n",
-			__func__);
-		goto fail;
+#ifdef CONFIG_SUPPORT_SSC_SPU
+	if (slpi_need_update_spu()) {
+		priv->pil_h = subsystem_get_with_fwname("slpi", "slpi_spu");
+		if (IS_ERR(priv->pil_h)) {
+			dev_err(&pdev->dev, "%s: pil get failed slpi_spu,\n",
+				__func__);
+			priv->pil_h = subsystem_get_with_fwname("slpi", firmware_name);
+			if (IS_ERR(priv->pil_h)) {
+				dev_err(&pdev->dev, "%s: pil get failed,\n",
+					__func__);
+				goto fail;
+			} else {
+				fw_idx = SSC_ORI_AF_SPU_FAIL;
+			}
+		} else {
+			fw_idx = SSC_SPU;
+		}
+	} else
+#endif
+	{
+		priv->pil_h = subsystem_get_with_fwname("slpi", firmware_name);
+		if (IS_ERR(priv->pil_h)) {
+			dev_err(&pdev->dev, "%s: pil get failed,\n",
+				__func__);
+			goto fail;
+		}
 	}
 
 	dev_dbg(&pdev->dev, "%s: SLPI image is loaded\n", __func__);
@@ -154,9 +272,28 @@ static ssize_t slpi_ssr_store(struct kobject *kobj,
 
 	if (kstrtoint(buf, 10, &ssr_cmd) < 0)
 		return -EINVAL;
-
-	if (ssr_cmd != SSR_RESET_CMD)
+#if defined(CONFIG_SEC_FACTORY) && defined(CONFIG_SUPPORT_DUAL_6AXIS)
+	if (ssr_cmd == SET_PRETEST_SSR) {
+		pr_info("[FACTORY] Set Pretest SSR. slpi will be restarted!!\n");
+		pretest = true;
+	} else if (ssr_cmd == CLR_PRETEST_SSR) {
+		pr_info("[FACTORY] Clear Pretest SSR. return without slpi ssr!!\n");
+		pretest = false;
+		return count;
+	} else if (ssr_cmd == SET_DHALL_SSR) {
+		pr_info("[FACTORY] SET_DHALL_SSR. slpi will be restarted!!\n");
+		pretest = true;
+	} else if (ssr_cmd == CLR_DHALL_SSR) {
+		pr_info("[FACTORY] CLR_DHALL_SSR. return without slpi ssr!!\n");
+		pretest = false;
+		return count;
+	} else if (ssr_cmd != SSR_RESET_CMD) {
 		return -EINVAL;
+	}
+#else
+	if (ssr_cmd != SSR_RESET_CMD && ssr_cmd != SSR_FORCE_RESET_CMD)
+		return -EINVAL;
+#endif
 
 	priv = platform_get_drvdata(pdev);
 	if (!priv)
@@ -167,7 +304,10 @@ static ssize_t slpi_ssr_store(struct kobject *kobj,
 		return -EINVAL;
 
 	dev_err(&pdev->dev, "Something went wrong with SLPI, restarting\n");
-
+	if (ssr_cmd == SSR_FORCE_RESET_CMD) {
+		pr_info("Run Force SSR for SS\n");
+		subsys_set_fssr(sns_dev, true);
+	}
 	/* subsystem_restart_dev has worker queue to handle */
 	if (subsystem_restart_dev(sns_dev) != 0) {
 		dev_err(&pdev->dev, "subsystem_restart_dev failed\n");
@@ -177,6 +317,50 @@ static ssize_t slpi_ssr_store(struct kobject *kobj,
 	dev_dbg(&pdev->dev, "SLPI restarted\n");
 	return count;
 }
+
+#if defined(CONFIG_SEC_FACTORY) && defined(CONFIG_SUPPORT_DUAL_6AXIS)
+bool is_pretest(void)
+{
+	return pretest;
+}
+EXPORT_SYMBOL(is_pretest);
+#endif
+
+#ifdef CONFIG_DSP_SLEEP_RECOVERY
+int slpi_ssr(void)
+{
+	struct subsys_device *slpi_dev = NULL;
+	struct platform_device *pdev = slpi_private;
+	struct slpi_loader_private *priv = NULL;
+	int rc;
+
+	dev_dbg(&pdev->dev, "%s: going to call slpi ssr\n ", __func__);
+
+	priv = platform_get_drvdata(pdev);
+	if (!priv)
+		return -EINVAL;
+
+	slpi_dev = (struct subsys_device *)priv->pil_h;
+	if (!slpi_dev)
+		return -EINVAL;
+
+	dev_info(&pdev->dev, "requesting for slpi restart\n");
+
+#ifndef CONFIG_SEC_SLPI_SLEEP_DEBUG
+	dev_info(&pdev->dev, "Set force slpi ssr regardless of debug level\n");
+	subsys_set_fssr(slpi_dev, true);
+#endif
+	/* subsystem_restart_dev has worker queue to handle */
+	rc = subsystem_restart_dev(slpi_dev);
+	if (rc) {
+		dev_err(&pdev->dev, "subsystem_restart_dev failed\n");
+		return rc;
+	}
+
+	dev_info(&pdev->dev, "slpi restarted by intention\n");
+	return 0;
+}
+#endif
 
 static ssize_t slpi_boot_store(struct kobject *kobj,
 	struct kobj_attribute *attr,

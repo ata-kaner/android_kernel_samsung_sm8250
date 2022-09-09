@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.*/
+/* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.*/
 
 #ifndef __MSM_PCIE_H
 #define __MSM_PCIE_H
@@ -21,6 +21,7 @@ enum msm_pcie_pm_opt {
 	MSM_PCIE_RESUME,
 	MSM_PCIE_DISABLE_PC,
 	MSM_PCIE_ENABLE_PC,
+	MSM_PCIE_HANDLE_LINKDOWN,
 };
 
 enum msm_pcie_event {
@@ -31,6 +32,7 @@ enum msm_pcie_event {
 	MSM_PCIE_EVENT_L1SS_TIMEOUT = BIT(3),
 	MSM_PCIE_EVENT_DRV_CONNECT = BIT(4),
 	MSM_PCIE_EVENT_DRV_DISCONNECT = BIT(5),
+	MSM_PCIE_EVENT_LINK_RECOVER = BIT(6),
 };
 
 enum msm_pcie_trigger {
@@ -273,5 +275,36 @@ static inline int msm_pcie_debug_info(struct pci_dev *dev, u32 option, u32 base,
 	return -ENODEV;
 }
 #endif /* CONFIG_PCI_MSM */
+
+#ifdef CONFIG_SEC_PCIE_L1SS
+enum l1ss_ctrl_ids {
+        L1SS_SYSFS,
+        L1SS_MST,
+        L1SS_AUDIO,
+        L1SS_MAX
+};
+
+void sec_pcie_set_use_ep_loaded(struct pci_dev *dev);
+void sec_pcie_set_ep_driver_loaded(struct pci_dev *dev, bool is_loaded);
+
+
+int sec_pcie_l1ss_enable(int ctrl_id);
+int sec_pcie_l1ss_disable(int ctrl_id);
+#else
+
+#define sec_pcie_set_use_ep_loaded(dev) do { } while(0)
+#define sec_pcie_set_ep_driver_loaded(dev, is_loaded) do { } while(0)
+
+inline int sec_pcie_l1ss_enable(int ctrl_id)
+{
+        return -ENODEV;
+}
+
+inline int sec_pcie_l1ss_disable(int ctrl_id)
+{
+        return -ENODEV;
+}
+#endif
+
 
 #endif /* __MSM_PCIE_H */

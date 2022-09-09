@@ -49,6 +49,8 @@
 #include <asm/sysreg.h>
 #include <asm/traps.h>
 
+#include <linux/sec_debug.h>
+
 #define FPEXC_IOF	(1 << 0)
 #define FPEXC_DZF	(1 << 1)
 #define FPEXC_OFF	(1 << 2)
@@ -886,6 +888,10 @@ void fpsimd_thread_switch(struct task_struct *next)
 	wrong_task = __this_cpu_read(fpsimd_last_state.st) !=
 					&next->thread.uw.fpsimd_state;
 	wrong_cpu = next->thread.fpsimd_cpu != smp_processor_id();
+
+	if (IS_ENABLED(CONFIG_KERNEL_MODE_NEON_DEBUG))
+		if (!wrong_task && !wrong_cpu)
+			fpsimd_context_check(next);
 
 	update_tsk_thread_flag(next, TIF_FOREIGN_FPSTATE,
 			       wrong_task || wrong_cpu);

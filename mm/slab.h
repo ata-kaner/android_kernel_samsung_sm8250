@@ -47,6 +47,10 @@ struct kmem_cache {
 #include <linux/random.h>
 #include <linux/sched/mm.h>
 
+#ifdef CONFIG_KDP_CRED
+#include <linux/kdp.h>
+#endif
+
 /*
  * State of the slab allocator.
  *
@@ -424,10 +428,20 @@ static inline struct kmem_cache *slab_pre_alloc_hook(struct kmem_cache *s,
 	if (should_failslab(s, flags))
 		return NULL;
 
+#ifdef CONFIG_KDP_CRED
+	if (s->name &&
+		(!strcmp(s->name, CRED_JAR_RO) ||
+		!strcmp(s->name, TSEC_JAR)||
+		!strcmp(s->name, VFSMNT_JAR)))
+		goto out;
+#endif
 	if (memcg_kmem_enabled() &&
 	    ((flags & __GFP_ACCOUNT) || (s->flags & SLAB_ACCOUNT)))
 		return memcg_kmem_get_cache(s);
 
+#ifdef CONFIG_KDP_CRED
+	out:
+#endif
 	return s;
 }
 

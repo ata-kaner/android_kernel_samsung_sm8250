@@ -875,8 +875,10 @@ bool cfg80211_chandef_usable(struct wiphy *wiphy,
 {
 	struct ieee80211_sta_ht_cap *ht_cap;
 	struct ieee80211_sta_vht_cap *vht_cap;
+	const struct ieee80211_sta_he_cap *he_cap;
 	struct ieee80211_edmg *edmg_cap;
 	u32 width, control_freq, cap;
+	bool is_6ghz_chan;
 
 	if (WARN_ON(!cfg80211_chandef_valid(chandef)))
 		return false;
@@ -884,6 +886,12 @@ bool cfg80211_chandef_usable(struct wiphy *wiphy,
 	ht_cap = &wiphy->bands[chandef->chan->band]->ht_cap;
 	vht_cap = &wiphy->bands[chandef->chan->band]->vht_cap;
 	edmg_cap = &wiphy->bands[chandef->chan->band]->edmg_cap;
+	//TODO: need to work on how to select correct iftype depending on the op that is invoking cfg80211_chandef_usable()
+	he_cap = ieee80211_get_he_iftype_cap(wiphy->bands[chandef->chan->band],
+					     NL80211_IFTYPE_AP);
+	is_6ghz_chan = (chandef->chan->band == NL80211_BAND_6GHZ);
+	if (is_6ghz_chan && he_cap == NULL)
+		return false;
 
 	if (edmg_cap->channels &&
 	    !cfg80211_edmg_usable(wiphy,
@@ -904,7 +912,7 @@ bool cfg80211_chandef_usable(struct wiphy *wiphy,
 		width = 10;
 		break;
 	case NL80211_CHAN_WIDTH_20:
-		if (!ht_cap->ht_supported)
+		if (!ht_cap->ht_supported && !is_6ghz_chan)
 			return false;
 	case NL80211_CHAN_WIDTH_20_NOHT:
 		prohibited_flags |= IEEE80211_CHAN_NO_20MHZ;
@@ -912,10 +920,15 @@ bool cfg80211_chandef_usable(struct wiphy *wiphy,
 		break;
 	case NL80211_CHAN_WIDTH_40:
 		width = 40;
-		if (!ht_cap->ht_supported)
+		if (!ht_cap->ht_supported && !is_6ghz_chan)
 			return false;
-		if (!(ht_cap->cap & IEEE80211_HT_CAP_SUP_WIDTH_20_40) ||
-		    ht_cap->cap & IEEE80211_HT_CAP_40MHZ_INTOLERANT)
+		if (!is_6ghz_chan &&
+		    (!(ht_cap->cap & IEEE80211_HT_CAP_SUP_WIDTH_20_40) ||
+		    ht_cap->cap & IEEE80211_HT_CAP_40MHZ_INTOLERANT))
+			return false;
+		if (is_6ghz_chan &&
+		    !(he_cap->he_cap_elem.phy_cap_info[0] &
+		    IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_80MHZ_IN_5G))
 			return false;
 		if (chandef->center_freq1 < control_freq &&
 		    chandef->chan->flags & IEEE80211_CHAN_NO_HT40MINUS)
@@ -926,20 +939,34 @@ bool cfg80211_chandef_usable(struct wiphy *wiphy,
 		break;
 	case NL80211_CHAN_WIDTH_80P80:
 		cap = vht_cap->cap & IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_MASK;
-		if (cap != IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160_80PLUS80MHZ)
+		if (!is_6ghz_chan &&
+		    cap != IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160_80PLUS80MHZ)
+			return false;
+		if (is_6ghz_chan &&
+		    !(he_cap->he_cap_elem.phy_cap_info[0] &
+		    IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_80PLUS80_MHZ_IN_5G))
 			return false;
 	case NL80211_CHAN_WIDTH_80:
-		if (!vht_cap->vht_supported)
+		if (!vht_cap->vht_supported && !is_6ghz_chan)
+			return false;
+		if (is_6ghz_chan &&
+		    !(he_cap->he_cap_elem.phy_cap_info[0] &
+		    IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_80MHZ_IN_5G))
 			return false;
 		prohibited_flags |= IEEE80211_CHAN_NO_80MHZ;
 		width = 80;
 		break;
 	case NL80211_CHAN_WIDTH_160:
-		if (!vht_cap->vht_supported)
+		if (!vht_cap->vht_supported && !is_6ghz_chan)
 			return false;
 		cap = vht_cap->cap & IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_MASK;
-		if (cap != IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160MHZ &&
+		if (!is_6ghz_chan &&
+		    cap != IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160MHZ &&
 		    cap != IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160_80PLUS80MHZ)
+			return false;
+		if (is_6ghz_chan &&
+		    !(he_cap->he_cap_elem.phy_cap_info[0] &
+		    IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_160MHZ_IN_5G))
 			return false;
 		prohibited_flags |= IEEE80211_CHAN_NO_160MHZ;
 		width = 160;
@@ -1050,7 +1077,8 @@ static bool cfg80211_ir_permissive_chan(struct wiphy *wiphy,
 		if (chan == other_chan)
 			return true;
 
-		if (chan->band != NL80211_BAND_5GHZ)
+		if (chan->band != NL80211_BAND_5GHZ &&
+		    chan->band != NL80211_BAND_6GHZ)
 			continue;
 
 		r1 = cfg80211_get_unii(chan->center_freq);

@@ -29,6 +29,9 @@ struct page_owner {
 	int pid;
 	u64 ts_nsec;
 	u64 free_ts_nsec;
+	int alloc_cpu, free_cpu;
+	char alloc_comm[TASK_COMM_LEN], free_comm[TASK_COMM_LEN];
+	pid_t free_pid;
 };
 
 static bool page_owner_disabled =
@@ -121,12 +124,19 @@ void __reset_page_owner(struct page *page, unsigned int order)
 	int i;
 	struct page_ext *page_ext;
 	u64 free_ts_nsec = local_clock();
+	struct page_owner *page_owner;
 
 	for (i = 0; i < (1 << order); i++) {
 		page_ext = lookup_page_ext(page + i);
 		if (unlikely(!page_ext))
 			continue;
-		get_page_owner(page_ext)->free_ts_nsec = free_ts_nsec;
+		page_owner = get_page_owner(page_ext);
+		page_owner->free_ts_nsec = free_ts_nsec;
+		preempt_disable();
+		page_owner->free_cpu = smp_processor_id();
+		preempt_enable();
+		strncpy(page_owner->free_comm, current->comm, TASK_COMM_LEN);
+		page_owner->free_pid = current->pid;
 		__clear_bit(PAGE_EXT_OWNER, &page_ext->flags);
 		__set_bit(PAGE_EXT_PG_FREE, &page_ext->flags);
 	}
@@ -194,6 +204,10 @@ static inline void __set_page_owner_handle(struct page_ext *page_ext,
 	page_owner->pid = current->pid;
 	page_owner->ts_nsec = local_clock();
 	page_owner->free_ts_nsec = 0;
+	preempt_disable();
+	page_owner->alloc_cpu = smp_processor_id();
+	preempt_enable();
+	strncpy(page_owner->alloc_comm, current->comm, TASK_COMM_LEN);
 
 	__set_bit(PAGE_EXT_OWNER, &page_ext->flags);
 	__clear_bit(PAGE_EXT_PG_FREE, &page_ext->flags);
@@ -270,6 +284,13 @@ void __copy_page_owner(struct page *oldpage, struct page *newpage)
 	new_page_owner->pid = old_page_owner->pid;
 	new_page_owner->ts_nsec = old_page_owner->ts_nsec;
 	new_page_owner->free_ts_nsec = old_page_owner->ts_nsec;
+	new_page_owner->alloc_cpu = old_page_owner->alloc_cpu;
+	strncpy(new_page_owner->alloc_comm, old_page_owner->alloc_comm,
+		TASK_COMM_LEN);
+	new_page_owner->free_cpu = old_page_owner->free_cpu;
+	strncpy(new_page_owner->free_comm, old_page_owner->free_comm,
+		TASK_COMM_LEN);
+	new_page_owner->free_pid = old_page_owner->free_pid;
 
 	/*
 	 * We don't clear the bit on the oldpage as it's going to be freed

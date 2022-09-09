@@ -243,6 +243,10 @@ static int fscrypt_new_context_from_policy(union fscrypt_context *ctx_u,
 		       policy->master_key_descriptor,
 		       sizeof(ctx->master_key_descriptor));
 		get_random_bytes(ctx->nonce, sizeof(ctx->nonce));
+
+#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
+		ctx->knox_flags = 0;
+#endif
 		return sizeof(*ctx);
 	}
 	case FSCRYPT_POLICY_V2: {
@@ -259,6 +263,10 @@ static int fscrypt_new_context_from_policy(union fscrypt_context *ctx_u,
 		       policy->master_key_identifier,
 		       sizeof(ctx->master_key_identifier));
 		get_random_bytes(ctx->nonce, sizeof(ctx->nonce));
+
+#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
+		ctx->knox_flags = 0;
+#endif
 		return sizeof(*ctx);
 	}
 	}
@@ -405,8 +413,11 @@ int fscrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 		return -EFAULT;
 
 	size = fscrypt_policy_size(&policy);
-	if (size <= 0)
+	if (size <= 0) {
+		printk(KERN_ERR
+			"fscrypt_ioctl_set_policy policy.version != 0\n");
 		return -EINVAL;
+	}
 
 	/*
 	 * We should just copy the remaining 'size - 1' bytes here, but a
@@ -420,12 +431,18 @@ int fscrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 	 * Work around it by just copying the first byte again...
 	 */
 	version = policy.version;
-	if (copy_from_user(&policy, arg, size))
+	if (copy_from_user(&policy, arg, size)) {
+		printk(KERN_ERR
+			"fscrypt_ioctl_set_policy copy_from_user failed\n");
 		return -EFAULT;
+	}
 	policy.version = version;
 
-	if (!inode_owner_or_capable(inode))
+	if (!inode_owner_or_capable(inode)) {
+		printk(KERN_ERR
+			"fscrypt_ioctl_set_policy inode_owner_or_capable failed\n");
 		return -EACCES;
+	}
 
 	ret = mnt_want_write_file(filp);
 	if (ret)
@@ -453,6 +470,8 @@ int fscrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 	inode_unlock(inode);
 
 	mnt_drop_write_file(filp);
+	pr_info("fscrypt_ioctl_set_policy : %s(%d)\n",
+			(filp ?(char *)filp->f_path.dentry->d_name.name : (char *)"Unknown"), ret);
 	return ret;
 }
 EXPORT_SYMBOL(fscrypt_ioctl_set_policy);
@@ -626,6 +645,24 @@ int fscrypt_inherit_context(struct inode *parent, struct inode *child,
 	ctxsize = fscrypt_new_context_from_policy(&ctx, &ci->ci_policy);
 
 	BUILD_BUG_ON(sizeof(ctx) != FSCRYPT_SET_CONTEXT_MAX_SIZE);
+
+#ifdef CONFIG_DDAR
+	res = dd_test_and_inherit_context(&ctx, parent, child, ci, fs_data);
+	if(res) {
+		dd_error("failed to inherit dd policy\n");
+		return res;
+	}
+#endif
+
+#ifdef CONFIG_FSCRYPT_SDP
+	res = fscrypt_sdp_inherit_context(parent, child, &ctx, fs_data);
+	if (res) {
+		printk_once(KERN_WARNING
+				"%s: Failed to set sensitive ongoing flag (err:%d)\n", __func__, res);
+		return res;
+	}
+#endif
+
 	res = parent->i_sb->s_cop->set_context(child, &ctx, ctxsize, fs_data);
 	if (res)
 		return res;

@@ -22,13 +22,32 @@
  */
 #include "sched.h"
 
-#include <trace/events/sched.h>
+#ifdef CONFIG_PERF_MGR
+#include <linux/cpufreq.h>
+#include <linux/percpu.h>
+#include <trace/events/power.h>
+#endif
 
+#include <trace/events/sched.h>
 #include "walt.h"
+
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+#include <linux/proc_fs.h>
+#endif
+
+#ifdef CONFIG_FAST_TRACK
+#include <cpu/ftt/ftt.h>
+#endif
 
 #ifdef CONFIG_SMP
 static inline bool task_fits_max(struct task_struct *p, int cpu);
 #endif /* CONFIG_SMP */
+
+#ifdef CONFIG_PERF_MGR
+unsigned long get_task_util(struct task_struct *p);
+unsigned long get_max_capacity(int cpu);
+unsigned long get_max_fps_util(int group_id);
+#endif /* CONFIG_FPS */
 
 #ifdef CONFIG_SCHED_WALT
 static void walt_fixup_sched_stats_fair(struct rq *rq, struct task_struct *p,
@@ -86,6 +105,14 @@ unsigned int sysctl_sched_sync_hint_enable = 1;
  * Enable/disable using cstate knowledge in idle sibling selection
  */
 unsigned int sysctl_sched_cstate_aware = 1;
+
+#ifdef CONFIG_PERF_MGR
+DEFINE_PER_CPU(unsigned long, fps_boosted_util);
+DEFINE_PER_CPU(int, fps_boosted_task_count);
+DEFINE_PER_CPU(u64, fps_boosted_last_time);
+DEFINE_PER_CPU(int, fps_group_id);
+
+#endif /* CONFIG_PERF_MGR */
 
 /*
  * The initial- and re-scaling of tunables is configurable
@@ -568,7 +595,15 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
 static inline int entity_before(struct sched_entity *a,
 				struct sched_entity *b)
 {
+#ifdef CONFIG_FAST_TRACK
+	s64 vdiff = a->vruntime - b->vruntime;
+
+	if (is_ftt(a) && is_ftt(b))
+		vdiff += (s64)(a->ftt_vrt_delta - b->ftt_vrt_delta);
+	return vdiff < 0;
+#else
 	return (s64)(a->vruntime - b->vruntime) < 0;
+#endif
 }
 
 static void update_min_vruntime(struct cfs_rq *cfs_rq)
@@ -577,7 +612,6 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 	struct rb_node *leftmost = rb_first_cached(&cfs_rq->tasks_timeline);
 
 	u64 vruntime = cfs_rq->min_vruntime;
-
 	if (curr) {
 		if (curr->on_rq)
 			vruntime = curr->vruntime;
@@ -640,6 +674,52 @@ static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	rb_erase_cached(&se->run_node, &cfs_rq->tasks_timeline);
 }
+
+#ifdef CONFIG_FAST_TRACK
+void ftt_set_vruntime(struct task_struct *task, int set)
+{
+	struct sched_entity *se = &task->se;
+	struct cfs_rq *cfs_rq;
+	int on_tree;
+	unsigned int on_rq;
+
+	if (!set && is_ftt(se))
+		return;
+
+	if (set && se->ftt_enqueue_time)
+		return;
+
+	cfs_rq = cfs_rq_of(se);
+	if (unlikely(cfs_rq == NULL))
+		return;
+
+	on_rq = se->on_rq;
+	on_tree = se != cfs_rq->curr && on_rq;
+
+	if (set == 0 && se->ftt_enqueue_time == 0)
+		on_rq = 0;
+	se->ftt_enqueue_time = on_rq && set;
+
+	if (on_tree)
+		__dequeue_entity(cfs_rq, se);
+
+	if (set) {
+		if (on_rq) {
+			__ftt_init_vruntime(cfs_rq, se);
+			cfs_rq->ftt_rqcnt++;
+		}
+	} else {
+		__ftt_normalize_vruntime(cfs_rq, se);
+		if (on_rq) {
+			if (likely(cfs_rq->ftt_rqcnt > 0))
+				cfs_rq->ftt_rqcnt--;
+		}
+	}
+	
+	if (on_tree)
+		__enqueue_entity(cfs_rq, se);
+}
+#endif
 
 struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
 {
@@ -898,6 +978,25 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	curr->sum_exec_runtime += delta_exec;
 	schedstat_add(cfs_rq->exec_clock, delta_exec);
 
+#ifdef CONFIG_FAST_TRACK
+	if (entity_is_task(curr)) {
+		struct task_struct *curtask = task_of(curr);
+
+		if (is_ftt(curr)) {	
+			curr->ftt_vrt_delta += calc_delta_fair(delta_exec, curr);			
+		} else {
+			curr->vruntime += calc_delta_fair(delta_exec, curr);
+			update_min_vruntime(cfs_rq);
+		}
+
+		trace_sched_stat_runtime(curtask, delta_exec, curr->vruntime);
+		cpuacct_charge(curtask, delta_exec);
+		account_group_exec_runtime(curtask, delta_exec);
+	} else {
+		curr->vruntime += calc_delta_fair(delta_exec, curr);
+		update_min_vruntime(cfs_rq);	
+	}
+#else
 	curr->vruntime += calc_delta_fair(delta_exec, curr);
 	update_min_vruntime(cfs_rq);
 
@@ -908,6 +1007,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 		cgroup_account_cputime(curtask, delta_exec);
 		account_group_exec_runtime(curtask, delta_exec);
 	}
+#endif
 
 	account_cfs_rq_runtime(cfs_rq, delta_exec);
 }
@@ -4110,7 +4210,6 @@ static void
 place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 {
 	u64 vruntime = cfs_rq->min_vruntime;
-
 	/*
 	 * The 'current' period is already promised to the current tasks,
 	 * however the extra weight of the new task will slow them down a
@@ -4241,8 +4340,15 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	enqueue_runnable_load_avg(cfs_rq, se);
 	account_entity_enqueue(cfs_rq, se);
 
+#ifdef CONFIG_FAST_TRACK
+	__ftt_normalize_vruntime(cfs_rq, se);
 	if (flags & ENQUEUE_WAKEUP)
 		place_entity(cfs_rq, se, 0);
+	ftt_enqueue_entity(cfs_rq, se);
+#else
+	if (flags & ENQUEUE_WAKEUP)
+		place_entity(cfs_rq, se, 0);
+#endif
 
 	check_schedstat_required();
 	update_stats_enqueue(cfs_rq, se, flags);
@@ -4312,6 +4418,9 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 */
 	update_curr(cfs_rq);
 
+#ifdef CONFIG_FAST_TRACK
+	ftt_dequeue_entity(cfs_rq, se);
+#endif
 	/*
 	 * When dequeuing a sched_entity, we must:
 	 *   - Update loads to have both entity and cfs_rq synced with now.
@@ -4467,7 +4576,6 @@ pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 			if (!second || (curr && entity_before(curr, second)))
 				second = curr;
 		}
-
 		if (second && wakeup_preempt_entity(second, left) < 1)
 			se = second;
 	}
@@ -5472,6 +5580,13 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct cfs_rq *cfs_rq;
 	struct sched_entity *se = &p->se;
+	
+#ifdef CONFIG_PERF_MGR
+	unsigned long next_fps_boosted_util;
+	int boosted_cnt;
+	int cur_group_id = -1, next_group_id = -1;
+	int alloc_cpu = -1;
+#endif
 
 	/*
 	 * The code below (indirectly) updates schedutil which looks at
@@ -5502,6 +5617,30 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 #ifdef CONFIG_SCHED_WALT
 	p->misfit = !task_fits_max(p, rq->cpu);
 #endif
+#ifdef CONFIG_PERF_MGR
+	if ( p->drawing_flag ){
+		alloc_cpu = cpu_of(rq);
+		
+		/* Get current value from run queue */
+		boosted_cnt = per_cpu(fps_boosted_task_count, alloc_cpu);
+		cur_group_id = per_cpu(fps_group_id, alloc_cpu);
+		next_group_id = p->drawing_flag;
+
+		/* Get new values. */
+		if ( boosted_cnt < 0) boosted_cnt = 0;
+		boosted_cnt = boosted_cnt + 1;
+		next_fps_boosted_util = get_max_fps_util(p->drawing_flag);
+
+		/* Put new values into run queue. */
+		per_cpu(fps_boosted_task_count, alloc_cpu) = boosted_cnt;
+		if (cur_group_id == next_group_id){
+			per_cpu(fps_boosted_util, alloc_cpu) = next_fps_boosted_util;
+		}else {
+			per_cpu(fps_boosted_util, alloc_cpu) = max(get_max_fps_util(cur_group_id), next_fps_boosted_util);
+			per_cpu(fps_group_id, alloc_cpu) = next_group_id;
+		}
+	}
+#endif /* fps_util */
 	/*
 	 * If in_iowait is set, the code below may not trigger any cpufreq
 	 * utilization updates, so do it here explicitly with the IOWAIT flag
@@ -5596,6 +5735,14 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_entity *se = &p->se;
 	int task_sleep = flags & DEQUEUE_SLEEP;
 
+#ifdef CONFIG_PERF_MGR
+	unsigned long next_fps_boosted_util = 0;
+	int cur_group_id = -1, next_group_id = -1;
+	int alloc_cpu = -1;
+	int boosted_cnt;
+	struct task_struct *rq_task;
+#endif /* fps_util */
+
 	/*
 	 * The code below (indirectly) updates schedutil which looks at
 	 * the cfs_rq utilization to select a frequency.
@@ -5603,6 +5750,39 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	 * current task is not more accounted for in the selection of the OPP.
 	 */
 	schedtune_dequeue_task(p, cpu_of(rq));
+
+#ifdef CONFIG_PERF_MGR
+	if ( p->drawing_flag ){
+		alloc_cpu = cpu_of(rq);
+		boosted_cnt = per_cpu(fps_boosted_task_count, alloc_cpu);
+		cur_group_id = per_cpu(fps_group_id, alloc_cpu);
+		next_group_id = p->drawing_flag;
+
+		if (boosted_cnt > 0){
+			boosted_cnt = boosted_cnt - 1;
+		}
+
+		/*
+		*  Initialize fps_boosted_util value when there's no task on alloc_cpu.
+		*  if not, update fps util as a current fps util.
+		*/
+		if (boosted_cnt == 0){
+			per_cpu(fps_boosted_util, alloc_cpu) = 0;
+			per_cpu(fps_group_id, alloc_cpu) = 0;
+		}else{
+			list_for_each_entry(rq_task, &(rq->cfs_tasks), se.group_node) {
+				if ( rq_task != p && rq_task->drawing_flag && (get_max_fps_util(rq_task->drawing_flag) > next_fps_boosted_util) ){
+					next_fps_boosted_util = get_max_fps_util(p->drawing_flag);
+					next_group_id = rq_task->drawing_flag;
+				}
+			}
+			per_cpu(fps_boosted_util, alloc_cpu) = next_fps_boosted_util;
+			per_cpu(fps_group_id, alloc_cpu) = next_group_id;
+		}
+		/* Set a new values up into run queue. */
+		per_cpu(fps_boosted_task_count, alloc_cpu) = boosted_cnt;
+	}
+#endif /* fps_util */
 
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
@@ -6189,10 +6369,17 @@ stune_util(int cpu, unsigned long other_util,
 	unsigned long util = min_t(unsigned long, SCHED_CAPACITY_SCALE,
 				   cpu_util_freq(cpu, walt_load) + other_util);
 	long margin = schedtune_cpu_margin(util, cpu);
-
+	unsigned long boosted_util;
+#ifdef CONFIG_PERF_MGR
+	unsigned long fps_util = per_cpu(fps_boosted_util, cpu);
+#endif
 	trace_sched_boost_cpu(cpu, util, margin);
+	boosted_util = util + margin;
+#ifdef CONFIG_PERF_MGR
+	boosted_util = max(fps_util, boosted_util);
+#endif
 
-	return util + margin;
+	return boosted_util;
 }
 
 #else /* CONFIG_SCHED_TUNE */
@@ -6204,6 +6391,30 @@ schedtune_cpu_margin(unsigned long util, int cpu)
 }
 
 #endif /* CONFIG_SCHED_TUNE */
+
+static inline unsigned long
+boosted_task_util(struct task_struct *task)
+{
+	unsigned long util = task_util_est(task);
+	long margin = schedtune_task_margin(task);
+	unsigned long ret_value;
+#ifdef CONFIG_PERF_MGR
+	unsigned long fps_util;
+#endif
+
+	ret_value = util + margin;
+#ifdef CONFIG_PERF_MGR
+
+	if (task->drawing_flag){
+		fps_util = get_max_fps_util(task->drawing_flag);
+		ret_value = max(ret_value, fps_util);
+	}
+
+#endif
+	trace_sched_boost_task(task, util, margin);
+
+	return ret_value;
+}
 
 static unsigned long cpu_util_without(int cpu, struct task_struct *p);
 
@@ -6872,6 +7083,20 @@ static int get_start_cpu(struct task_struct *p)
 			task_boost == TASK_BOOST_ON_MID;
 	bool task_skip_min = task_skip_min_cpu(p);
 
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+	int prio_ret = is_low_priority_task(p, false);
+
+	if (prio_ret == LOW_PRIO_NICE) {
+		start_cpu = rd->min_cap_orig_cpu;
+		return start_cpu;
+	}
+#endif /* CONFIG_SCHED_SEC_TASK_BOOST */
+
+	if (task_boost > TASK_BOOST_ON_MID) {
+		start_cpu = rd->max_cap_orig_cpu;
+		return start_cpu;
+	}
+
 	/*
 	 * note about min/mid/max_cap_orig_cpu - either all of them will be -ve
 	 * or just mid will be -1, there never be any other combinations of -1s
@@ -6880,11 +7105,9 @@ static int get_start_cpu(struct task_struct *p)
 	if (task_skip_min || boosted) {
 		start_cpu = rd->mid_cap_orig_cpu == -1 ?
 			rd->max_cap_orig_cpu : rd->mid_cap_orig_cpu;
-	}
-
-	if (task_boost > TASK_BOOST_ON_MID) {
-		start_cpu = rd->max_cap_orig_cpu;
+#ifdef CONFIG_WALT_POWER_FEATURE
 		return start_cpu;
+#endif
 	}
 
 	if (start_cpu == -1 || start_cpu == rd->max_cap_orig_cpu)
@@ -6938,6 +7161,9 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 	int isolated_candidate = -1;
 	unsigned int target_nr_rtg_high_prio = UINT_MAX;
 	bool rtg_high_prio_task = task_rtg_high_prio(p);
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+	int prio_ret = is_low_priority_task(p, false);
+#endif
 
 	/*
 	 * In most cases, target_capacity tracks capacity_orig of the most
@@ -7008,7 +7234,22 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 
 			if (fbt_env->skip_cpu == i)
 				continue;
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+			/*
+			 * in case of schedboost usecase
+			 * both low & normal priority tasks
+			 * are not allowed to migrate prime cluster
+			 */
+			if (!is_min_capacity_cpu(i) &&
+				 (prio_ret == LOW_PRIO_NICE) &&
+				sysctl_sched_boost > 0)
+				continue;
+#endif /* CONFIG_SCHED_SEC_TASK_BOOST */
 
+#ifdef CONFIG_FAST_TRACK
+			if(is_ftt(&p->se) && (is_ftt(&cpu_rq(i)->curr->se) || cpu_rq(i)->rt.rt_nr_running))
+				continue;
+#endif
 			/*
 			 * p's blocked utilization is still accounted for on prev_cpu
 			 * so prev_cpu will receive a negative bias due to the double
@@ -7813,7 +8054,6 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 		}
 		goto unlock;
 	}
-
 	/* If there is only one sensible candidate, select it now. */
 	cpu = cpumask_first(candidates);
 	if (weight == 1 && ((uclamp_latency_sensitive(p) && idle_cpu(cpu)) ||
@@ -8084,6 +8324,10 @@ static int
 wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 {
 	s64 gran, vdiff = curr->vruntime - se->vruntime;
+#ifdef CONFIG_FAST_TRACK
+	if (is_ftt(curr) && is_ftt(se))
+		vdiff += (s64)(curr->ftt_vrt_delta - se->ftt_vrt_delta);
+#endif
 
 	if (vdiff <= 0)
 		return -1;
@@ -8136,6 +8380,10 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	int scale = cfs_rq->nr_running >= sched_nr_latency;
 	int next_buddy_marked = 0;
 
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+	int curr_cpu = cpu_of(rq);
+	struct root_domain *rd = cpu_rq(smp_processor_id())->rd;
+#endif
 	if (unlikely(se == pse))
 		return;
 
@@ -8152,6 +8400,11 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		set_next_buddy(pse);
 		next_buddy_marked = 1;
 	}
+
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+	if(per_task_boost(curr) == TASK_BOOST_STRICT_MAX)
+		return;
+#endif
 
 	/*
 	 * We can come here with TIF_NEED_RESCHED already set from new task
@@ -8181,6 +8434,12 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	find_matching_se(&se, &pse);
 	update_curr(cfs_rq_of(se));
 	BUG_ON(!pse);
+
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+	if (per_task_boost(p) == TASK_BOOST_STRICT_MAX && (curr_cpu >= rd->mid_cap_orig_cpu))
+		goto preempt;
+#endif
+
 	if (wakeup_preempt_entity(se, pse) == 1) {
 		/*
 		 * Bias pick_next to pick the sched entity that is
@@ -8218,14 +8477,28 @@ pick_next_task_fair(struct rq *rq, struct task_struct *prev, struct rq_flags *rf
 	struct sched_entity *se;
 	struct task_struct *p;
 	int new_tasks;
+#ifdef CONFIG_FAST_TRACK
+	int norm = 0;
+#endif
 
 again:
 	if (!cfs_rq->nr_running)
 		goto idle;
 
+#ifdef CONFIG_FAST_TRACK
+	if (cfs_rq->ftt_sched_count >= FTT_MAX_SCHED) {
+		if (is_ftt(&prev->se)) {
+			fttstat.wrong++;
+			__ftt_normalize_vruntime(cfs_rq_of(&prev->se), &prev->se);
+			norm = 1;
+		}
+	}
+#endif
+
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	if (prev->sched_class != &fair_sched_class)
 		goto simple;
+
 
 	/*
 	 * Because of the set_next_buddy() in dequeue_task_fair() it is rather
@@ -8245,9 +8518,17 @@ again:
 		 * forget we've ever seen it.
 		 */
 		if (curr) {
+#ifdef CONFIG_FAST_TRACK
+			if (curr->on_rq) {
+				update_curr(cfs_rq);
+				if (norm && curr == &prev->se)
+					__ftt_normalize_vruntime(cfs_rq, curr);
+			} else
+#else
 			if (curr->on_rq)
 				update_curr(cfs_rq);
 			else
+#endif
 				curr = NULL;
 
 			/*
@@ -8327,6 +8608,26 @@ done: __maybe_unused;
 
 	update_misfit_status(p, rq);
 
+#ifdef CONFIG_FAST_TRACK
+	cfs_rq =&rq->cfs;
+	if (is_ftt(&p->se)) {
+		__ftt_init_vruntime(cfs_rq_of(&p->se), &p->se);
+		if (cfs_rq->ftt_rqcnt != rq->nr_running) {
+			cfs_rq->ftt_sched_count++;
+			if (cfs_rq->ftt_sched_count == FTT_MAX_SCHED)
+				cfs_rq->ftt_sched_count += rq->nr_running << 1;
+
+			fttstat.pick_ftt++;
+		}
+	} else {
+		if (cfs_rq->ftt_sched_count >= FTT_MAX_SCHED)
+			cfs_rq->ftt_sched_count--;
+		else
+			cfs_rq->ftt_sched_count = cfs_rq->ftt_sched_count - FTT_DELINE_COUNT > 0 ?
+				cfs_rq->ftt_sched_count - FTT_DELINE_COUNT : 0;
+	}
+#endif
+
 	return p;
 
 idle:
@@ -8350,6 +8651,14 @@ idle:
 	 */
 	update_idle_rq_clock_pelt(rq);
 
+#ifdef CONFIG_FAST_TRACK
+	cfs_rq = &rq->cfs;
+	if (cfs_rq->ftt_sched_count >= FTT_MAX_SCHED)
+		cfs_rq->ftt_sched_count--;
+	else
+		cfs_rq->ftt_sched_count = cfs_rq->ftt_sched_count - FTT_DELINE_COUNT > 0 ?
+			cfs_rq->ftt_sched_count - FTT_DELINE_COUNT : 0;
+#endif
 	return NULL;
 }
 
@@ -8360,6 +8669,15 @@ static void put_prev_task_fair(struct rq *rq, struct task_struct *prev)
 {
 	struct sched_entity *se = &prev->se;
 	struct cfs_rq *cfs_rq;
+#ifdef CONFIG_FAST_TRACK
+	cfs_rq = &rq->cfs;
+	if (is_ftt(se)) {
+		if (cfs_rq->ftt_sched_count >= FTT_MAX_SCHED) {
+			__ftt_normalize_vruntime(cfs_rq_of(se), se);
+		}
+	}
+#endif
+
 
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
@@ -8697,7 +9015,10 @@ static
 int can_migrate_task(struct task_struct *p, struct lb_env *env)
 {
 	int tsk_cache_hot;
-
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+	struct root_domain *rd = cpu_rq(smp_processor_id())->rd;
+	int prio_ret = is_low_priority_task(p, false);
+#endif
 	lockdep_assert_held(&env->src_rq->lock);
 
 	/*
@@ -8776,6 +9097,17 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 	if (env->flags & LBF_IGNORE_BIG_TASKS &&
 		!task_fits_max(p, env->dst_cpu))
 		return 0;
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+	/*
+	 * Don't detach low priority task from mid/little cluster to prime cluster
+	 * in schedboost use-cases.
+	 */
+	if ((rd->max_cap_orig_cpu == env->dst_cpu || rd->mid_cap_orig_cpu == env->dst_cpu)
+		&& (prio_ret == LOW_PRIO_NICE)
+		&& sysctl_sched_boost > 0){
+			return 0;
+		}
+#endif /* CONFIG_SCHED_SEC_TASK_BOOST */
 #endif
 
 	/* Don't detach task if it is under active migration */
@@ -8800,6 +9132,10 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 
 	if (env->idle != CPU_NOT_IDLE || tsk_cache_hot <= 0 ||
 	    env->sd->nr_balance_failed > env->sd->cache_nice_tries) {
+#ifdef CONFIG_FAST_TRACK
+                if(is_ftt(&p->se) && (is_ftt(&cpu_rq(env->dst_cpu)->curr->se) || cpu_rq(env->dst_cpu)->rt.rt_nr_running))
+			return 0;
+#endif
 		if (tsk_cache_hot == 1) {
 			schedstat_inc(env->sd->lb_hot_gained[env->idle]);
 			schedstat_inc(p->se.statistics.nr_forced_migrations);
@@ -12072,6 +12408,11 @@ static void task_fork_fair(struct task_struct *p)
 	curr = cfs_rq->curr;
 	if (curr) {
 		update_curr(cfs_rq);
+#ifdef CONFIG_FAST_TRACK
+		if (is_ftt(curr))
+			se->vruntime = cfs_rq->min_vruntime;
+		else
+#endif
 		se->vruntime = curr->vruntime;
 	}
 	place_entity(cfs_rq, se, 1);
@@ -12271,6 +12612,10 @@ void init_cfs_rq(struct cfs_rq *cfs_rq)
 #endif
 #ifdef CONFIG_SMP
 	raw_spin_lock_init(&cfs_rq->removed.lock);
+#endif
+#ifdef CONFIG_FAST_TRACK
+	cfs_rq->ftt_rqcnt = 0;
+	cfs_rq->ftt_sched_count = 0;
 #endif
 }
 
@@ -12968,5 +13313,74 @@ void check_for_migration(struct rq *rq, struct task_struct *p)
 		raw_spin_unlock(&migration_lock);
 	}
 }
+
+#ifdef CONFIG_SCHED_SEC_TASK_BOOST
+static ssize_t write_perf_reserve(struct file *file, const char __user *buf,
+									size_t count, loff_t *offset)
+{
+	char buffer[10];
+	int get_value, err;
+
+	memset(buffer, 0, sizeof(buffer));
+	if (count > sizeof(buffer) - 1)
+		count = sizeof(buffer) - 1;
+	if (copy_from_user(buffer, buf, count)) {
+		err = -EFAULT;
+		goto out;
+	}
+	err = kstrtoint(strstrip(buffer), 0, &get_value);
+	if (err){
+		pr_err("set perf_reserve node err = %d", err);
+		goto out;
+	} else {
+		perf_reserve = get_value;
+	}
+out:
+	return err < 0 ? err : count;
+}
+
+static ssize_t read_perf_reserve( struct file *filp, char *buf,
+									size_t count, loff_t *f_pos )
+{
+	char procfs_buffer[64];
+	ssize_t length;
+
+	length = scnprintf(procfs_buffer, 12, "%d\n", perf_reserve);
+	return simple_read_from_buffer(buf, count, f_pos, procfs_buffer, length);
+}
+
+
+static const struct file_operations proc_perf_reserve_operations = {
+	.write	=	write_perf_reserve,
+	.read	=	read_perf_reserve,
+	.llseek	=	noop_llseek,
+};
+
+static __init int init_perf_reserve(void)
+{
+
+	if(!proc_create("perf_reserve",S_IWUSR|S_IWGRP, NULL,
+					&proc_perf_reserve_operations))
+		pr_err("Failed to register proc interface 'perf_reserve'\n");
+
+	perf_reserve=0;
+	return 0;
+}
+late_initcall(init_perf_reserve);
+#endif /* CONFIG_SCHED_SEC_TASK_BOOST */
+
+#ifdef CONFIG_PERF_MGR
+
+unsigned long get_task_util(struct task_struct *p){
+	return task_util_est(p);
+}
+EXPORT_SYMBOL_GPL(get_task_util);
+
+unsigned long get_max_capacity(int cpu){
+	return capacity_orig_of(cpu);
+}
+EXPORT_SYMBOL_GPL(get_max_capacity);
+
+#endif /* CONFIG_PERF_MGR */
 
 #endif /* CONFIG_SCHED_WALT */

@@ -902,46 +902,6 @@ static inline uint8_t wma_parse_mpdudensity(uint8_t mpdudensity)
 		return 0;
 }
 
-#if defined(CONFIG_HL_SUPPORT) && defined(FEATURE_WLAN_TDLS)
-
-/**
- * wma_unified_peer_state_update() - update peer state
- * @sta_mac: pointer to sta mac addr
- * @bss_addr: bss address
- * @sta_type: sta entry type
- *
- *
- * Return: None
- */
-static void
-wma_unified_peer_state_update(
-	uint8_t *sta_mac,
-	uint8_t *bss_addr,
-	uint8_t sta_type)
-{
-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
-
-	if (STA_ENTRY_TDLS_PEER == sta_type)
-		cdp_peer_state_update(soc, sta_mac,
-				      OL_TXRX_PEER_STATE_AUTH);
-	else
-		cdp_peer_state_update(soc, bss_addr,
-				      OL_TXRX_PEER_STATE_AUTH);
-}
-#else
-
-static inline void
-wma_unified_peer_state_update(
-	uint8_t *sta_mac,
-	uint8_t *bss_addr,
-	uint8_t sta_type)
-{
-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
-
-	cdp_peer_state_update(soc, bss_addr, OL_TXRX_PEER_STATE_AUTH);
-}
-#endif
-
 #define CFG_CTRL_MASK              0xFF00
 #define CFG_DATA_MASK              0x00FF
 
@@ -1505,9 +1465,6 @@ QDF_STATUS wma_send_peer_assoc(tp_wma_handle wma,
 	}
 	if (params->wpa_rsn >> 1)
 		cmd->need_gtk_2_way = 1;
-
-	wma_unified_peer_state_update(params->staMac,
-				      params->bssId, params->staType);
 
 #ifdef FEATURE_WLAN_WAPI
 	if (params->encryptType == eSIR_ED_WPI) {
@@ -2398,8 +2355,6 @@ QDF_STATUS wma_set_ap_vdev_up(tp_wma_handle wma, uint8_t vdev_id)
 	status = vdev_mgr_up_send(mlme_obj);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		WMA_LOGE(FL("failed to send vdev up"));
-		policy_mgr_set_do_hw_mode_change_flag(
-			wma->psoc, false);
 		return status;
 	}
 	wma_set_sap_keepalive(wma, vdev_id);

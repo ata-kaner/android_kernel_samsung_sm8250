@@ -47,6 +47,12 @@ int rtc_hctosys(void)
 
 	}
 
+	/*
+	 * Force update rtc year time to 2019
+	 * (The release year of device)
+	 */
+	tm.tm_year = 119;
+
 	tv64.tv_sec = rtc_tm_to_time64(&tm);
 
 #if BITS_PER_LONG == 32

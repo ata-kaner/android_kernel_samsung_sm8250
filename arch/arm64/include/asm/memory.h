@@ -80,7 +80,8 @@
  */
 #ifdef CONFIG_KASAN
 #define KASAN_SHADOW_SIZE	(UL(1) << (VA_BITS - KASAN_SHADOW_SCALE_SHIFT))
-#define KASAN_THREAD_SHIFT	1
+/* Increase to *4, because of https://bugs.llvm.org/show_bug.cgi?id=38809 */
+#define KASAN_THREAD_SHIFT	2
 #else
 #define KASAN_SHADOW_SIZE	(0)
 #define KASAN_THREAD_SHIFT	0

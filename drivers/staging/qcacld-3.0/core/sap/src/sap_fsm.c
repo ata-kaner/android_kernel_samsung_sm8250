@@ -2470,6 +2470,43 @@ static QDF_STATUS sap_fsm_handle_start_failure(struct sap_context *sap_ctx,
 }
 
 /**
+ * sap_propagate_cac_events() - Indicate CAC START/END event
+ * @sap_ctx: SAP context
+ *
+ * This function is to indicate CAC START/END event if CAC process
+ * is skipped.
+ *
+ * Return: void
+ */
+static void sap_propagate_cac_events(struct sap_context *sap_ctx)
+{
+	QDF_STATUS qdf_status;
+
+	qdf_status = sap_signal_hdd_event(sap_ctx, NULL,
+					  eSAP_DFS_CAC_START,
+					  (void *)
+					  eSAP_STATUS_SUCCESS);
+	if (qdf_status != QDF_STATUS_SUCCESS) {
+		QDF_TRACE(QDF_MODULE_ID_SAP,
+			  QDF_TRACE_LEVEL_DEBUG,
+			  "failed to indicate CAC START vdev %d",
+			  sap_ctx->sessionId);
+		return;
+	}
+
+	qdf_status = sap_signal_hdd_event(sap_ctx, NULL,
+					  eSAP_DFS_CAC_END,
+					  (void *)
+					  eSAP_STATUS_SUCCESS);
+	if (qdf_status != QDF_STATUS_SUCCESS) {
+		QDF_TRACE(QDF_MODULE_ID_SAP,
+			  QDF_TRACE_LEVEL_DEBUG,
+			  "failed to indicate CAC End vdev %d",
+			  sap_ctx->sessionId);
+	}
+}
+
+/**
  * sap_fsm_state_starting() - utility function called from sap fsm
  * @sap_ctx: SAP context
  * @sap_event: SAP event buffer
@@ -2507,10 +2544,10 @@ static QDF_STATUS sap_fsm_state_starting(struct sap_context *sap_ctx,
 
 		if (sap_ctx->is_chan_change_inprogress) {
 			/* SAP channel change request processing is completed */
-			sap_ctx->is_chan_change_inprogress = false;
 			qdf_status = sap_signal_hdd_event(sap_ctx, roam_info,
 						eSAP_CHANNEL_CHANGE_EVENT,
 						(void *)eSAP_STATUS_SUCCESS);
+			sap_ctx->is_chan_change_inprogress = false;
 		} else {
 			/* Action code for transition */
 			qdf_status = sap_signal_hdd_event(sap_ctx, roam_info,
@@ -2574,6 +2611,16 @@ static QDF_STATUS sap_fsm_state_starting(struct sap_context *sap_ctx,
 				QDF_TRACE(QDF_MODULE_ID_SAP,
 					  QDF_TRACE_LEVEL_INFO_HIGH,
 					FL("skip cac timer"));
+				/*
+				 * If hostapd starts AP on dfs channel,
+				 * hostapd will wait for CAC START/CAC END
+				 * event and finish AP start process.
+				 * If we skip CAC timer, we will need to
+				 * indicate the CAC event even though driver
+				 * doesn't perform CAC.
+				 */
+				sap_propagate_cac_events(sap_ctx);
+
 				wlansap_start_beacon_req(sap_ctx);
 			}
 		}
@@ -3320,6 +3367,8 @@ static QDF_STATUS sap_get_freq_list(struct sap_context *sap_ctx,
 	struct acs_weight_range *range_list;
 	bool freq_present_in_list = false;
 	uint8_t i;
+	bool srd_chan_enabled;
+	enum QDF_OPMODE vdev_opmode;
 
 	mac_ctx = sap_get_mac_context();
 	if (!mac_ctx) {
@@ -3438,15 +3487,19 @@ static QDF_STATUS sap_get_freq_list(struct sap_context *sap_ctx,
 				mac_ctx->mlme_cfg->acs.np_chan_weightage);
 			freq_present_in_list = true;
 		}
-		/* Dont scan ETSI13 SRD channels if the ETSI13 SRD channels
-		 * are not enabled in master mode
-		 */
-		if (!wlan_reg_is_etsi13_srd_chan_allowed_master_mode(mac_ctx->
-								     pdev) &&
-		    wlan_reg_is_etsi13_srd_chan_for_freq(
-					mac_ctx->pdev,
-					WLAN_REG_CH_TO_FREQ(loop_count)))
+
+		vdev_opmode = wlan_vdev_mlme_get_opmode(sap_ctx->vdev);
+		wlan_mlme_get_srd_master_mode_for_vdev(mac_ctx->psoc,
+						       vdev_opmode,
+						       &srd_chan_enabled);
+
+		if (!srd_chan_enabled &&
+		    wlan_reg_is_etsi13_srd_chan_for_freq(mac_ctx->pdev,
+					WLAN_REG_CH_TO_FREQ(loop_count))) {
+			sap_debug("vdev opmode %d not allowed on SRD freq %d",
+				  vdev_opmode, WLAN_REG_CH_TO_FREQ(loop_count));
 			continue;
+		}
 
 		/* Check if the freq is present in range list */
 		for (i = 0; i < mac_ctx->mlme_cfg->acs.num_weight_range; i++) {

@@ -16,6 +16,7 @@
 #include "msm_bus_adhoc.h"
 #include "msm_bus_noc.h"
 #include "msm_bus_bimc.h"
+#include <linux/sde_rsc.h>
 
 static int msm_bus_dev_init_qos(struct device *dev, void *data);
 
@@ -1113,6 +1114,7 @@ static int msm_bus_device_probe(struct platform_device *pdev)
 	unsigned int i, ret;
 	struct msm_bus_device_node_registration *pdata;
 
+	reg_log_dump(__func__, __LINE__);
 	/* If possible, get pdata from device-tree */
 	if (pdev->dev.of_node)
 		pdata = msm_bus_of_to_pdata(pdev);
@@ -1180,6 +1182,7 @@ static int msm_bus_device_probe(struct platform_device *pdev)
 	devm_kfree(&pdev->dev, pdata->info);
 	devm_kfree(&pdev->dev, pdata);
 
+	reg_log_dump(__func__, __LINE__);
 	dev_info(&pdev->dev, "Bus scaling driver probe successful\n");
 
 exit_device_probe:

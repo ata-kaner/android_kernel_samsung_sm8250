@@ -49,6 +49,13 @@
 #include <asm/ptdump.h>
 #include <asm/tlbflush.h>
 
+#ifdef CONFIG_UH
+#include <linux/uh.h>
+#ifdef CONFIG_UH_RKP
+#include <linux/rkp.h>
+#endif
+#endif
+
 #define NO_BLOCK_MAPPINGS	BIT(0)
 #define NO_CONT_MAPPINGS	BIT(1)
 
@@ -62,12 +69,21 @@ EXPORT_SYMBOL(kimage_voffset);
  * Empty_zero_page is a special page that is used for zero-initialized data
  * and COW.
  */
+#ifdef CONFIG_UH_RKP
+unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)] __page_aligned_rkp_bss;
+EXPORT_SYMBOL(empty_zero_page);
+
+static pte_t bm_pte[PTRS_PER_PTE] __page_aligned_rkp_bss;
+static pmd_t bm_pmd[PTRS_PER_PMD] __page_aligned_rkp_bss __maybe_unused;
+static pud_t bm_pud[PTRS_PER_PUD] __page_aligned_rkp_bss __maybe_unused;
+#else
 unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)] __page_aligned_bss;
 EXPORT_SYMBOL(empty_zero_page);
 
 static pte_t bm_pte[PTRS_PER_PTE] __page_aligned_bss;
 static pmd_t bm_pmd[PTRS_PER_PMD] __page_aligned_bss __maybe_unused;
 static pud_t bm_pud[PTRS_PER_PUD] __page_aligned_bss __maybe_unused;
+#endif
 
 struct dma_contig_early_reserve {
 	phys_addr_t base;
@@ -138,6 +154,15 @@ static phys_addr_t __init early_pgtable_alloc(void)
 
 	return phys;
 }
+
+#ifdef CONFIG_UH_RKP
+static phys_addr_t rkp_ro_alloc_phys(void)
+{
+	phys_addr_t ret = 0;
+	uh_call(UH_APP_RKP, RKP_RKP_ROBUFFER_ALLOC, (u64)&ret, 0, 0, 0);
+	return ret;
+}
+#endif
 
 static bool pgattr_change_is_safe(u64 old, u64 new)
 {
@@ -274,6 +299,10 @@ static void alloc_init_cont_pmd(pud_t *pudp, unsigned long addr,
 	if (pud_none(pud)) {
 		phys_addr_t pmd_phys;
 		BUG_ON(!pgtable_alloc);
+#ifdef CONFIG_UH_RKP
+		pmd_phys = rkp_ro_alloc_phys();
+		if (!pmd_phys)
+#endif
 		pmd_phys = pgtable_alloc();
 		__pud_populate(pudp, pmd_phys, PUD_TYPE_TABLE);
 		pud = READ_ONCE(*pudp);
@@ -299,6 +328,9 @@ static void alloc_init_cont_pmd(pud_t *pudp, unsigned long addr,
 static inline bool use_1G_block(unsigned long addr, unsigned long next,
 			unsigned long phys)
 {
+#ifdef CONFIG_UH_RKP
+	return false;    
+#endif
 	if (PAGE_SHIFT != 12)
 		return false;
 
@@ -591,6 +623,33 @@ static void __init map_kernel_segment(pgd_t *pgdp, void *va_start, void *va_end,
 	vm_area_add_early(vma);
 }
 
+#ifdef CONFIG_UH_RKP
+static void __init map_kernel_text_segment(pgd_t *pgdp, void *va_start, void *va_end,
+				      pgprot_t prot, struct vm_struct *vma,
+				      int flags, unsigned long vm_flags)
+{
+	phys_addr_t pa_start = __pa_symbol(va_start);
+	unsigned long size = va_end - va_start;
+
+	BUG_ON(!PAGE_ALIGNED(pa_start));
+	BUG_ON(!PAGE_ALIGNED(size));
+
+	__create_pgd_mapping(pgdp, pa_start, (unsigned long)va_start, size, prot,
+			     rkp_ro_alloc_phys, flags);
+
+	if (!(vm_flags & VM_NO_GUARD))
+		size += PAGE_SIZE;
+
+	vma->addr	= (void *)((unsigned long)va_start & PMD_MASK);
+	vma->phys_addr	= (phys_addr_t)((unsigned long)pa_start & PMD_MASK);
+	vma->size	= size + (unsigned long)va_start - (unsigned long)vma->addr;
+	vma->flags	= VM_MAP | vm_flags;
+	vma->caller	= __builtin_return_address(0);
+
+	vm_area_add_early(vma);
+}
+#endif
+
 static int __init parse_rodata(char *arg)
 {
 	return strtobool(arg, &rodata_enabled);
@@ -645,8 +704,13 @@ static void __init map_kernel(pgd_t *pgdp)
 	 * Only rodata will be remapped with different permissions later on,
 	 * all other segments are allowed to use contiguous mappings.
 	 */
+#ifdef CONFIG_UH_RKP
+	map_kernel_text_segment(pgdp, _text, _etext, text_prot, &vmlinux_text, 0,
+			   VM_NO_GUARD);
+#else
 	map_kernel_segment(pgdp, _text, _etext, text_prot, &vmlinux_text, 0,
 			   VM_NO_GUARD);
+#endif
 	map_kernel_segment(pgdp, __start_rodata, __inittext_begin, PAGE_KERNEL,
 			   &vmlinux_rodata, NO_CONT_MAPPINGS, VM_NO_GUARD);
 	map_kernel_segment(pgdp, __inittext_begin, __inittext_end, text_prot,
@@ -688,9 +752,15 @@ static void __init map_kernel(pgd_t *pgdp)
  */
 void __init paging_init(void)
 {
-	phys_addr_t pgd_phys = early_pgtable_alloc();
-	pgd_t *pgdp = pgd_set_fixmap(pgd_phys);
+	phys_addr_t pgd_phys;
+	pgd_t *pgdp;
 
+	set_memsize_kernel_type(MEMSIZE_KERNEL_PAGING);
+	pgd_phys = early_pgtable_alloc();
+	pgdp = pgd_set_fixmap(pgd_phys);
+#ifdef CONFIG_UH_RKP
+	rkp_robuffer_init();
+#endif
 	map_kernel(pgdp);
 	map_mem(pgdp);
 
@@ -713,9 +783,12 @@ void __init paging_init(void)
 	 * We only reuse the PGD from the swapper_pg_dir, not the pud + pmd
 	 * allocated with it.
 	 */
+#ifndef CONFIG_UH_RKP
 	memblock_free(__pa_symbol(swapper_pg_dir) + PAGE_SIZE,
 		      __pa_symbol(swapper_pg_end) - __pa_symbol(swapper_pg_dir)
 		      - PAGE_SIZE);
+#endif
+	set_memsize_kernel_type(MEMSIZE_KERNEL_OTHERS);
 }
 
 #ifdef CONFIG_MEMORY_HOTPLUG

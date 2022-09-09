@@ -54,6 +54,11 @@ static int try_to_freeze_tasks(bool user_only)
 		todo = 0;
 		read_lock(&tasklist_lock);
 		for_each_process_thread(g, p) {
+			if (pm_wakeup_pending()) {
+				wakeup = true;
+				break;
+			}
+
 			if (p == current || !freeze_task(p))
 				continue;
 
@@ -70,7 +75,7 @@ static int try_to_freeze_tasks(bool user_only)
 		if (!todo || time_after(jiffies, end_time))
 			break;
 
-		if (pm_wakeup_pending()) {
+		if (wakeup || pm_wakeup_pending()) {
 #ifdef CONFIG_PM_SLEEP
 			pm_get_active_wakeup_sources(suspend_abort,
 				MAX_SUSPEND_ABORT_LEN);
@@ -120,7 +125,7 @@ static int try_to_freeze_tasks(bool user_only)
 			elapsed_msecs % 1000);
 	}
 
-	return todo ? -EBUSY : 0;
+	return (todo || wakeup) ? -EBUSY : 0;
 }
 
 /**

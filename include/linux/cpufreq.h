@@ -212,6 +212,26 @@ static inline unsigned int cpufreq_quick_get_max(unsigned int cpu)
 static inline void disable_cpufreq(void) { }
 #endif
 
+#if defined(CONFIG_CPU_FREQ_LIMIT_USERSPACE)
+enum {
+	DVFS_NO_ID			= 0,
+
+	/* need to update now */
+	DVFS_TOUCH_ID			= 1,
+	DVFS_FINGER_ID			= 2,
+	DVFS_MULTI_TOUCH_ID		= 3,
+	DVFS_ARGOS_ID			= 4,
+#ifdef CONFIG_USB_AUDIO_ENHANCED_DETECT_TIME
+	DVFS_BOOST_HOST_ID		= 5,
+#endif
+	DVFS_USER_MIN_ID		= 6,
+	DVFS_USER_MAX_ID		= 7,
+	DVFS_MAX_ID
+};
+
+int set_freq_limit(unsigned long id, unsigned int freq);
+#endif
+
 #ifdef CONFIG_CPU_FREQ_STAT
 void cpufreq_stats_create_table(struct cpufreq_policy *policy);
 void cpufreq_stats_free_table(struct cpufreq_policy *policy);
@@ -222,6 +242,10 @@ static inline void cpufreq_stats_create_table(struct cpufreq_policy *policy) { }
 static inline void cpufreq_stats_free_table(struct cpufreq_policy *policy) { }
 static inline void cpufreq_stats_record_transition(struct cpufreq_policy *policy,
 						   unsigned int new_freq) { }
+static inline int cpufreq_stats_on_check(struct cpufreq_policy *policy)
+{
+	return 0;
+}
 #endif /* CONFIG_CPU_FREQ_STAT */
 
 /*********************************************************************

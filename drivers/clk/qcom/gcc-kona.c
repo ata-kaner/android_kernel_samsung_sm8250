@@ -17,6 +17,8 @@
 #include <linux/regmap.h>
 #include <linux/reset-controller.h>
 
+#include <linux/sde_rsc.h>
+
 #include <dt-bindings/clock/qcom,gcc-kona.h>
 
 #include "clk-alpha-pll.h"
@@ -1054,10 +1056,14 @@ static struct clk_rcg2 gcc_qupv3_wrap2_s5_clk_src = {
 };
 
 static const struct freq_tbl ftbl_gcc_sdcc2_apps_clk_src[] = {
+	F(300000, P_BI_TCXO, 32, 1, 2),
 	F(400000, P_BI_TCXO, 12, 1, 4),
 	F(19200000, P_BI_TCXO, 1, 0, 0),
 	F(25000000, P_GPLL0_OUT_EVEN, 12, 0, 0),
 	F(50000000, P_GPLL0_OUT_EVEN, 6, 0, 0),
+#if defined(CONFIG_SEC_GTS7L_PROJECT) || defined(CONFIG_SEC_GTS7XL_PROJECT)
+	F(85714285, P_GPLL0_OUT_MAIN, 7, 0, 0),
+#endif
 	F(100000000, P_GPLL0_OUT_MAIN, 6, 0, 0),
 	F(202000000, P_GPLL9_OUT_MAIN, 4, 0, 0),
 	{ }
@@ -4373,6 +4379,7 @@ static int gcc_kona_probe(struct platform_device *pdev)
 	struct regmap *regmap;
 	int ret;
 
+	reg_log_dump(__func__, __LINE__);
 	regmap = qcom_cc_map(pdev, &gcc_kona_desc);
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);

@@ -56,6 +56,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/timer.h>
 
+#include <linux/sec_debug.h>
+
 __visible u64 jiffies_64 __cacheline_aligned_in_smp = INITIAL_JIFFIES;
 
 EXPORT_SYMBOL(jiffies_64);
@@ -1342,7 +1344,9 @@ static void call_timer_fn(struct timer_list *timer, void (*fn)(struct timer_list
 	lock_map_acquire(&lockdep_map);
 
 	trace_timer_expire_entry(timer);
+	sec_debug_msg_log("timer %pS entry", fn);
 	fn(timer);
+	sec_debug_msg_log("timer %pS exit", fn);
 	trace_timer_expire_exit(timer);
 
 	lock_map_release(&lockdep_map);
@@ -2076,3 +2080,37 @@ void __sched usleep_range(unsigned long min, unsigned long max)
 	}
 }
 EXPORT_SYMBOL(usleep_range);
+
+/**
+ * get_cpu_where_timer_on - iterate timer vec to find cpu num where the timer is on 
+ * @timer : target timer_list to find
+ * CAUTION : it must be called from oops/watchdog bark context for debugging purpose.
+ * 
+ * Returns -1 when there is no target in vector otherwise cpu num where it is on will be returned.
+ */
+int get_cpu_where_timer_on(struct timer_list *timer)
+{
+	int i;
+	int cpu;
+	struct timer_list *t;
+	struct timer_base *base;
+	struct hlist_node *n;
+	struct hlist_head *vec;
+
+	for_each_possible_cpu(cpu) {
+		base = per_cpu_ptr(&timer_bases[BASE_STD], cpu);
+		raw_spin_lock(&base->lock);
+		for (i = 0; i < WHEEL_SIZE; i++) {
+			vec = &base->vectors[i];
+			hlist_for_each_entry_safe(t, n, vec, entry) {
+				if(timer == t) {
+					raw_spin_unlock(&base->lock);
+					return cpu;		
+				}
+			}
+		}
+		raw_spin_unlock(&base->lock);
+	}
+
+	return -1;
+}

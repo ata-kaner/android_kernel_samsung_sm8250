@@ -17,6 +17,7 @@
 #include <linux/blkdev.h>
 #include <linux/extcon.h>
 #include <linux/ipc_logging.h>
+#include <linux/wakelock.h>
 
 #include <linux/mmc/core.h>
 #include <linux/mmc/card.h>
@@ -467,6 +468,7 @@ struct mmc_host {
 #define MMC_CAP2_MAX_DISCARD_SIZE       (1 << 8)
 #define MMC_CAP2_HS200		(MMC_CAP2_HS200_1_8V_SDR | \
 				 MMC_CAP2_HS200_1_2V_SDR)
+#define MMC_CAP2_DETECT_ON_ERR  (1 << 9)        /* On I/O err check card removal */
 #define MMC_CAP2_CD_ACTIVE_HIGH	(1 << 10)	/* Card-detect signal active high */
 #define MMC_CAP2_RO_ACTIVE_HIGH	(1 << 11)	/* Write-protect signal active high */
 #define MMC_CAP2_PACKED_RD      (1 << 12)       /* Allow packed read */
@@ -513,6 +515,11 @@ struct mmc_host {
 	struct device_attribute clkgate_delay_attr;
 	unsigned long           clkgate_delay;
 #endif
+#ifndef CONFIG_MMC_CLKGATE
+	bool			clk_gated;	/* clock gated */
+	unsigned int		clk_old;	/* old clock value cache */
+	spinlock_t		clk_lock;	/* lock for clk fields */
+#endif
 
 	/* host specific block data */
 	unsigned int		max_seg_size;	/* see blk_queue_max_segment_size */
@@ -558,6 +565,8 @@ struct mmc_host {
 	struct mmc_ctx		default_ctx;	/* default context */
 
 	struct delayed_work	detect;
+	struct wake_lock        detect_wake_lock;
+	const char              *wlock_name;
 	int			detect_change;	/* card detect flag */
 	struct mmc_slot		slot;
 
@@ -641,8 +650,26 @@ struct mmc_host {
 	bool crash_on_err;	/* crash the system on error */
 	bool need_hw_reset;
 	atomic_t active_reqs;
+	unsigned int		card_detect_cnt;
+	int (*sdcard_uevent)(struct mmc_card *card);
+#ifndef CONFIG_MMC_CLKGATE
+#define SEC_MMC_PM_ACTIVE_STATE		0
+#define SEC_MMC_PM_RUNTIME_STATE	1
+#define SEC_MMC_PM_SYSTEM_STATE		2
+	int curr_pm_state;
+#endif
 	unsigned long		private[0] ____cacheline_aligned;
 };
+
+#ifndef CONFIG_MMC_CLKGATE
+#define SEC_mmc_pm_state_set_active(host)		(host->curr_pm_state = SEC_MMC_PM_ACTIVE_STATE)
+#define SEC_mmc_pm_state_set_runtime_suspend(host)	(host->curr_pm_state = SEC_MMC_PM_RUNTIME_STATE)
+#define SEC_mmc_pm_state_set_system_suspend(host)	(host->curr_pm_state = SEC_MMC_PM_SYSTEM_STATE)
+
+#define SEC_mmc_pm_state_is_active(host)		(host->curr_pm_state == SEC_MMC_PM_ACTIVE_STATE)
+#define SEC_mmc_pm_state_is_runtime_suspend(host)	(host->curr_pm_state == SEC_MMC_PM_RUNTIME_STATE)
+#define SEC_mmc_pm_state_is_system_suspend(host)	(host->curr_pm_state == SEC_MMC_PM_SYSTEM_STATE)
+#endif
 
 struct device_node;
 

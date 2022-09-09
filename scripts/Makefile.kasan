@@ -40,11 +40,21 @@ else
     instrumentation_flags := -mllvm -hwasan-instrument-with-calls=1
 endif
 
+# clang+kasan stack usage bug. Worked around with KASAN_THREAD_SHIFT.
+ifneq ($(CONFIG_FRAME_WARN),0)
+CFLAGS_KASAN += -Wno-error=frame-larger-than=
+endif
+
 CFLAGS_KASAN := -fsanitize=kernel-hwaddress \
 		-mllvm -hwasan-instrument-stack=0 \
 		$(instrumentation_flags)
 
 endif # CONFIG_KASAN_SW_TAGS
+
+# clang+kasan stack usage bug. Worked around with KASAN_THREAD_SHIFT.
+ifneq ($(CONFIG_FRAME_WARN),0)
+CFLAGS_KASAN += -Wno-error=frame-larger-than=
+endif
 
 ifdef CONFIG_KASAN
 CFLAGS_KASAN_NOSANITIZE := -fno-builtin

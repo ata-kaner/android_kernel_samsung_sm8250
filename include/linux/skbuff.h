@@ -512,6 +512,12 @@ struct skb_shared_info {
 	 * remains valid until skb destructor */
 	void *		destructor_arg;
 
+// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_VPN {
+	uid_t uid;
+	pid_t pid;
+	u_int32_t knox_mark;
+// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_VPN }
+
 	/* must be last field, see pskb_expand_head() */
 	skb_frag_t	frags[MAX_SKB_FRAGS];
 };
@@ -697,7 +703,11 @@ struct sk_buff {
 	 * want to keep them across layers you have to do a skb_clone()
 	 * first. This is owned by whoever has the skb queued ATM.
 	 */
+#ifdef CONFIG_MPTCP
+	char			cb[80] __aligned(8);
+#else
 	char			cb[48] __aligned(8);
+#endif
 
 	union {
 		struct {

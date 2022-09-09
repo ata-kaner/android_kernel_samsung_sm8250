@@ -82,7 +82,7 @@ obj-$(CONFIG_MSM_REMOTEQDSS) += remoteqdss.o
 obj-$(CONFIG_MSM_EVENT_TIMER) += event_timer.o
 obj-$(CONFIG_MSM_IDLE_STATS)	+= lpm-stats.o
 ifdef CONFIG_QCOM_RPMH
-       obj-$(CONFIG_QTI_RPM_STATS_LOG) += rpmh_master_stat.o
+       obj-$(CONFIG_QTI_RPM_STATS_LOG) += rpmh_master_stat.o subsystem_sleep_debug.o
 else
        obj-$(CONFIG_QTI_RPM_STATS_LOG) += rpm_master_stat.o
 endif

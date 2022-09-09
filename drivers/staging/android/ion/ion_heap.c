@@ -15,6 +15,7 @@
 #include <linux/scatterlist.h>
 #include <linux/vmalloc.h>
 #include "ion.h"
+#include <linux/memblock.h>
 
 void *ion_heap_map_kernel(struct ion_heap *heap,
 			  struct ion_buffer *buffer)
@@ -311,11 +312,32 @@ int ion_heap_init_shrinker(struct ion_heap *heap)
 	return register_shrinker(&heap->shrinker);
 }
 
+#ifdef CONFIG_ION_RBIN_HEAP
+bool need_ion_rbin_heap(void)
+{
+#ifdef CONFIG_ION_RBIN_ONLY_FOR_UNDER_8GB
+	phys_addr_t total_bytes = memblock_phys_mem_size();
+
+	if (total_bytes > SZ_8G)
+		return false;
+#endif
+	return true;
+}
+#endif
+
 struct ion_heap *ion_heap_create(struct ion_platform_heap *heap_data)
 {
 	struct ion_heap *heap = NULL;
 	int heap_type = heap_data->type;
 
+#ifdef CONFIG_ION_RBIN_HEAP
+	if (heap_type == ION_HEAP_TYPE_RBIN) {
+		if (heap_data->base == 0 && heap_data->size == 0)
+			return ERR_PTR(-EINVAL);
+		if (!need_ion_rbin_heap())
+			heap_type = ION_HEAP_TYPE_CARVEOUT;
+	}
+#endif
 	switch (heap_type) {
 	case ION_HEAP_TYPE_SYSTEM_CONTIG:
 		pr_err("%s: Heap type is disabled: %d\n", __func__,
@@ -324,6 +346,11 @@ struct ion_heap *ion_heap_create(struct ion_platform_heap *heap_data)
 	case ION_HEAP_TYPE_SYSTEM:
 		heap = ion_system_heap_create(heap_data);
 		break;
+#ifdef CONFIG_ION_RBIN_HEAP
+	case ION_HEAP_TYPE_RBIN:
+		heap = ion_rbin_heap_create(heap_data);
+		break;
+#endif
 	case ION_HEAP_TYPE_CARVEOUT:
 		heap = ion_carveout_heap_create(heap_data);
 		break;

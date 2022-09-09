@@ -1200,7 +1200,14 @@ int diagfwd_write(uint8_t peripheral, uint8_t type, void *buf, int len)
 		err = 0;
 		err = fwd_info->p_ops->write(fwd_info->ctxt, buf, len);
 		if (err && err != -ENODEV) {
-			usleep_range(100000, 101000);
+			/* TEMP: for mass production pgm delay on EGAIN reply
+			* temporary make exceptional path for NPU		i
+			*/
+			if (peripheral == PERIPHERAL_NPU)
+				usleep_range(10000, 10010);
+			else
+				usleep_range(100000, 101000);
+
 			retry_count++;
 			continue;
 		}

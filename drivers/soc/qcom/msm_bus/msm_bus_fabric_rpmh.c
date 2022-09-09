@@ -20,6 +20,7 @@
 #include "msm_bus_rpmh.h"
 #include "msm_bus_noc.h"
 #include "msm_bus_bimc.h"
+#include <linux/sde_rsc.h>
 
 #define MSM_BUS_RSC_COUNT		(MSM_BUS_RSC_LAST-MSM_BUS_RSC_FIRST+1)
 
@@ -1802,6 +1803,7 @@ static int msm_bus_device_probe(struct platform_device *pdev)
 	unsigned int i = 1, ret;
 	struct msm_bus_device_node_registration *pdata;
 
+	reg_log_dump(__func__, __LINE__);
 	MSM_BUS_ERR("msm_bus: Probe started");
 	/* If possible, get pdata from device-tree */
 	if (pdev->dev.of_node)
@@ -1891,6 +1893,7 @@ static int msm_bus_device_probe(struct platform_device *pdev)
 	msm_bus_arb_setops_adhoc(&arb_ops);
 	bus_for_each_dev(&msm_bus_type, NULL, NULL, msm_bus_node_debug);
 
+	reg_log_dump(__func__, __LINE__);
 	devm_kfree(&pdev->dev, pdata->info);
 	devm_kfree(&pdev->dev, pdata);
 exit_device_probe:

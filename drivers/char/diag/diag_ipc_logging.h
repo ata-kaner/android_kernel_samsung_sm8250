@@ -7,7 +7,7 @@
 
 #include <linux/ipc_logging.h>
 
-#define DIAG_IPC_LOG_PAGES	50
+#define DIAG_IPC_LOG_PAGES	100
 
 #define DIAG_DEBUG_USERSPACE	0x0001
 #define DIAG_DEBUG_MUX		0x0002
