@@ -14,6 +14,10 @@
 #include "sde_connector.h"
 #include "dp_display.h"
 
+#ifdef CONFIG_SEC_DISPLAYPORT
+#include "secdp.h"
+#endif
+
 #define DEBUG_NAME "drm_dp"
 
 struct dp_debug_private {

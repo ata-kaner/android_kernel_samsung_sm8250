@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -8,6 +8,58 @@
 #include "cam_flash_soc.h"
 #include "cam_flash_core.h"
 #include "cam_common_util.h"
+
+#if defined(CONFIG_LEDS_PMIC_QPNP)
+struct cam_flash_ctrl *g_flash_ctrl;
+#endif
+
+#if defined(CONFIG_LEDS_S2MPB02) || defined(CONFIG_LEDS_KTD2692)
+#include <cam_sensor_cmn_header.h>
+#include <cam_sensor_util.h>
+struct msm_pinctrl_info flash_pctrl;
+#endif
+
+#if defined(CONFIG_SAMSUNG_REAR_TOF)
+int32_t cam_flash_init_tof(struct cam_flash_ctrl *fctrl)
+{
+	struct cam_sensor_i2c_reg_setting reg_setting;
+	int size = 0;
+	int rc = 0;
+
+	CAM_INFO(CAM_FLASH, "E");
+
+	memset(&reg_setting, 0, sizeof(reg_setting));
+	reg_setting.reg_setting = kmalloc(sizeof(struct cam_sensor_i2c_reg_array) * 1, GFP_KERNEL);
+	if (!reg_setting.reg_setting) {
+		return -ENOMEM;
+	}
+	memset(reg_setting.reg_setting, 0, sizeof(struct cam_sensor_i2c_reg_array));
+
+	reg_setting.reg_setting[size].reg_addr = 0x04;
+	reg_setting.reg_setting[size].reg_data = 0x26;
+	reg_setting.reg_setting[size].delay = 1000;
+	size++;
+
+	reg_setting.size = size;
+	reg_setting.addr_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+	reg_setting.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+
+	rc = camera_io_dev_write(&fctrl->io_master_info,
+		&reg_setting);
+	if (rc < 0)
+		CAM_ERR(CAM_FLASH,
+			"Failed to random write I2C settings: %d",
+			rc);
+
+	if (reg_setting.reg_setting) {
+		kfree(reg_setting.reg_setting);
+		reg_setting.reg_setting = NULL;
+	}
+	CAM_INFO(CAM_FLASH, "X");
+
+	return rc;
+}
+#endif
 
 static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 		void *arg, struct cam_flash_private_soc *soc_private)
@@ -159,6 +211,12 @@ static int32_t cam_flash_driver_cmd(struct cam_flash_ctrl *fctrl,
 			rc = -EINVAL;
 			goto release_mutex;
 		}
+
+#if defined(CONFIG_SAMSUNG_REAR_TOF)
+		if (fctrl->soc_info.index == 3) {
+			cam_flash_init_tof(fctrl);
+		}
+#endif
 
 		fctrl->flash_state = CAM_FLASH_STATE_START;
 		break;
@@ -342,25 +400,6 @@ static int32_t cam_flash_i2c_driver_remove(struct i2c_client *client)
 	return rc;
 }
 
-static int cam_flash_subdev_open(struct v4l2_subdev *sd,
-	struct v4l2_subdev_fh *fh)
-{
-	struct cam_flash_ctrl *fctrl =
-		v4l2_get_subdevdata(sd);
-
-	if (!fctrl) {
-		CAM_ERR(CAM_FLASH, "Flash ctrl ptr is NULL");
-		return -EINVAL;
-	}
-
-	mutex_lock(&fctrl->flash_mutex);
-	fctrl->open_cnt++;
-	CAM_DBG(CAM_FLASH, "Flash open count %d", fctrl->open_cnt);
-	mutex_unlock(&fctrl->flash_mutex);
-
-	return 0;
-}
-
 static int cam_flash_subdev_close(struct v4l2_subdev *sd,
 	struct v4l2_subdev_fh *fh)
 {
@@ -373,14 +412,7 @@ static int cam_flash_subdev_close(struct v4l2_subdev *sd,
 	}
 
 	mutex_lock(&fctrl->flash_mutex);
-	if (fctrl->open_cnt <= 0) {
-		mutex_unlock(&fctrl->flash_mutex);
-		return -EINVAL;
-	}
-	fctrl->open_cnt--;
-	CAM_DBG(CAM_FLASH, "Flash open count %d", fctrl->open_cnt);
-	if (fctrl->open_cnt == 0)
-		cam_flash_shutdown(fctrl);
+	cam_flash_shutdown(fctrl);
 	mutex_unlock(&fctrl->flash_mutex);
 
 	return 0;
@@ -398,7 +430,6 @@ static struct v4l2_subdev_ops cam_flash_subdev_ops = {
 };
 
 static const struct v4l2_subdev_internal_ops cam_flash_internal_ops = {
-	.open  = cam_flash_subdev_open,
 	.close = cam_flash_subdev_close,
 };
 
@@ -504,26 +535,11 @@ static int32_t cam_flash_platform_probe(struct platform_device *pdev)
 		fctrl->func_tbl.power_ops = cam_flash_i2c_power_ops;
 		fctrl->func_tbl.flush_req = cam_flash_i2c_flush_request;
 	} else {
-		if (fctrl->soc_info.gpio_data) {
-			rc = cam_sensor_util_request_gpio_table(
-				&fctrl->soc_info,
-				true);
-			if (rc) {
-				CAM_ERR(CAM_FLASH,
-					"GPIO table request failed: rc: %d",
-					rc);
-				goto free_gpio_resource;
-			}
-		}
-		/* PMIC GPIO Flash */
-		fctrl->func_tbl.parser =
-			cam_flash_pmic_gpio_pkt_parser;
-		fctrl->func_tbl.apply_setting =
-			cam_flash_pmic_gpio_apply_setting;
-		fctrl->func_tbl.power_ops =
-			cam_flash_pmic_gpio_power_ops;
-		fctrl->func_tbl.flush_req =
-			cam_flash_pmic_gpio_flush_request;
+		/* PMIC Flash */
+		fctrl->func_tbl.parser = cam_flash_pmic_pkt_parser;
+		fctrl->func_tbl.apply_setting = cam_flash_pmic_apply_setting;
+		fctrl->func_tbl.power_ops = cam_flash_pmic_power_ops;
+		fctrl->func_tbl.flush_req = cam_flash_pmic_flush_request;
 	}
 
 	rc = cam_flash_init_subdev(fctrl);
@@ -544,18 +560,28 @@ static int32_t cam_flash_platform_probe(struct platform_device *pdev)
 
 	mutex_init(&(fctrl->flash_mutex));
 
+#if defined(CONFIG_LEDS_S2MPB02) || defined(CONFIG_LEDS_KTD2692)
+	rc = msm_camera_pinctrl_init(&flash_pctrl, &pdev->dev);
+	if (rc >= 0) {
+		// make pin state to suspend
+		rc = pinctrl_select_state(flash_pctrl.pinctrl, flash_pctrl.gpio_state_suspend);
+		if (rc < 0) {
+			CAM_ERR(CAM_FLASH, "Cannot set pin to suspend state");
+			return rc;
+		}
+	}
+#endif
+
 	fctrl->flash_state = CAM_FLASH_STATE_INIT;
-	fctrl->open_cnt = 0;
+#if defined(CONFIG_LEDS_PMIC_QPNP)
+	g_flash_ctrl = fctrl;
+#endif
 	CAM_DBG(CAM_FLASH, "Probe success");
 	return rc;
 
 free_cci_resource:
 	kfree(fctrl->io_master_info.cci_client);
 	fctrl->io_master_info.cci_client = NULL;
-free_gpio_resource:
-	cam_sensor_util_request_gpio_table(&fctrl->soc_info, false);
-	kfree(fctrl->soc_info.gpio_data);
-	fctrl->soc_info.gpio_data = NULL;
 free_resource:
 	kfree(fctrl->i2c_data.per_frame);
 	kfree(fctrl->soc_info.soc_private);
@@ -573,11 +599,13 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 	int32_t rc = 0, i = 0;
 	struct cam_flash_ctrl *fctrl;
 
+#if 0
 	if (client == NULL || id == NULL) {
 		CAM_ERR(CAM_FLASH, "Invalid Args client: %pK id: %pK",
 			client, id);
 		return -EINVAL;
 	}
+#endif
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		CAM_ERR(CAM_FLASH, "%s :: i2c_check_functionality failed",
@@ -635,7 +663,9 @@ static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
 
 	mutex_init(&(fctrl->flash_mutex));
 	fctrl->flash_state = CAM_FLASH_STATE_INIT;
-	fctrl->open_cnt = 0;
+#if defined(CONFIG_LEDS_PMIC_QPNP)
+	g_flash_ctrl = fctrl;
+#endif
 
 	return rc;
 
@@ -671,6 +701,9 @@ static struct i2c_driver cam_flash_i2c_driver = {
 	.remove = cam_flash_i2c_driver_remove,
 	.driver = {
 		.name = FLASH_DRIVER_I2C,
+		.owner = THIS_MODULE,
+		.of_match_table = cam_flash_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -679,7 +712,7 @@ static int32_t __init cam_flash_init_module(void)
 	int32_t rc = 0;
 
 	rc = platform_driver_register(&cam_flash_platform_driver);
-	if (rc == 0) {
+	if (rc < 0) {
 		CAM_DBG(CAM_FLASH, "platform probe success");
 		return 0;
 	}

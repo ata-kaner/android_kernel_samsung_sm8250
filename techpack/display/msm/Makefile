@@ -3,6 +3,9 @@ ccflags-y := -I$(srctree)/include/drm -I$(srctree)/techpack/display/msm -I$(srct
 ccflags-y += -I$(srctree)/techpack/display/msm/sde
 ccflags-y += -I$(srctree)/techpack/display/rotator
 
+ccflags-$(CONFIG_DISPLAY_SAMSUNG) += -I$(srctree)/techpack/display/msm/samsung
+#ccflags-$(CONFIG_DISPLAY_SAMSUNG) += -Idrivers/gpu/drm/msm/samsung
+
 msm_drm-$(CONFIG_DRM_MSM_DP) += dp/dp_usbpd.o \
 	dp/dp_parser.o \
 	dp/dp_power.o \
@@ -22,6 +25,15 @@ msm_drm-$(CONFIG_DRM_MSM_DP) += dp/dp_usbpd.o \
 	dp/dp_drm.o \
 	dp/dp_hdcp2p2.o \
 	dp/dp_mst_drm.o \
+
+# sec displayport
+msm_drm-$(CONFIG_SEC_DISPLAYPORT) += dp/secdp_sysfs.o \
+	dp/secdp_logger.o \
+	dp/secdp_unit_test.o \
+
+msm_drm-$(CONFIG_SEC_DISPLAYPORT_AUX_CONTROL) += dp/secdp_aux_control.o \
+
+msm_drm-$(CONFIG_SEC_DISPLAYPORT_BIGDATA) += dp/displayport_bigdata.o \
 
 msm_drm-$(CONFIG_DRM_MSM_SDE) += sde/sde_crtc.o \
 	sde/sde_encoder.o \
@@ -118,3 +130,6 @@ msm_drm-$(CONFIG_DRM_MSM) += \
 obj-$(CONFIG_DRM_MSM)	+= msm_drm.o
 
 obj-$(CONFIG_DRM_FBDEV_EMULATION) += msm_fbdev.o
+ifeq ($(CONFIG_DISPLAY_SAMSUNG),y)
+obj-y += samsung/
+endif

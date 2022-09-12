@@ -106,7 +106,16 @@
 #define SDE_NAME_SIZE  12
 
 /* timeout in frames waiting for frame done */
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+/* case 03134585
+ * sometimes, it is delayed for hundreds miliseconds
+ * to call sde_crtc_frame_event_work(), by scheduling.
+ * Set enough time for frame done timeout.
+ */
+#define SDE_FRAME_DONE_TIMEOUT	500
+#else
 #define SDE_FRAME_DONE_TIMEOUT	60
+#endif
 
 /* max active secure client counts allowed */
 #define MAX_ALLOWED_SECURE_CLIENT_CNT	1
@@ -464,7 +473,12 @@ void *sde_debugfs_get_root(struct sde_kms *sde_kms);
  * These functions/definitions allow for building up a 'sde_info' structure
  * containing one or more "key=value\n" entries.
  */
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+/* SS display modes are too many to cover all mode info with given 4K size, so increased */
+#define SDE_KMS_INFO_MAX_SIZE	(4096 * 2)
+#else
 #define SDE_KMS_INFO_MAX_SIZE	4096
+#endif
 
 /**
  * struct sde_kms_info - connector information structure container

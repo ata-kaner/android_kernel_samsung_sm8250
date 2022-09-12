@@ -615,6 +615,10 @@ static inline int sde_hw_ctl_trigger_flush_v1(struct sde_hw_ctl *ctx)
 		SDE_REG_WRITE(&ctx->hw, CTL_PERIPH_FLUSH,
 				ctx->flush.pending_periph_flush_mask);
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	SDE_DEBUG("%s idx : %d pending_flush_mask : 0x%x\n", __func__, ctx->idx, ctx->flush.pending_flush_mask);
+#endif
+
 	SDE_REG_WRITE(&ctx->hw, CTL_FLUSH, ctx->flush.pending_flush_mask);
 	return 0;
 }

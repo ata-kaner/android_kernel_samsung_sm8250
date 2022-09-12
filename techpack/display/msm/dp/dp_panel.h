@@ -109,6 +109,12 @@ struct dp_panel {
 	/* debug */
 	u32 max_bw_code;
 
+#ifdef CONFIG_SEC_DISPLAYPORT
+	u8 monitor_name[14];	/* max 13 chars + null */
+	u32 dsp_type;
+	struct dp_panel_info max_timing_info;
+#endif
+
 	/* By default, stream_id is assigned to DP_INVALID_STREAM.
 	 * Client sets the stream id value using set_stream_id interface.
 	 */

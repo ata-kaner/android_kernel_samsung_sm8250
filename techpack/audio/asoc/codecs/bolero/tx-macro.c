@@ -9,6 +9,8 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/pm_runtime.h>
+#include <linux/regulator/consumer.h>
+#include <linux/err.h>
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
 #include <sound/tlv.h>
@@ -123,10 +125,27 @@ enum {
 	VA_MCLK,
 };
 
+/*
+ * Structure used to update codec
+ * register defaults after reset
+ */
 struct tx_macro_reg_mask_val {
 	u16 reg;
 	u8 mask;
 	u8 val;
+};
+
+/* Based on 9.6MHZ MCLK Freq */
+enum {
+	CLK_DISABLED = 0,
+	CLK_2P4MHZ,
+	CLK_0P6MHZ,
+};
+
+static int dmic_clk_rate_div[] = {
+	[CLK_DISABLED] = 0,
+	[CLK_2P4MHZ] = TX_MACRO_CLK_DIV_4,
+	[CLK_0P6MHZ] = TX_MACRO_CLK_DIV_16,
 };
 
 struct tx_mute_work {
@@ -176,7 +195,17 @@ struct tx_macro_priv {
 	bool bcs_clk_en;
 	bool hs_slow_insert_complete;
 	int amic_sample_rate;
+	u32 dmic_rate_override;
+
+	struct regulator *sub_dmic_bias;
+	struct regulator *thi_dmic_bias;
 };
+
+static const char* const dmic_rate_override_text[] = {
+	"DISABLED", "CLK_2P4MHZ", "CLK_0P6MHZ"
+};
+
+static SOC_ENUM_SINGLE_EXT_DECL(dmic_rate_enum, dmic_rate_override_text);
 
 static bool tx_macro_get_data(struct snd_soc_component *component,
 			      struct device **tx_dev,
@@ -204,6 +233,42 @@ static bool tx_macro_get_data(struct snd_soc_component *component,
 	}
 
 	return true;
+}
+
+static int dmic_rate_override_get(struct snd_kcontrol *kcontrol,
+				  struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+			snd_soc_kcontrol_component(kcontrol);
+	struct tx_macro_priv *tx_priv = NULL;
+	struct device *tx_dev = NULL;
+
+	if (!tx_macro_get_data(component, &tx_dev, &tx_priv, __func__))
+	return -EINVAL;
+
+	ucontrol->value.enumerated.item[0] = tx_priv->dmic_rate_override;
+	dev_dbg(component->dev, "%s: dmic rate: %d\n",
+		__func__, tx_priv->dmic_rate_override);
+
+	return 0;
+}
+
+static int dmic_rate_override_put(struct snd_kcontrol *kcontrol,
+				  struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+			snd_soc_kcontrol_component(kcontrol);
+	struct tx_macro_priv *tx_priv = NULL;
+	struct device *tx_dev = NULL;
+
+	if (!tx_macro_get_data(component, &tx_dev, &tx_priv, __func__))
+	return -EINVAL;
+
+	tx_priv->dmic_rate_override = ucontrol->value.enumerated.item[0];
+	dev_dbg(component->dev, "%s: dmic rate: %d\n",
+		__func__, tx_priv->dmic_rate_override);
+
+	return 0;
 }
 
 static int tx_macro_mclk_enable(struct tx_macro_priv *tx_priv,
@@ -1104,6 +1169,71 @@ static int tx_macro_enable_micbias(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+static int tx_external_enable_micbias(struct snd_soc_dapm_widget *w,
+			struct snd_kcontrol *kcontrol, int event)
+{
+	struct device *tx_dev = NULL;
+	struct snd_soc_component *component =
+				snd_soc_dapm_to_component(w->dapm);
+	struct tx_macro_priv *tx_priv = NULL;
+	char *wname = NULL;
+	unsigned int dmic = 0;
+	int ret = 0;
+
+	if (!tx_macro_get_data(component, &tx_dev, &tx_priv, __func__))
+		return -EINVAL;
+
+	wname = strpbrk(w->name, "01234567");
+	if (!wname) {
+		dev_err(component->dev, "%s: widget not found\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = kstrtouint(wname, 10, &dmic);
+	if (ret < 0) {
+		dev_err(component->dev, "%s: Invalid DMIC line on the codec\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		switch(dmic) {
+		case 1:
+			ret = regulator_enable(tx_priv->sub_dmic_bias);
+			break;
+		case 2:
+			ret = regulator_enable(tx_priv->thi_dmic_bias);
+			break;
+		}
+		if (ret != 0) {
+			dev_err(component->dev, "%s: Failed to enable supply dmic%d : %d\n",
+					__func__, dmic, ret);
+		}
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		switch(dmic) {
+		case 1:
+			ret = regulator_disable(tx_priv->sub_dmic_bias);
+			break;
+		case 2:
+			ret = regulator_disable(tx_priv->thi_dmic_bias);
+			break;
+		}
+		if (ret != 0) {
+			dev_err(component->dev, "%s: Failed to disable supply dmic%d : %d\n",
+					__func__, dmic, ret);
+		}
+		break;
+	default:
+		dev_err(component->dev, "%s: Invalid event\n",
+			__func__);
+		break;
+	}
+
+	return 0;
+}
+
 static int tx_macro_hw_params(struct snd_pcm_substream *substream,
 			   struct snd_pcm_hw_params *params,
 			   struct snd_soc_dai *dai)
@@ -1698,6 +1828,12 @@ static const struct snd_soc_dapm_widget tx_macro_dapm_widgets[] = {
 
 	SND_SOC_DAPM_MICBIAS_E("TX MIC BIAS1", SND_SOC_NOPM, 0, 0,
 			       tx_macro_enable_micbias,
+			       SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MICBIAS_E("MIC BIAS External1", SND_SOC_NOPM, 0, 0,
+			       tx_external_enable_micbias,
+			       SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MICBIAS_E("MIC BIAS External2", SND_SOC_NOPM, 0, 0,
+			       tx_external_enable_micbias,
 			       SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 	SND_SOC_DAPM_ADC_E("TX DMIC0", NULL, SND_SOC_NOPM, 0, 0,
 		tx_macro_enable_dmic, SND_SOC_DAPM_PRE_PMU |
@@ -2334,6 +2470,8 @@ static const struct snd_kcontrol_new tx_macro_snd_controls_common[] = {
 
 	SOC_ENUM_EXT("BCS CH_SEL", bcs_ch_sel_mux_enum,
 			tx_macro_get_bcs_ch_sel, tx_macro_put_bcs_ch_sel),
+	SOC_ENUM_EXT("DMIC_RATE OVERRIDE", dmic_rate_enum,
+			dmic_rate_override_get, dmic_rate_override_put),
 };
 
 static const struct snd_kcontrol_new tx_macro_snd_controls_v3[] = {
@@ -2415,6 +2553,9 @@ static const struct snd_kcontrol_new tx_macro_snd_controls[] = {
 
 	SOC_SINGLE_EXT("DEC0_BCS Switch", SND_SOC_NOPM, 0, 1, 0,
 		       tx_macro_get_bcs, tx_macro_set_bcs),
+
+	SOC_ENUM_EXT("DMIC_RATE OVERRIDE", dmic_rate_enum,
+			dmic_rate_override_get, dmic_rate_override_put),
 };
 
 static int tx_macro_register_event_listener(struct snd_soc_component *component,
@@ -2449,7 +2590,7 @@ static int tx_macro_register_event_listener(struct snd_soc_component *component,
 					tx_priv->tx_swr_gpio_p, false);
 		} else {
 			msm_cdc_pinctrl_set_wakeup_capable(
-					tx_priv->tx_swr_gpio_p, true);
+				tx_priv->tx_swr_gpio_p, false);
 			ret = swrm_wcd_notify(
 				tx_priv->swr_ctrl_data[0].tx_swr_pdev,
 				SWR_DEREGISTER_WAKEUP, NULL);
@@ -2642,6 +2783,9 @@ static int tx_macro_clk_div_get(struct snd_soc_component *component)
 
 	if (!tx_macro_get_data(component, &tx_dev, &tx_priv, __func__))
 		return -EINVAL;
+
+	if (tx_priv->dmic_rate_override)
+		return dmic_clk_rate_div[tx_priv->dmic_rate_override];
 
 	return tx_priv->dmic_clk_div;
 }
@@ -2838,6 +2982,9 @@ undefined_rate:
 
 static const struct tx_macro_reg_mask_val tx_macro_reg_init[] = {
 	{BOLERO_CDC_TX0_TX_PATH_SEC7, 0x3F, 0x0A},
+	{BOLERO_CDC_TX0_TX_PATH_CFG1, 0x0F, 0x0A},
+	{BOLERO_CDC_TX1_TX_PATH_CFG1, 0x0F, 0x0A},
+	{BOLERO_CDC_TX2_TX_PATH_CFG1, 0x0F, 0x0A},
 };
 
 static int tx_macro_init(struct snd_soc_component *component)
@@ -3270,6 +3417,17 @@ static int tx_macro_probe(struct platform_device *pdev)
 		mutex_init(&tx_priv->swr_clk_lock);
 	}
 	tx_priv->is_used_tx_swr_gpio = is_used_tx_swr_gpio;
+
+	tx_priv->sub_dmic_bias = regulator_get(&pdev->dev, "sub-mic-bias");
+	if (IS_ERR_OR_NULL(tx_priv->sub_dmic_bias))
+		dev_err(&pdev->dev, "%s: did not get sub mic bias regulator or not supported\n",
+				__func__);
+
+	tx_priv->thi_dmic_bias = regulator_get(&pdev->dev, "3rd-mic-bias");
+	if (IS_ERR_OR_NULL(tx_priv->thi_dmic_bias))
+		dev_err(&pdev->dev, "%s: did not get thi mic bias regulator or not supported\n",
+				__func__);
+
 	mutex_init(&tx_priv->mclk_lock);
 	tx_macro_init_ops(&ops, tx_io_base);
 	ops.clk_id_req = TX_CORE_CLK;

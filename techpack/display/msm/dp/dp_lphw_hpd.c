@@ -43,8 +43,10 @@ static void dp_lphw_hpd_attention(struct work_struct *work)
 
 	lphw_hpd->base.hpd_irq = true;
 
+#ifndef CONFIG_SEC_DISPLAYPORT
 	if (lphw_hpd->cb && lphw_hpd->cb->attention)
 		lphw_hpd->cb->attention(lphw_hpd->dev);
+#endif
 }
 
 static void dp_lphw_hpd_connect(struct work_struct *work)
@@ -61,8 +63,10 @@ static void dp_lphw_hpd_connect(struct work_struct *work)
 	lphw_hpd->base.alt_mode_cfg_done = true;
 	lphw_hpd->base.hpd_irq = false;
 
+#ifndef CONFIG_SEC_DISPLAYPORT
 	if (lphw_hpd->cb && lphw_hpd->cb->configure)
 		lphw_hpd->cb->configure(lphw_hpd->dev);
+#endif
 }
 
 static void dp_lphw_hpd_disconnect(struct work_struct *work)
@@ -79,8 +83,10 @@ static void dp_lphw_hpd_disconnect(struct work_struct *work)
 	lphw_hpd->base.alt_mode_cfg_done = false;
 	lphw_hpd->base.hpd_irq = false;
 
+#ifndef CONFIG_SEC_DISPLAYPORT
 	if (lphw_hpd->cb && lphw_hpd->cb->disconnect)
 		lphw_hpd->cb->disconnect(lphw_hpd->dev);
+#endif
 }
 
 static irqreturn_t dp_tlmm_isr(int unused, void *data)
@@ -213,10 +219,12 @@ static int dp_lphw_hpd_simulate_connect(struct dp_hpd *dp_hpd, bool hpd)
 		return -EINVAL;
 	}
 
+#ifndef CONFIG_SEC_DISPLAYPORT
 	if (hpd)
 		lphw_hpd->cb->configure(lphw_hpd->dev);
 	else
 		lphw_hpd->cb->disconnect(lphw_hpd->dev);
+#endif
 
 	return 0;
 }
@@ -234,8 +242,10 @@ static int dp_lphw_hpd_simulate_attention(struct dp_hpd *dp_hpd, int vdo)
 
 	lphw_hpd->base.hpd_irq = true;
 
+#ifndef CONFIG_SEC_DISPLAYPORT
 	if (lphw_hpd->cb && lphw_hpd->cb->attention)
 		lphw_hpd->cb->attention(lphw_hpd->dev);
+#endif
 
 	return 0;
 }

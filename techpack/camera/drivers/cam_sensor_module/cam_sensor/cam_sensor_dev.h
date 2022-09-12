@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_DEV_H_
@@ -111,7 +111,16 @@ struct cam_sensor_ctrl_t {
 	bool bob_pwm_switch;
 	uint32_t last_flush_req;
 	uint16_t pipeline_delay;
-	int32_t open_cnt;
+#if defined(CONFIG_CAMERA_ADAPTIVE_MIPI)
+	u32 mipi_clock_index_new;
+	u32 mipi_clock_index_cur;
+	const struct cam_mipi_sensor_mode *mipi_info;
+	uint8_t sensor_mode;
+#endif
+#if defined(CONFIG_CAMERA_FRAME_CNT_DBG)
+	struct task_struct *sensor_thread;
+	bool is_thread_started;
+#endif
 };
 
 #endif /* _CAM_SENSOR_DEV_H_ */

@@ -685,6 +685,7 @@ void dsi_ctrl_hw_cmn_kickoff_command(struct dsi_ctrl_hw *ctrl,
 
 	if (!(flags & DSI_CTRL_HW_CMD_WAIT_FOR_TRIGGER))
 		DSI_W32(ctrl, DSI_CMD_MODE_DMA_SW_TRIGGER, 0x1);
+	SDE_EVT32(ctrl->index, flags);
 }
 
 /**
@@ -778,7 +779,6 @@ void dsi_ctrl_hw_cmn_reset_cmd_fifo(struct dsi_ctrl_hw *ctrl)
 void dsi_ctrl_hw_cmn_trigger_command_dma(struct dsi_ctrl_hw *ctrl)
 {
 	DSI_W32(ctrl, DSI_CMD_MODE_DMA_SW_TRIGGER, 0x1);
-	DSI_CTRL_HW_DBG(ctrl, "CMD DMA triggered\n");
 }
 
 /**
@@ -993,9 +993,33 @@ void dsi_ctrl_hw_cmn_enable_status_interrupts(
 		reg |= BIT(31);
 
 	DSI_W32(ctrl, DSI_INT_CTRL, reg);
+	wmb();
 
 	DSI_CTRL_HW_DBG(ctrl, "Enable interrupts 0x%x, INT_CTRL=0x%x\n", ints,
 			reg);
+}
+
+void dsi_ctrl_hw_cmn_dma_read_before_trigger(struct dsi_ctrl_hw *ctrl)
+{
+	u32 fifo = 0, dma_ctrl, offset, length;
+
+	fifo = DSI_R32(ctrl, DSI_FIFO_STATUS);
+	SDE_EVT32(ctrl->index, 0xc, fifo);
+
+	dma_ctrl = DSI_R32(ctrl, DSI_COMMAND_MODE_DMA_CTRL);
+	SDE_EVT32(ctrl->index, 0x3c, dma_ctrl);
+
+	offset = DSI_R32(ctrl, DSI_DMA_CMD_OFFSET);
+	SDE_EVT32(ctrl->index, 0x48, offset);
+
+	length = DSI_R32(ctrl, DSI_DMA_CMD_LENGTH);
+	SDE_EVT32(ctrl->index, 0x4c, length);
+}
+
+u32 dsi_ctrl_hw_cmn_read_mdp_line_count(struct dsi_ctrl_hw *ctrl)
+{
+	u32 reg = DSI_MMSS_MISC_R32(ctrl, 0xb0);
+	return reg;
 }
 
 /**
@@ -1194,6 +1218,8 @@ void dsi_ctrl_hw_cmn_enable_error_interrupts(struct dsi_ctrl_hw *ctrl,
 	u32 int_mask0 = 0x7FFF3BFF;
 
 	int_ctrl = DSI_R32(ctrl, DSI_INT_CTRL);
+	SDE_EVT32(ctrl->index, int_ctrl);
+
 	if (errors)
 		int_ctrl |= BIT(25);
 	else
@@ -1255,11 +1281,13 @@ void dsi_ctrl_hw_cmn_enable_error_interrupts(struct dsi_ctrl_hw *ctrl,
 	if (errors & DSI_INTERLEAVE_OP_CONTENTION)
 		int_mask0 &= ~BIT(8);
 
+	SDE_EVT32(ctrl->index, int_ctrl);
 	DSI_W32(ctrl, DSI_INT_CTRL, int_ctrl);
+	SDE_EVT32(ctrl->index, int_ctrl);
 	DSI_W32(ctrl, DSI_ERR_INT_MASK0, int_mask0);
 
 	DSI_CTRL_HW_DBG(ctrl, "[DSI_%d] enable errors = 0x%llx, int_mask0=0x%x\n",
-		 errors, int_mask0);
+		 ctrl->index, errors, int_mask0);
 }
 
 /**
@@ -1616,6 +1644,7 @@ int dsi_ctrl_hw_cmn_wait4dynamic_refresh_done(struct dsi_ctrl_hw *ctrl)
 	/* ack dynamic refresh done status */
 	reg = DSI_R32(ctrl, DSI_INT_CTRL);
 	reg |= dyn_refresh_done;
+	SDE_EVT32(reg);
 	DSI_W32(ctrl, DSI_INT_CTRL, reg);
 
 	return 0;

@@ -29,6 +29,8 @@
 #include <linux/bootmem.h>
 #include <soc/qcom/scm.h>
 
+#include <linux/sde_rsc.h>
+
 #include "msm_drv.h"
 #include "msm_mmu.h"
 #include "msm_gem.h"
@@ -49,6 +51,7 @@
 #include "sde_crtc.h"
 #include "sde_reg_dma.h"
 #include "sde_connector.h"
+#include "sde_dbg.h"
 
 #include <soc/qcom/scm.h>
 #include "soc/qcom/secure_buffer.h"
@@ -56,6 +59,14 @@
 
 #define CREATE_TRACE_POINTS
 #include "sde_trace.h"
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+#include <linux/sec_debug.h>
+#endif
+
+#if defined(CONFIG_DISPLAY_SAMSUNG) // case 04436106
+#include "ss_dsi_panel_debug.h"
+#endif
 
 /* defines for secure channel call */
 #define MEM_PROTECT_SD_CTRL_SWITCH 0x18
@@ -103,6 +114,102 @@ static const char * const iommu_ports[] = {
 static bool sdecustom = true;
 module_param(sdecustom, bool, 0400);
 MODULE_PARM_DESC(sdecustom, "Enable customizations for sde clients");
+
+#define SDE_REG_EVT32(...) sde_evtlog_log(sde_dbg_base_evtlog, func_name, \
+		line_num, SDE_EVTLOG_ALWAYS, ##__VA_ARGS__, \
+		SDE_EVTLOG_DATA_LIMITER)
+
+#if defined(CONFIG_PANEL_NT36523_PPA957DB1_WQXGA)
+#define MAX_REG_COUNT 5
+#else
+#define MAX_REG_COUNT 1
+#endif
+
+struct reg_log_info {
+	u32 reg_off;
+	void __iomem *reg_mem;
+};
+static struct reg_log_info reg_info[MAX_REG_COUNT];
+
+struct reg_log_value {
+	u32 reg_off;
+	u32 reg_val;
+};
+
+static bool g_init_done = false;
+static bool g_cont_splash = true;
+
+static void _reg_log_init()
+{
+	int index = 0;
+
+#if defined(CONFIG_PANEL_NT36523_PPA957DB1_WQXGA)
+	int addr[MAX_REG_COUNT] = {
+		0xae94008, // DSI_STATUS
+		0xae9400c, // DSI_FIFO_STATUS
+		0xae94110, // DSI_INT_CTRL
+		0x0AF020CC,
+		0x0AF0209C,
+	};
+#else
+	int addr[MAX_REG_COUNT] = {
+		0xAE6BAB0, // INTF_LINE_COUNT
+	};
+#endif
+
+	sde_dbg_init(NULL);
+
+	for (index = 0; index < MAX_REG_COUNT; index++) {
+		reg_info[index].reg_off = addr[index];
+		reg_info[index].reg_mem = ioremap(reg_info[index].reg_off, 4);
+	}
+}
+
+void reg_log_dump(const char *func_name, int line_num)
+{
+	struct reg_log_value value[5] = {{0}};
+	int i;
+
+	if (!g_cont_splash)
+		return;
+
+	if (!g_init_done) {
+		_reg_log_init();
+		g_init_done = true;
+	}
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	{
+		/* PBA booting skip */
+		extern int ss_panel_attached(int ndx);
+
+		if (!(ss_panel_attached(0) || ss_panel_attached(1)))
+			return;
+	}
+#if defined(CONFIG_PANEL_S6TUUM1_AMSA24VU01_WQXGA)
+	/* for GTS7XL hwid 02 2800X1752 panel */
+	return;
+#endif
+#endif
+
+	for (i = 0 ; i < MAX_REG_COUNT; i++) {
+		if (reg_info[i].reg_off)
+			value[i].reg_off = reg_info[i].reg_off;
+
+		if (!IS_ERR_OR_NULL(reg_info[i].reg_mem))
+			value[i].reg_val = readl_relaxed(reg_info[i].reg_mem);
+	}
+
+	SDE_REG_EVT32(func_name, line_num, i, 0xdddd,
+				value[0].reg_off, value[0].reg_val,
+				value[1].reg_off, value[1].reg_val,
+				value[2].reg_off, value[2].reg_val,
+				value[3].reg_off, value[3].reg_val,
+				value[4].reg_off, value[4].reg_val);
+
+	pr_debug("auto-refresh: %s:%d, off:0x%x, val:0x%x\n", func_name, line_num,
+			value[0].reg_off, value[0].reg_val);
+}
 
 static int sde_kms_hw_init(struct msm_kms *kms);
 static int _sde_kms_mmu_destroy(struct sde_kms *sde_kms);
@@ -187,14 +294,25 @@ static int sde_kms_enable_vblank(struct msm_kms *kms, struct drm_crtc *crtc)
 	ret = sde_crtc_vblank(crtc, true);
 	SDE_ATRACE_END("sde_kms_enable_vblank");
 
+#if defined(CONFIG_DISPLAY_SAMSUNG) // case 04436106
+	SS_XLOG_VSYNC(ret);
+#endif
 	return ret;
 }
 
 static void sde_kms_disable_vblank(struct msm_kms *kms, struct drm_crtc *crtc)
 {
+#if defined(CONFIG_DISPLAY_SAMSUNG) // case 04436106
+	int ret = 0;
+#endif
+
 	SDE_ATRACE_BEGIN("sde_kms_disable_vblank");
-	sde_crtc_vblank(crtc, false);
+	ret = sde_crtc_vblank(crtc, false);
 	SDE_ATRACE_END("sde_kms_disable_vblank");
+
+#if defined(CONFIG_DISPLAY_SAMSUNG) // case 04436106
+	SS_XLOG_VSYNC(ret);
+#endif
 }
 
 static void sde_kms_wait_for_frame_transfer_complete(struct msm_kms *kms,
@@ -740,6 +858,14 @@ static int _sde_kms_release_splash_buffer(struct sde_kms *sde_kms,
 
 	/* leave ramdump memory only if base address matches */
 	if (ramdump_base == mem_addr &&
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+			/* case 1) upload mode: release splash memory except disp_rdump_memory
+			 *         which is used for framebuffer in upload mode bootloader
+			 * case 2) None-upload mode: release whole splash memory
+			 *         which is used for framebuffer in normal booitng mode bootloader
+			 */
+			sec_debug_is_enabled() &&
+#endif
 			ramdump_buffer_size <= splash_buffer_size) {
 		mem_addr +=  ramdump_buffer_size;
 		splash_buffer_size -= ramdump_buffer_size;
@@ -756,8 +882,14 @@ static int _sde_kms_release_splash_buffer(struct sde_kms *sde_kms,
 		SDE_ERROR("continuous splash memory free failed:%d\n", ret);
 		return ret;
 	}
+	free_memsize_reserved(mem_addr, splash_buffer_size);
 	for (pfn_idx = pfn_start; pfn_idx < pfn_end; pfn_idx++)
 		free_reserved_page(pfn_to_page(pfn_idx));
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	SDE_INFO("release splash buffer: addr: %x, size: %x, sec_debug: %d\n",
+			mem_addr, splash_buffer_size, sec_debug_is_enabled());
+#endif
 
 	return ret;
 
@@ -998,6 +1130,7 @@ static void sde_kms_prepare_commit(struct msm_kms *kms,
 				head) {
 			if (encoder->crtc != crtc)
 				continue;
+			g_cont_splash = false;
 
 			if (sde_encoder_prepare_commit(encoder) == -ETIMEDOUT) {
 				SDE_ERROR("crtc:%d, initiating hw reset\n",
@@ -1134,10 +1267,12 @@ static void sde_kms_check_for_ext_vote(struct sde_kms *sde_kms,
 	 * cases, allow the target to go through a gdsc toggle after
 	 * crtc is disabled.
 	 */
-	if (!crtc_enabled && phandle->is_ext_vote_en) {
+	if (!crtc_enabled && (phandle->is_ext_vote_en ||
+            !dev->dev->power.runtime_auto)) {
 		pm_runtime_put_sync(sde_kms->dev->dev);
-		SDE_EVT32(phandle->is_ext_vote_en);
 		pm_runtime_get_sync(sde_kms->dev->dev);
+		SDE_EVT32(phandle->is_ext_vote_en,
+        dev->dev->power.runtime_auto);
 	}
 
 	mutex_unlock(&phandle->ext_client_lock);
@@ -1382,9 +1517,15 @@ static void _sde_kms_release_displays(struct sde_kms *sde_kms)
 	sde_kms->wb_displays = NULL;
 	sde_kms->wb_display_count = 0;
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	sde_kms->dsi_display_count = 0;
+	kfree(sde_kms->dsi_displays);
+	sde_kms->dsi_displays = NULL;
+#else
 	kfree(sde_kms->dsi_displays);
 	sde_kms->dsi_displays = NULL;
 	sde_kms->dsi_display_count = 0;
+#endif
 }
 
 /**
@@ -1823,6 +1964,11 @@ void sde_kms_timeline_status(struct drm_device *dev)
 	mutex_unlock(&dev->mode_config.mutex);
 }
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+int sde_core_perf_sysfs_init(struct sde_kms *sde_kms);
+int sde_core_perf_sysfs_deinit(struct sde_kms *sde_kms);
+#endif
+
 static int sde_kms_postinit(struct msm_kms *kms)
 {
 	struct sde_kms *sde_kms = to_sde_kms(kms);
@@ -1840,6 +1986,12 @@ static int sde_kms_postinit(struct msm_kms *kms)
 	rc = _sde_debugfs_init(sde_kms);
 	if (rc)
 		SDE_ERROR("sde_debugfs init failed: %d\n", rc);
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	rc = sde_core_perf_sysfs_init(sde_kms);
+	if (rc)
+		SDE_ERROR("sde_core_sysfs init failed: %d\n", rc);
+#endif
 
 	drm_for_each_crtc(crtc, dev)
 		sde_crtc_post_init(dev, crtc);
@@ -1892,6 +2044,9 @@ static void _sde_kms_hw_destroy(struct sde_kms *sde_kms,
 	/* safe to call these more than once during shutdown */
 	_sde_debugfs_destroy(sde_kms);
 	_sde_kms_mmu_destroy(sde_kms);
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	sde_core_perf_sysfs_deinit(sde_kms);
+#endif
 
 	if (sde_kms->catalog) {
 		for (i = 0; i < sde_kms->catalog->vbif_count; i++) {
@@ -2223,6 +2378,9 @@ static int _sde_kms_helper_reset_custom_properties(struct sde_kms *sde_kms,
 	return ret;
 }
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+#include "./dsi/dsi_display.h"
+#endif
 static void sde_kms_lastclose(struct msm_kms *kms,
 		struct drm_modeset_acquire_ctx *ctx)
 {
@@ -2264,6 +2422,30 @@ static void sde_kms_lastclose(struct msm_kms *kms,
 		SDE_ERROR("failed to run last close: %d\n", ret);
 
 	drm_atomic_state_put(state);
+
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	/*
+		There is reverse current on BLIC after panel power off.
+		This project use AOT mode(always on touch). So suspend status sustain panel power on.
+		So, only consider set power off & set restart case
+	*/
+	{
+		struct dsi_display *display;
+		int i;
+
+		for (i = 0; i < sde_kms->dsi_display_count; ++i) {
+			display = (struct dsi_display *)sde_kms->dsi_displays[i];
+			if (of_node_name_eq(display->panel_node, "ss_dsi_panel_NT36523_PPA957DB1_WQXGA")) {
+				SDE_ERROR("wait 3s start\n");
+				msleep(3000);
+				SDE_ERROR("wait 3s end\n");
+				break;
+			}
+		}
+
+	}
+#endif
 }
 
 static int sde_kms_check_secure_transition(struct msm_kms *kms,
@@ -2544,6 +2726,7 @@ static int sde_kms_cont_splash_config(struct msm_kms *kms)
 				sde_kms->splash_data.num_splash_displays,
 				sde_kms->dsi_display_count);
 
+	reg_log_dump(__func__, __LINE__);
 	/* dsi */
 	for (i = 0; i < sde_kms->dsi_display_count; ++i) {
 		display = sde_kms->dsi_displays[i];
@@ -2636,6 +2819,7 @@ static int sde_kms_cont_splash_config(struct msm_kms *kms)
 		}
 		drm_mode_copy(&crtc->state->adjusted_mode, drm_mode);
 		drm_mode_copy(&crtc->mode, drm_mode);
+		reg_log_dump(__func__, __LINE__);
 
 		/* Update encoder structure */
 		sde_encoder_update_caps_for_cont_splash(encoder,
@@ -2643,10 +2827,33 @@ static int sde_kms_cont_splash_config(struct msm_kms *kms)
 
 		sde_crtc_update_cont_splash_settings(crtc);
 
+		reg_log_dump(__func__, __LINE__);
 		sde_conn = to_sde_connector(connector);
 		if (sde_conn && sde_conn->ops.cont_splash_config)
 			sde_conn->ops.cont_splash_config(sde_conn->display);
 
+		if (sde_encoder_prepare_commit(encoder) == -ETIMEDOUT) {
+			u32 plane_id, xin_mask = 0;
+			int j = 0;
+
+			SDE_ERROR("crtc:%d, initiating hw reset\n",
+					DRMID(crtc));
+
+			for (j = 0; j < splash_display->pipe_cnt; j++) {
+				plane_id = splash_display->pipes[j].sspp;
+				if ((plane_id > 0) && (plane_id <= 4))
+					xin_mask |= BIT((plane_id - 1) * 4);
+				else if ((plane_id > 8) && (plane_id <= 12))
+					xin_mask |=
+						BIT(((plane_id - 9) * 4) + 1);
+
+			}
+			SDE_ERROR("resetting sspp xin_mask: 0x%x\n", xin_mask);
+			sde_encoder_needs_hw_reset(encoder);
+			sde_crtc_reset_hw_immediate(crtc, xin_mask);
+		}
+
+		reg_log_dump(__func__, __LINE__);
 		rc = _sde_kms_update_planes_for_cont_splash(sde_kms,
 				splash_display, crtc);
 		if (rc) {
@@ -2654,6 +2861,7 @@ static int sde_kms_cont_splash_config(struct msm_kms *kms)
 			return rc;
 		}
 	}
+	reg_log_dump(__func__, __LINE__);
 
 	return rc;
 }
@@ -3051,6 +3259,11 @@ end:
 	return 0;
 }
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+extern int ss_dsi_panel_event_handler(
+		int display_ndx, enum mdss_intf_events event, void *arg);
+#endif
+
 static const struct msm_kms_funcs kms_funcs = {
 	.hw_init         = sde_kms_hw_init,
 	.postinit        = sde_kms_postinit,
@@ -3082,6 +3295,10 @@ static const struct msm_kms_funcs kms_funcs = {
 	.postopen = _sde_kms_post_open,
 	.check_for_splash = sde_kms_check_for_splash,
 	.get_mixer_count = sde_kms_get_mixer_count,
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	.ss_callback	= ss_dsi_panel_event_handler,
+#endif
 };
 
 /* the caller api needs to turn on clock before calling it */
@@ -3564,10 +3781,12 @@ static int _sde_kms_hw_init_blocks(struct sde_kms *sde_kms,
 	struct sde_rm *rm = NULL;
 	int i, rc = -EINVAL;
 
+	reg_log_dump(__func__, __LINE__);
 	for (i = 0; i < SDE_POWER_HANDLE_DBUS_ID_MAX; i++)
 		sde_power_data_bus_set_quota(&priv->phandle, i,
 			SDE_POWER_HANDLE_CONT_SPLASH_BUS_AB_QUOTA,
 			SDE_POWER_HANDLE_CONT_SPLASH_BUS_IB_QUOTA);
+	reg_log_dump(__func__, __LINE__);
 
 	_sde_kms_core_hw_rev_init(sde_kms);
 
@@ -3717,6 +3936,7 @@ static int _sde_kms_hw_init_blocks(struct sde_kms *sde_kms,
 		goto drm_obj_init_err;
 	}
 
+	reg_log_dump(__func__, __LINE__);
 	return 0;
 
 genpd_err:
@@ -3741,6 +3961,7 @@ static int sde_kms_hw_init(struct msm_kms *kms)
 		goto end;
 	}
 
+	reg_log_dump(__func__, __LINE__);
 	sde_kms = to_sde_kms(kms);
 	dev = sde_kms->dev;
 	if (!dev || !dev->dev) {
@@ -3815,6 +4036,8 @@ static int sde_kms_hw_init(struct msm_kms *kms)
 	irq_num = platform_get_irq(to_platform_device(sde_kms->dev->dev), 0);
 	SDE_DEBUG("Registering for notification of irq_num: %d\n", irq_num);
 	irq_set_affinity_notifier(irq_num, &sde_kms->affinity_notify);
+
+	reg_log_dump(__func__, __LINE__);
 
 	return 0;
 

@@ -59,6 +59,5 @@ struct dp_usbpd {
  * the callback functions about the connection and status.
  */
 struct dp_hpd *dp_usbpd_get(struct device *dev, struct dp_hpd_cb *cb);
-
 void dp_usbpd_put(struct dp_hpd *pd);
 #endif /* _DP_USBPD_H_ */

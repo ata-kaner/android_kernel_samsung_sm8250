@@ -18,6 +18,20 @@
 static struct cam_req_mgr_util_hdl_tbl *hdl_tbl;
 static DEFINE_SPINLOCK(hdl_tbl_lock);
 
+#if defined(CONFIG_SAMSUNG_SBI)
+bool is_crm_in_ssm_mode = false;
+
+bool cam_req_mgr_get_is_crm_in_ssm_mode()
+{
+    return is_crm_in_ssm_mode;
+}
+
+void cam_req_mgr_set_is_crm_in_ssm_mode(bool val)
+{
+    is_crm_in_ssm_mode = val;
+}
+#endif
+
 int cam_req_mgr_util_init(void)
 {
 	int rc = 0;

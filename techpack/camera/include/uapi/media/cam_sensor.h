@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
- * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_SENSOR_H__
@@ -334,8 +334,7 @@ struct cam_cmd_unconditional_wait {
  * @3phase        : Details whether 3Phase / 2Phase operation
  * @settle_time   : Settling time in ms
  * @data_rate     : Data rate
- * @mipi_flags    : Mipi flags mask
- * @reserved
+ *
  */
 struct cam_csiphy_info {
 	uint16_t    lane_mask;
@@ -346,8 +345,6 @@ struct cam_csiphy_info {
 	uint8_t     secure_mode;
 	uint64_t    settle_time;
 	uint64_t    data_rate;
-	uint32_t    mipi_flags;
-	uint32_t    reserved;
 } __attribute__((packed));
 
 /**
@@ -378,6 +375,17 @@ struct cam_sensor_acquire_dev {
 	uint32_t    handle_type;
 	uint32_t    reserved;
 	uint64_t    info_handle;
+} __attribute__((packed));
+
+/**
+ * cam_sensor_release_dev : Updates sensor acuire cmd
+ * @session_handle :    Session handle for acquiring device
+ * @device_handle  :    Updates device handle
+ *
+ */
+struct cam_sensor_release_dev {
+	uint32_t    session_handle;
+	uint32_t    device_handle;
 } __attribute__((packed));
 
 /**

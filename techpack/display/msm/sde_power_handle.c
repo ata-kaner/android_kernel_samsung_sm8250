@@ -297,6 +297,11 @@ static int _sde_power_data_bus_set_quota(
 		return -EINVAL;
 	}
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	pdbus->in_ab_quota = in_ab_quota;
+	pdbus->in_ib_quota = in_ib_quota;
+#endif
+
 	if (!in_ab_quota && !in_ib_quota)  {
 		new_uc_idx = 0;
 	} else {
@@ -554,11 +559,15 @@ int sde_power_resource_init(struct platform_device *pdev,
 		goto clk_err;
 	}
 
+	SDE_EVT32(mp->num_clk,0x1111);
+
 	rc = msm_dss_clk_set_rate(mp->clk_config, mp->num_clk);
 	if (rc) {
 		pr_err("clock set rate failed rc=%d\n", rc);
 		goto bus_err;
 	}
+
+	SDE_EVT32(mp->num_clk,0x2222);
 
 	rc = sde_power_reg_bus_parse(pdev, phandle);
 	if (rc) {
@@ -722,6 +731,7 @@ int sde_power_resource_enable(struct sde_power_handle *phandle, bool enable)
 	sde_power_rsc_client_init(phandle);
 
 	if (enable) {
+		reg_log_dump(__func__, __LINE__);
 		sde_power_event_trigger_locked(phandle,
 				SDE_POWER_EVENT_PRE_ENABLE);
 
@@ -737,6 +747,8 @@ int sde_power_resource_enable(struct sde_power_handle *phandle, bool enable)
 				goto vreg_err;
 			}
 		}
+		reg_log_dump(__func__, __LINE__);
+
 		rc = msm_dss_enable_vreg(mp->vreg_config, mp->num_vreg,
 				enable);
 		if (rc) {
@@ -744,12 +756,14 @@ int sde_power_resource_enable(struct sde_power_handle *phandle, bool enable)
 			goto vreg_err;
 		}
 
+		reg_log_dump(__func__, __LINE__);
 		rc = sde_power_scale_reg_bus(phandle, VOTE_INDEX_LOW, true);
 		if (rc) {
 			pr_err("failed to set reg bus vote rc=%d\n", rc);
 			goto reg_bus_hdl_err;
 		}
 
+		reg_log_dump(__func__, __LINE__);
 		SDE_EVT32_VERBOSE(enable, SDE_EVTLOG_FUNC_CASE1);
 		rc = sde_power_rsc_update(phandle, true);
 		if (rc) {
@@ -757,6 +771,7 @@ int sde_power_resource_enable(struct sde_power_handle *phandle, bool enable)
 			goto rsc_err;
 		}
 
+		reg_log_dump(__func__, __LINE__);
 		rc = msm_dss_enable_clk(mp->clk_config, mp->num_clk, enable);
 		if (rc) {
 			pr_err("clock enable failed rc:%d\n", rc);
@@ -765,6 +780,7 @@ int sde_power_resource_enable(struct sde_power_handle *phandle, bool enable)
 
 		sde_power_event_trigger_locked(phandle,
 				SDE_POWER_EVENT_POST_ENABLE);
+		reg_log_dump(__func__, __LINE__);
 
 	} else {
 		sde_power_event_trigger_locked(phandle,

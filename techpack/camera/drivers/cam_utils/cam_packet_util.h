@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _CAM_PACKET_UTIL_H_
@@ -13,6 +13,8 @@
  *
  * @handle:                Memory handle
  * @cpu_addr:              Cpu address
+ * @kmd_frame_header_addr: Frame header address
+ * @io_addr:               I/O address
  * @offset:                Offset from the start of the buffer
  * @size:                  Size of the buffer
  * @used_bytes:            Used memory in bytes
@@ -21,6 +23,8 @@
 struct cam_kmd_buf_info {
 	int        handle;
 	uint32_t  *cpu_addr;
+	uint32_t * kmd_frame_header_addr;
+	uint64_t   io_addr;
 	uint32_t   offset;
 	uint32_t   size;
 	uint32_t   used_bytes;
@@ -99,6 +103,20 @@ int cam_packet_util_get_kmd_buffer(struct cam_packet *packet,
  */
 void cam_packet_dump_patch_info(struct cam_packet *packet,
 	int32_t iommu_hdl, int32_t sec_mmu_hdl);
+
+/**
+ * cam_packet_util_get_kmd_io_mem_addr()
+ *
+ * @brief                  Get the io address for kmd buffer
+ *
+ * @kmd_buf:               KMD buffer information
+ * @iommu_hdl:             Address corresponding to the handle
+ *
+ * @return:                0 for success
+ */
+int cam_packet_util_get_frame_header_addr(
+	struct cam_kmd_buf_info *kmd_buf, int32_t iommu_hdl);
+
 
 /**
  * cam_packet_util_process_patches()

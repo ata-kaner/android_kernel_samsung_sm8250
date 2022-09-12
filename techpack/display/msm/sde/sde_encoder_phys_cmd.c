@@ -10,6 +10,10 @@
 #include "sde_formats.h"
 #include "sde_trace.h"
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+#include "ss_dsi_panel_common.h"
+#endif
+
 #define SDE_DEBUG_CMDENC(e, fmt, ...) SDE_DEBUG("enc%d intf%d " fmt, \
 		(e) && (e)->base.parent ? \
 		(e)->base.parent->base.id : -1, \
@@ -25,6 +29,8 @@
 
 #define PP_TIMEOUT_MAX_TRIALS	4
 
+extern int global_flag;
+
 /*
  * Tearcheck sync start and continue thresholds are empirically found
  * based on common panels In the future, may want to allow panels to override
@@ -37,6 +43,8 @@
 #define AUTOREFRESH_SEQ1_POLL_TIME	2000
 #define AUTOREFRESH_SEQ2_POLL_TIME	25000
 #define AUTOREFRESH_SEQ2_POLL_TIMEOUT	1000000
+
+int global_flag = 0;
 
 static inline int _sde_encoder_phys_cmd_get_idle_timeout(
 		struct sde_encoder_phys_cmd *cmd_enc)
@@ -175,12 +183,21 @@ static void _sde_encoder_phys_cmd_update_intf_cfg(
 static void sde_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
 {
 	struct sde_encoder_phys *phys_enc = arg;
+	u32 scheduler_status = INVALID_CTL_STATUS;
+	struct sde_encoder_phys_cmd *cmd_enc;
+	struct sde_hw_pp_vsync_info info[MAX_CHANNELS_PER_ENC] = {{0}};
+	struct sde_hw_ctl *ctl;
 	u32 event = 0;
 
 	if (!phys_enc || !phys_enc->hw_pp)
 		return;
 
 	SDE_ATRACE_BEGIN("pp_done_irq");
+	cmd_enc = to_sde_encoder_phys_cmd(phys_enc);
+	ctl = phys_enc->hw_ctl;
+
+	if (ctl && ctl->ops.get_scheduler_status)
+		scheduler_status = ctl->ops.get_scheduler_status(ctl);
 
 	/* notify all synchronous clients first, then asynchronous clients */
 	if (phys_enc->parent_ops.handle_frame_done &&
@@ -193,8 +210,17 @@ static void sde_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
 		spin_unlock(phys_enc->enc_spinlock);
 	}
 
+	sde_encoder_helper_get_pp_line_count(phys_enc->parent, info);
 	SDE_EVT32_IRQ(DRMID(phys_enc->parent),
-			phys_enc->hw_pp->idx - PINGPONG_0, event);
+		phys_enc->hw_pp->idx - PINGPONG_0, event,
+		info[0].pp_idx, info[0].intf_idx,
+		info[0].wr_ptr_line_count, info[0].intf_frame_count,
+		info[1].pp_idx, info[1].intf_idx,
+		info[1].wr_ptr_line_count, info[1].intf_frame_count,
+		scheduler_status);
+
+	if (scheduler_status == 0x30)
+		global_flag = 0;	//P200728-01222 disable debug patch from 04710138 due to sluggish issue.
 
 	/* Signal any waiting atomic commit thread */
 	wake_up_all(&phys_enc->pending_kickoff_wq);
@@ -236,6 +262,31 @@ static void sde_encoder_phys_cmd_te_rd_ptr_irq(void *arg, int irq_idx)
 	struct sde_encoder_phys_cmd_te_timestamp *te_timestamp;
 	unsigned long lock_flags;
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	struct drm_connector *conn = phys_enc ? phys_enc->connector : NULL;
+	struct samsung_display_driver_data *vdd = NULL;
+	enum ss_display_ndx ndx;
+
+	static ktime_t prev_t[MAX_DISPLAY_NDX];
+	ktime_t cur_t;
+	int t_delt;
+	int fps;
+	static int prev_fps[MAX_DISPLAY_NDX];
+	static int cnt[MAX_DISPLAY_NDX];
+
+	if (unlikely(!conn || conn->index >= MAX_DISPLAY_NDX)) {
+		SDE_ERROR("error: invalid drm_conn (%d)\n", conn ? conn->index : -ENODEV);
+		ndx = -1;
+	} else {
+		/* connecotr->index:
+		 * 0: DSI1, 1: DSI2, 2: WB , 3: DP, or
+		 * 0: DSI1, 1: WB , 2: DP
+		 */
+		ndx = conn->index;
+		vdd = ss_get_vdd(ndx);
+	}
+#endif
+
 	if (!phys_enc || !phys_enc->hw_pp || !phys_enc->hw_intf)
 		return;
 
@@ -264,10 +315,50 @@ static void sde_encoder_phys_cmd_te_rd_ptr_irq(void *arg, int irq_idx)
 		info[1].wr_ptr_line_count, info[1].intf_frame_count,
 		scheduler_status);
 
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	/* case 05295952: detect MDP clock underflow that causes line noise */
+	if (vdd && info[0].wr_ptr_line_count > (phys_enc->cached_mode.vdisplay/3) &&
+			info[0].wr_ptr_line_count < phys_enc->cached_mode.vdisplay)
+		SS_XLOG(info[0].wr_ptr_line_count, ++vdd->cnt_mdp_clk_underflow);
+
+
+	if (vdd && vdd->vrr.support_te_mod && vdd->vrr.te_mod_on && vdd->vrr.te_mod_divider > 0) {
+		vdd->vrr.te_mod_cnt = (vdd->vrr.te_mod_cnt + 1) % vdd->vrr.te_mod_divider;
+
+		if (vdd->vrr.te_mod_cnt)
+			goto skip_call_handle_vblank_virt;
+	}
+#endif
+
 	if (phys_enc->parent_ops.handle_vblank_virt)
 		phys_enc->parent_ops.handle_vblank_virt(phys_enc->parent,
 			phys_enc);
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+skip_call_handle_vblank_virt:
+	if (ndx >= 0 && vdd) {
+		if(ctl)
+			SDE_DEBUG("sde_encoder_phys_cmd_te_rd_ptr_irq = [DISPLAY_%d]\n", ctl->idx);
+		cur_t = ktime_get();
 
+		if (vdd->vrr.running_vrr || cnt[ndx]-- > 0) {
+			t_delt = (int)ktime_us_delta(cur_t , prev_t[ndx]);
+			fps = 1000000 / t_delt;
+
+			if (cnt[ndx] == 1) {
+				LCD_INFO("VRR: teirq: %d, %d\n", prev_fps[ndx], fps);
+				SS_XLOG(prev_fps[ndx], fps);
+			}
+
+			if (vdd->vrr.running_vrr)
+				cnt[ndx] = 5;
+			prev_fps[ndx] = fps;
+		}
+
+		prev_t[ndx] = cur_t;
+
+	}
+#endif
 	atomic_add_unless(&cmd_enc->pending_vblank_cnt, -1, 0);
 	wake_up_all(&cmd_enc->pending_vblank_wq);
 	SDE_ATRACE_END("rd_ptr_irq");
@@ -511,6 +602,34 @@ static int _sde_encoder_phys_cmd_handle_ppdone_timeout(
 			cmd_enc->pp_timeout_report_cnt,
 			pending_kickoff_cnt,
 			frame_event);
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	SS_XLOG(cmd_enc->pp_timeout_report_cnt);
+
+	phys_enc->sde_kms->base.funcs->ss_callback(conn->index, SS_EVENT_CHECK_TE, NULL);
+	inc_dpui_u32_field(DPUI_KEY_QCT_PPTO, 1);
+
+
+	if (sec_debug_is_enabled()) {
+		/* Debug Level MID or HIGH */
+		SDE_ERROR_CMDENC(cmd_enc,
+			"pp:%d kickoff timed out ctl %d koff_cnt %d\n",
+			phys_enc->hw_pp->idx - PINGPONG_0,
+			phys_enc->hw_ctl->idx - CTL_0,
+			pending_kickoff_cnt);
+
+		SDE_EVT32(DRMID(phys_enc->parent), SDE_EVTLOG_FATAL);
+		SDE_DBG_DUMP("all", "dbg_bus", "vbif_dbg_bus", "panic");
+	}
+
+	pr_err("%s: pp_timeout_report_cnt: %d\n", __func__, cmd_enc->pp_timeout_report_cnt);
+	if (cmd_enc->pp_timeout_report_cnt < 10) {
+		/* request a ctl reset before the next kickoff */
+		phys_enc->enable_state = SDE_ENC_ERR_NEEDS_HW_RESET;
+		pr_err("%s: ignore pp & phy_hw_reset\n", __func__);
+		goto exit;
+	}
+#endif
 
 	/* check if panel is still sending TE signal or not */
 	if (sde_connector_esd_status(phys_enc->connector))
@@ -849,6 +968,10 @@ static int sde_encoder_phys_cmd_control_vblank_irq(
 	SDE_EVT32(DRMID(phys_enc->parent), phys_enc->hw_pp->idx - PINGPONG_0,
 			enable, refcount);
 
+#if defined(CONFIG_DISPLAY_SAMSUNG) // case 04436106
+	SS_XLOG_VSYNC(enable, refcount);
+#endif
+
 	if (enable && atomic_inc_return(&phys_enc->vblank_refcount) == 1) {
 		ret = sde_encoder_helper_register_irq(phys_enc, INTR_IDX_RDPTR);
 		if (ret)
@@ -869,6 +992,9 @@ end:
 		SDE_EVT32(DRMID(phys_enc->parent),
 				phys_enc->hw_pp->idx - PINGPONG_0,
 				enable, refcount, SDE_EVTLOG_ERROR);
+#if defined(CONFIG_DISPLAY_SAMSUNG) // case 04436106
+		SS_XLOG_VSYNC(0xbad, enable, refcount, ret);
+#endif
 	}
 
 	mutex_unlock(&sde_kms->vblank_ctl_global_lock);
@@ -1063,7 +1189,14 @@ static void sde_encoder_phys_cmd_tearcheck_config(
 	 * disable sde hw generated TE signal, since hw TE will arrive first.
 	 * Only caveat is if due to error, we hit wrap-around.
 	 */
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	/* 3 * 16.6ms based on mode->vtotal
+	 note : need to multiply current_fps / 60 to match 16ms regardless of current fps
+	*/
+	tc_cfg.sync_cfg_height = (mode->vtotal * 3 * mode->vrefresh) / 12 / 5;
+#else
 	tc_cfg.sync_cfg_height = 0xFFF0;
+#endif
 	tc_cfg.vsync_init_val = mode->vdisplay;
 	tc_cfg.sync_threshold_start = _get_tearcheck_threshold(phys_enc,
 			&extra_frame_trigger_time);
@@ -1758,6 +1891,11 @@ static void _sde_encoder_autorefresh_disable_seq1(
 		udelay(AUTOREFRESH_SEQ1_POLL_TIME);
 		if ((trial * AUTOREFRESH_SEQ1_POLL_TIME)
 				> (KICKOFF_TIMEOUT_MS * USEC_PER_MSEC)) {
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+			struct samsung_display_driver_data *vdd = ss_get_vdd(PRIMARY_DISPLAY_NDX);
+			vdd->is_autorefresh_fail = true;
+			LCD_INFO("set is_autorefresh_fail true\n");
+#endif
 			SDE_ERROR_CMDENC(cmd_enc,
 					"disable autorefresh failed\n");
 

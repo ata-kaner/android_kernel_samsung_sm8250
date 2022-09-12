@@ -226,7 +226,7 @@ int cam_flash_get_dt_data(struct cam_flash_ctrl *fctrl,
 		rc = -ENOMEM;
 		goto release_soc_res;
 	}
-	of_node = fctrl->pdev->dev.of_node;
+	of_node = soc_info->dev->of_node;
 
 	rc = cam_soc_util_get_dt_properties(soc_info);
 	if (rc) {

@@ -85,7 +85,7 @@ static int cam_vfe_rdi_put_evt_payload(
 	return 0;
 }
 
-static int cam_vfe_rdi_cpas_reg_dump(
+static int cam_vfe_camif_cpas_reg_dump(
 struct cam_vfe_mux_rdi_data *rdi_priv)
 {
 	struct cam_vfe_soc_private *soc_private =
@@ -260,7 +260,7 @@ static int cam_vfe_rdi_resource_start(
 	struct cam_vfe_mux_rdi_data   *rsrc_data;
 	int                            rc = 0;
 	uint32_t                       err_irq_mask[CAM_IFE_IRQ_REGISTERS_MAX];
-	uint32_t                 rdi_irq_mask[CAM_IFE_IRQ_REGISTERS_MAX] = {0};
+	uint32_t                       irq_mask[CAM_IFE_IRQ_REGISTERS_MAX];
 
 	if (!rdi_res) {
 		CAM_ERR(CAM_ISP, "Error! Invalid input arguments");
@@ -278,6 +278,10 @@ static int cam_vfe_rdi_resource_start(
 		rsrc_data->rdi_common_reg_data->error_irq_mask0;
 	err_irq_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS1] =
 		rsrc_data->rdi_common_reg_data->error_irq_mask1;
+	irq_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS0] =
+		rsrc_data->rdi_common_reg_data->subscribe_irq_mask0;
+	irq_mask[CAM_IFE_IRQ_CAMIF_REG_STATUS1] =
+		rsrc_data->rdi_common_reg_data->subscribe_irq_mask1;
 
 	rdi_res->res_state = CAM_ISP_RESOURCE_STATE_STREAMING;
 
@@ -305,19 +309,11 @@ static int cam_vfe_rdi_resource_start(
 	if (!rdi_res->rdi_only_ctx)
 		goto end;
 
-	rdi_irq_mask[0] =
-		(rsrc_data->reg_data->reg_update_irq_mask |
-			rsrc_data->reg_data->sof_irq_mask);
-
-	CAM_DBG(CAM_ISP, "RDI%d irq_mask 0x%x",
-		rdi_res->res_id - CAM_ISP_HW_VFE_IN_RDI0,
-		rdi_irq_mask[0]);
-
 	if (!rsrc_data->irq_handle) {
 		rsrc_data->irq_handle = cam_irq_controller_subscribe_irq(
 			rsrc_data->vfe_irq_controller,
 			CAM_IRQ_PRIORITY_1,
-			rdi_irq_mask,
+			irq_mask,
 			rdi_res,
 			rdi_res->top_half_handler,
 			rdi_res->bottom_half_handler,
@@ -495,20 +491,15 @@ static int cam_vfe_rdi_handle_irq_bottom_half(void *handler_priv,
 		ret = CAM_VFE_IRQ_STATUS_SUCCESS;
 	}
 
-	if (!rdi_priv->rdi_irq_status)
-		goto end;
-
 	irq_rdi_status =
 		(irq_status1 &
 		rdi_priv->rdi_irq_status->rdi_overflow_mask);
 	if (irq_rdi_status) {
 		ktime_get_boottime_ts64(&ts);
 		CAM_INFO(CAM_ISP,
-			"current monotonic time stamp seconds %lld:%lld",
+		"current monotonic time stamp seconds %lld:%lld",
 			ts.tv_sec, ts.tv_nsec/1000);
-
-		cam_vfe_rdi_cpas_reg_dump(rdi_priv);
-
+		cam_vfe_camif_cpas_reg_dump(rdi_priv);
 		CAM_INFO(CAM_ISP, "ife_clk_src:%lld",
 			soc_private->ife_clk_src);
 		CAM_INFO(CAM_ISP,
@@ -535,13 +526,12 @@ static int cam_vfe_rdi_handle_irq_bottom_half(void *handler_priv,
 			evt_info.res_id = CAM_ISP_IFE_OUT_RES_RDI_3;
 			}
 
-		if (rdi_priv->event_cb)
-			rdi_priv->event_cb(rdi_priv->priv,
-			CAM_ISP_HW_EVENT_ERROR,
+		rdi_priv->event_cb(rdi_priv->priv,
+			CAM_ISP_HW_EVENT_OVERFLOW_DEBUG_DATA,
 			(void *)&evt_info);
 		cam_cpas_log_votes();
 	}
-end:
+
 	cam_vfe_rdi_put_evt_payload(rdi_priv, &payload);
 	CAM_DBG(CAM_ISP, "returing status = %d", ret);
 	return ret;

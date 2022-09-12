@@ -922,7 +922,9 @@ u32 msm_vidc_calculate_dec_input_frame_size(struct msm_vidc_inst *inst)
 		div_factor = 4;
 		base_res_mbs = inst->capability.cap[CAP_MBS_PER_FRAME].max;
 	} else {
-		base_res_mbs = NUM_MBS_4k;
+		base_res_mbs = min_t(unsigned int,
+				inst->capability.cap[CAP_MBS_PER_FRAME].max,
+				NUM_MBS_4k);
 		if (f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_VP9)
 			div_factor = 1;
 		else

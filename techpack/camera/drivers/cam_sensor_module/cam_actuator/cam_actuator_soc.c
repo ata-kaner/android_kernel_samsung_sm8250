@@ -22,6 +22,7 @@ int32_t cam_actuator_parse_dt(struct cam_actuator_ctrl_t *a_ctrl,
 	struct cam_sensor_power_ctrl_t  *power_info = &soc_private->power_info;
 	struct device_node              *of_node = NULL;
 	struct device_node              *of_parent = NULL;
+	uint32_t                        temp = 0;
 
 	/* Initialize mutex */
 	mutex_init(&(a_ctrl->actuator_mutex));
@@ -54,6 +55,13 @@ int32_t cam_actuator_parse_dt(struct cam_actuator_ctrl_t *a_ctrl,
 			a_ctrl->cci_num = CCI_DEVICE_0;
 		a_ctrl->io_master_info.cci_client->cci_device = a_ctrl->cci_num;
 		CAM_DBG(CAM_ACTUATOR, "cci-device %d", a_ctrl->cci_num);
+	}
+
+	rc = of_property_read_u32(of_node, "slave-addr", &temp);
+	soc_private->i2c_info.slave_addr = temp;
+	if (rc < 0) {
+		CAM_INFO(CAM_ACTUATOR, "No slave-addr found");
+		rc = 0;
 	}
 
 	if (!soc_info->gpio_data) {
