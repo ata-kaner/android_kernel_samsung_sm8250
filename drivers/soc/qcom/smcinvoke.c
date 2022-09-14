@@ -1072,8 +1072,7 @@ static int marshal_out_invoke_req(const uint8_t *buf, uint32_t buf_size,
 					TZHANDLE_GET_SERVER(tz_args->handle),
 				&temp_fd, NO_LOCK);
 
-		if (temp_fd >= 0)
-			args_buf[i].o.fd = temp_fd;
+		args_buf[i].o.fd = temp_fd;
 
 		if (ret)
 			goto out;
@@ -1371,8 +1370,7 @@ static int marshal_in_tzcb_req(const struct smcinvoke_cb_txn *cb_txn,
 		ret = get_uhandle_from_tzhandle(tz_args[i].handle, srvr_id,
 					&temp_fd, TAKE_LOCK);
 
-		if (temp_fd >= 0)
-			tmp_arg.o.fd = temp_fd;
+		tmp_arg.o.fd = temp_fd;
 
 		if (ret) {
 			ret = -EINVAL;
@@ -1553,7 +1551,7 @@ static long process_accept_req(struct file *filp, unsigned int cmd,
 		return -EINVAL;
 	}
 
-	if (copy_from_user(&user_args, (void __user *)arg,
+	if (copy_from_user(&user_args, (void __user *)(uintptr_t)arg,
 					sizeof(struct smcinvoke_accept))) {
 		pr_err("copying accept request from user failed\n");
 		return -EFAULT;
@@ -1669,8 +1667,8 @@ static long process_accept_req(struct file *filp, unsigned int cmd,
 							cb_txn->txn_id);
 			kref_put(&cb_txn->ref_cnt, delete_cb_txn);
 			mutex_unlock(&g_smcinvoke_lock);
-			ret =  copy_to_user((void __user *)arg, &user_args,
-					sizeof(struct smcinvoke_accept));
+			ret =  copy_to_user((void __user *)(uintptr_t)arg,
+				&user_args, sizeof(struct smcinvoke_accept));
 		}
 	} while (!cb_txn);
 out:
@@ -1715,7 +1713,7 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 		return -EPERM;
 	}
 
-	ret = copy_from_user(&req, (void __user *)arg, sizeof(req));
+	ret = copy_from_user(&req, (void __user *)(uintptr_t)arg, sizeof(req));
 	if (ret) {
 		pr_err("copying invoke req failed\n");
 		return -EFAULT;
@@ -1799,7 +1797,7 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 					nr_args * req.argsize);
 	}
 	/* copy result of invoke op */
-	ret |=  copy_to_user((void __user *)arg, &req, sizeof(req));
+	ret |=  copy_to_user((void __user *)(uintptr_t)arg, &req, sizeof(req));
 	if (ret)
 		goto out;
 
