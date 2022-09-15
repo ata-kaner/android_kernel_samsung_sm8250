@@ -1283,6 +1283,8 @@ static void dwc3_prepare_one_trb_sg(struct dwc3_ep *dep,
 	struct scatterlist *s;
 	int		i;
 	unsigned int length = req->request.length;
+	unsigned int maxp = usb_endpoint_maxp(dep->endpoint.desc);
+	unsigned int rem = length % maxp;
 	unsigned int remaining = req->request.num_mapped_sgs
 		- req->num_queued_sgs;
 
@@ -1294,8 +1296,6 @@ static void dwc3_prepare_one_trb_sg(struct dwc3_ep *dep,
 		length -= sg_dma_len(s);
 
 	for_each_sg(sg, s, remaining, i) {
-		unsigned int maxp = usb_endpoint_maxp(dep->endpoint.desc);
-		unsigned int rem = length % maxp;
 		unsigned int trb_length;
 		unsigned chain = true;
 
@@ -1572,6 +1572,7 @@ static int __dwc3_gadget_kick_transfer(struct dwc3_ep *dep)
 			return ret;
 		}
 
+		dbg_event(0xFF, "GADGET_EP_CMD Failure", ret);
 		dwc3_stop_active_transfer(dwc, dep->number, true);
 
 		list_for_each_entry_safe(req, n, &dep->started_list, list)
@@ -1678,7 +1679,9 @@ static int __dwc3_gadget_ep_queue(struct dwc3_ep *dep, struct dwc3_request *req)
 		}
 	}
 
-	return __dwc3_gadget_kick_transfer(dep);
+	__dwc3_gadget_kick_transfer(dep);
+
+	return 0;
 }
 
 static int dwc3_gadget_wakeup(struct usb_gadget *g)

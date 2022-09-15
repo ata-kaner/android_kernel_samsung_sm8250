@@ -83,6 +83,7 @@ struct cnss_pinctrl_info {
 	struct pinctrl_state *bootstrap_active;
 	struct pinctrl_state *wlan_en_active;
 	struct pinctrl_state *wlan_en_sleep;
+	int bt_en_gpio;
 };
 
 #ifdef CONFIG_MSM_SUBSYSTEM_RESTART
@@ -405,6 +406,7 @@ struct cnss_plat_data {
 	u8 set_wlaon_pwr_ctrl;
 	u8 fw_pcie_gen_switch;
 	u8 pcie_gen_speed;
+	int power_up_error;
 };
 
 #ifdef CONFIG_ARCH_QCOM
