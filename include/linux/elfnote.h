@@ -58,6 +58,9 @@
 		desc			;	\
 	ELFNOTE_END
 
+#define ELFNOTE_LINUX(desc)			\
+	ELFNOTE(Linux, 0, desc)
+
 #else	/* !__ASSEMBLER__ */
 #include <linux/elf.h>
 /*
@@ -94,6 +97,11 @@
 
 #define ELFNOTE32(name, type, desc) ELFNOTE(32, name, type, desc)
 #define ELFNOTE64(name, type, desc) ELFNOTE(64, name, type, desc)
+
+#define ELFNOTE32_LINUX(desc)			\
+	ELFNOTE32("Linux", 0, desc)
+#define ELFNOTE64_LINUX(desc)			\
+	ELFNOTE64("Linux", 0, desc)
 #endif	/* __ASSEMBLER__ */
 
 #endif /* _LINUX_ELFNOTE_H */

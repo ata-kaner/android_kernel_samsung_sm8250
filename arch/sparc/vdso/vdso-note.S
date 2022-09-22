@@ -7,6 +7,4 @@
 #include <linux/version.h>
 #include <linux/elfnote.h>
 
-ELFNOTE_START(Linux, 0)
-	.long LINUX_VERSION_CODE
-ELFNOTE_END
+ELFNOTE_LINUX(.long LINUX_VERSION_CODE)
