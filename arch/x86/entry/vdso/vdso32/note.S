@@ -11,7 +11,7 @@
 /* Ideally this would use UTS_NAME, but using a quoted string here
    doesn't work. Remember to change this when changing the
    kernel's name. */
-ELFNOTE_START(Linux, 0, "a")
+ELFNOTE_START(Linux, 0)
 	.long LINUX_VERSION_CODE
 ELFNOTE_END
 
@@ -39,7 +39,7 @@ BUILD_SALT
 
 #include "../../xen/vdso.h"	/* Defines VDSO_NOTE_NONEGSEG_BIT.  */
 
-ELFNOTE_START(GNU, 2, "a")
+ELFNOTE_START(GNU, 2)
 	.long 1			/* ncaps */
 VDSO32_NOTE_MASK:		/* Symbol used by arch/x86/xen/setup.c */
 	.long 0			/* mask */

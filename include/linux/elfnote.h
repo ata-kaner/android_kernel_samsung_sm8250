@@ -39,8 +39,8 @@
  * e.g. ELFNOTE(XYZCo, 42, .asciz, "forty-two")
  *      ELFNOTE(XYZCo, 12, .long, 0xdeadbeef)
  */
-#define ELFNOTE_START(name, type, flags)	\
-.pushsection .note.name, flags,@note	;	\
+#define ELFNOTE_START(name, type)		\
+.pushsection .note.name, "a",@note	;	\
   .balign 4				;	\
   .long 2f - 1f		/* namesz */	;	\
   .long 4484f - 3f	/* descsz */	;	\
@@ -54,7 +54,7 @@
 .popsection				;
 
 #define ELFNOTE(name, type, desc)		\
-	ELFNOTE_START(name, type, "")		\
+	ELFNOTE_START(name, type)		\
 		desc			;	\
 	ELFNOTE_END
 

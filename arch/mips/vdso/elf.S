@@ -15,7 +15,7 @@
 #include <linux/elfnote.h>
 #include <linux/version.h>
 
-ELFNOTE_START(Linux, 0, "a")
+ELFNOTE_START(Linux, 0)
 	.long LINUX_VERSION_CODE
 ELFNOTE_END
 
