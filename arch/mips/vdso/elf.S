@@ -15,9 +15,7 @@
 #include <linux/elfnote.h>
 #include <linux/version.h>
 
-ELFNOTE_START(Linux, 0)
-	.long LINUX_VERSION_CODE
-ELFNOTE_END
+ELFNOTE_LINUX(.long LINUX_VERSION_CODE)
 
 /*
  * The .MIPS.abiflags section must be defined with the FP ABI flags set
