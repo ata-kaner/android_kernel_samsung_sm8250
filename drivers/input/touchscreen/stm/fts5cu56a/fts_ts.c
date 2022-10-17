@@ -2154,9 +2154,6 @@ static u8 fts_event_handler_type_b(struct fts_ts_info *info)
 								__func__, p_gesture_status->gesture_id);
 						break;
 					}
-					input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
-					input_sync(info->input_dev);
-					input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
 					break;
 				}
 			}
