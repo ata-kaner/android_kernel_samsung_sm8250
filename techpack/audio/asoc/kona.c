@@ -92,10 +92,6 @@
 #define WCN_CDC_SLIM_TX_CH_MAX 2
 #define WCN_CDC_SLIM_TX_CH_MAX_LITO 3
 
-#define VDD_APCx_PC_DISABLE    800 // Little 909us, Big 1461us
-#define VDD_APCx_PC_ENABLE     PM_QOS_DEFAULT_VALUE
-static struct pm_qos_request noise_wa_req;
-
 #ifdef CONFIG_SND_SOC_CS35L41
 #define CLK_SRC_SCLK 0
 #define CLK_SRC_LRCLK 1
@@ -214,7 +210,6 @@ struct msm_asoc_mach_data {
 	struct clk *lpass_audio_hw_vote;
 	int core_audio_vote_count;
 	u32 tdm_max_slots; /* Max TDM slots used */
-	bool pm_qos_noise_wa;
 };
 
 struct tdm_port {
@@ -1042,28 +1037,6 @@ static void param_set_mask(struct snd_pcm_hw_params *p, int n,
 		m->bits[1] = 0;
 		m->bits[bit >> 5] |= (1 << (bit & 31));
 	}
-}
-
-static int vdd_apcx_control_get(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	return 0;
-}
-
-static int vdd_apcx_control_put(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	pr_info("%s: ucontrol value = %ld\n", __func__,
-		ucontrol->value.integer.value[0]);
-	switch (ucontrol->value.integer.value[0]) {
-	case 0:
-		pm_qos_update_request(&noise_wa_req, VDD_APCx_PC_ENABLE);
-		break;
-	case 1:
-		pm_qos_update_request(&noise_wa_req, VDD_APCx_PC_DISABLE);
-		break;
-	}
-	return 0;
 }
 
 #ifdef CONFIG_SND_SOC_CS35L41
@@ -4015,11 +3988,6 @@ static int msm_bt_sample_rate_tx_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static const struct snd_kcontrol_new pm_qos_noise_wa_controls[] = {
-	SOC_SINGLE_EXT("Vdd Apcx Control", SND_SOC_NOPM, 0, 1, 0,
-			vdd_apcx_control_get, vdd_apcx_control_put),
-};
-
 #ifdef CONFIG_SND_SOC_CS35L41
 static const struct soc_enum cirrus_snd_enum[] = {
 	SOC_ENUM_SINGLE_EXT(4, dai_sub_clocks),
@@ -6310,17 +6278,6 @@ static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
 		pr_err("%s: add common snd controls failed: %d\n",
 			__func__, ret);
 		return ret;
-	}
-
-	if (pdata->pm_qos_noise_wa) {
-		ret = snd_soc_add_component_controls(component, pm_qos_noise_wa_controls,
-					ARRAY_SIZE(pm_qos_noise_wa_controls));
-		if (ret < 0) {
-			pr_err("%s: add_pm_qos_noise_wa_controls failed, err %d\n",
-				__func__, ret);
-
-			return ret;
-		}
 	}
 
 	msm_add_tdm_snd_controls(component);
@@ -9283,17 +9240,6 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	if (!pdata)
 		return -ENOMEM;
 
-	pdata->pm_qos_noise_wa = false;
-	pdata->pm_qos_noise_wa = of_parse_phandle(pdev->dev.of_node,
-							"pm_qos_noise_wa", 0);
-
-	if (pdata->pm_qos_noise_wa) {
-		dev_info(&pdev->dev,
-			"%s: pm noise\n", __func__);
-		noise_wa_req.type = PM_QOS_REQ_ALL_CORES;
-		pm_qos_add_request(&noise_wa_req, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
-	}
-
 	of_property_read_u32(pdev->dev.of_node,
 				"qcom,lito-is-v2-enabled",
 				&pdata->lito_v2_enabled);
@@ -9504,10 +9450,6 @@ static int msm_asoc_machine_remove(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 
-	if (of_parse_phandle(pdev->dev.of_node,
-		"pm_qos_noise_wa", 0)) {
-		pm_qos_remove_request(&noise_wa_req);
-	}
 	snd_event_master_deregister(&pdev->dev);
 	snd_soc_unregister_card(card);
 	msm_i2s_auxpcm_deinit();
