@@ -47,35 +47,6 @@ static struct ss_dbg_xlog_vsync {
  *
  **************************************************************/
 
-void ss_xlog_vsync(const char *name, int flag, ...)
-{
-	unsigned long flags;
-	int i, val = 0;
-	va_list args;
-	struct ss_tlog *log;
-
-	spin_lock_irqsave(&ss_xlock_vsync, flags);
-	log = &ss_dbg_xlog_vsync.logs[ss_dbg_xlog_vsync.curr];
-	log->time = ktime_to_us(ktime_get());
-	log->name = name;
-	log->pid = current->pid;
-
-	va_start(args, flag);
-	for (i = 0; i < SS_XLOG_MAX_DATA; i++) {
-		val = va_arg(args, int);
-		if (val == DATA_LIMITER)
-			break;
-
-		log->data[i] = val;
-	}
-	va_end(args);
-	log->data_cnt = i;
-	ss_dbg_xlog_vsync.curr = (ss_dbg_xlog_vsync.curr + 1) % SS_XLOG_ENTRY;
-	ss_dbg_xlog_vsync.last++;
-
-	spin_unlock_irqrestore(&ss_xlock_vsync, flags);
-}
-
 static bool __ss_dump_xlog_calc_range_vsync(void)
 {
 	static u32 next;
@@ -166,35 +137,6 @@ static struct ss_dbg_xlog {
  *
  **************************************************************/
 
-void ss_xlog(const char *name, int flag, ...)
-{
-	unsigned long flags;
-	int i, val = 0;
-	va_list args;
-	struct ss_tlog *log;
-
-	spin_lock_irqsave(&ss_xlock, flags);
-	log = &ss_dbg_xlog.logs[ss_dbg_xlog.curr];
-	log->time = ktime_to_us(ktime_get());
-	log->name = name;
-	log->pid = current->pid;
-
-	va_start(args, flag);
-	for (i = 0; i < SS_XLOG_MAX_DATA; i++) {
-		val = va_arg(args, int);
-		if (val == DATA_LIMITER)
-			break;
-
-		log->data[i] = val;
-	}
-	va_end(args);
-	log->data_cnt = i;
-	ss_dbg_xlog.curr = (ss_dbg_xlog.curr + 1) % SS_XLOG_ENTRY;
-	ss_dbg_xlog.last++;
-
-	spin_unlock_irqrestore(&ss_xlock, flags);
-}
-
 static bool __ss_dump_xlog_calc_range(void)
 {
 	static u32 next;
@@ -263,20 +205,6 @@ static ssize_t ss_xlog_dump_entry(char *xlog_buf, ssize_t xlog_buf_size)
 	spin_unlock_irqrestore(&ss_xlock, flags);
 
 	return off;
-}
-
-void ss_dump_xlog(void)
-{
-	char xlog_buf[SS_XLOG_BUF_MAX] = {0,};
-
-	pr_info("============ Start Samsung XLOG ============\n");
-
-	while (__ss_dump_xlog_calc_range()) {
-		ss_xlog_dump_entry(xlog_buf, SS_XLOG_BUF_MAX);
-		pr_info("%s", xlog_buf);
-	}
-
-	pr_info("============ Finish Samsung XLOG ============\n");
 }
 
 static ssize_t ss_xlog_dump_read(struct file *file, char __user *buff,
@@ -525,110 +453,6 @@ int ss_disp_dbg_info_misc_register(void)
 	return 0;
 }
 
-int ss_read_rddpm(struct samsung_display_driver_data *vdd)
-{
-	char rddpm = 0;
-	int ret;
-
-	ret = ss_panel_data_read(vdd, RX_LDI_DEBUG0, &rddpm, LEVEL_KEY_NONE);
-	if (ret) {
-		LCD_ERR("fail to read rddpm(ret=%d)\n", ret);
-		return ret;
-	}
-
-	LCD_DEBUG("========== SHOW PANEL [0Ah:RDDPM] INFO ==========\n");
-	LCD_DEBUG("* Reg Value : 0x%02x, Result : %s\n",
-				rddpm, (rddpm == 0x9C) ? "GOOD" : "NG");
-	LCD_DEBUG("* Bootster Mode : %s\n", rddpm & 0x80 ? "ON (GD)" : "OFF (NG)");
-	LCD_DEBUG("* Idle Mode     : %s\n", rddpm & 0x40 ? "ON (NG)" : "OFF (GD)");
-	LCD_DEBUG("* Partial Mode  : %s\n", rddpm & 0x20 ? "ON" : "OFF");
-	LCD_DEBUG("* Sleep Mode    : %s\n", rddpm & 0x10 ? "OUT (GD)" : "IN (NG)");
-	LCD_DEBUG("* Normal Mode   : %s\n", rddpm & 0x08 ? "OK (GD)" : "SLEEP (NG)");
-	LCD_DEBUG("* DISPON          : %s\n", rddpm & 0x04 ? "ON (GD)" : "OFF (NG)");
-	LCD_DEBUG("* REAL DISPON(2c) : %s\n", rddpm & 0x02 ? "ON (GD)" : "OFF (NG)");
-	LCD_DEBUG("* POC_LOAD        : %s\n", rddpm & 0x01 ? "ON (GD)" : "OFF (NG)");
-	LCD_DEBUG("=================================================\n");
-
-	return rddpm;
-}
-
-int ss_read_errfg(struct samsung_display_driver_data *vdd)
-{
-	char err_fg = 0;
-	int ret;
-
-	ret = ss_panel_data_read(vdd, RX_LDI_DEBUG2, &err_fg, LEVEL2_KEY);
-	if (ret) {
-		LCD_ERR("fail to read errfg(ret=%d)\n", ret);
-		return ret;
-	}
-
-	LCD_DEBUG("========== SHOW PANEL [EEh:ERR_FG] INFO ==========\n");
-	LCD_DEBUG("* Reg Value : 0x%02x, Result : %s\n",
-				err_fg, (err_fg & 0x4C) ? "NG" : "GOOD");
-
-	if (err_fg & 0x04) {
-		LCD_ERR("* VLOUT3 Error\n");
-		inc_dpui_u32_field(DPUI_KEY_PNVLO3E, 1);
-	}
-
-	if (err_fg & 0x08) {
-		LCD_ERR("* ELVDD Error\n");
-		inc_dpui_u32_field(DPUI_KEY_PNELVDE, 1);
-	}
-
-	if (err_fg & 0x40) {
-		LCD_ERR("* VLIN1 Error\n");
-		inc_dpui_u32_field(DPUI_KEY_PNVLI1E, 1);
-	}
-	LCD_DEBUG("==================================================\n");
-	return err_fg;
-}
-
-int ss_read_rddsm(struct samsung_display_driver_data *vdd)
-{
-	char rddsm = 0;
-	int ret;
-
-	ret = ss_panel_data_read(vdd, RX_LDI_DEBUG3, &rddsm, LEVEL_KEY_NONE);
-	if (ret) {
-		LCD_ERR("fail to read rddsm(ret=%d)\n", ret);
-		return ret;
-	}
-
-	LCD_DEBUG("========== SHOW PANEL [0Eh:RDDSM] INFO ==========\n");
-	LCD_DEBUG("* Reg Value : 0x%02x, Result : %s\n",
-				rddsm, (rddsm == 0x80) ? "GOOD" : "NG");
-	LCD_DEBUG("* TE Mode : %s\n", rddsm & 0x80 ? "ON(GD)" : "OFF(NG)");
-	LCD_DEBUG("=================================================\n");
-
-	return rddsm;
-}
-
-
-int ss_read_dsierr(struct samsung_display_driver_data *vdd)
-{
-	char dsi_err = 0;
-	int ret;
-
-	ret = ss_panel_data_read(vdd, RX_LDI_DEBUG4, &dsi_err, LEVEL1_KEY);
-	if (ret) {
-		LCD_ERR("fail to read dsierr(ret=%d)\n", ret);
-		return ret;
-	}
-
-	LCD_DEBUG("========== SHOW PANEL [05h:DSIE_CNT] INFO ==========\n");
-	LCD_DEBUG("* Reg Value : 0x%02x, Result : %s\n",
-			dsi_err, (dsi_err) ? "NG" : "GOOD");
-	if (dsi_err)
-		LCD_ERR("* DSI Error Count : %d\n", dsi_err);
-	LCD_DEBUG("====================================================\n");
-
-	inc_dpui_u32_field(DPUI_KEY_PNDSIE, dsi_err);
-
-	return dsi_err;
-}
-
 int ss_read_self_diag(struct samsung_display_driver_data *vdd)
 {
 	char self_diag = 0;
@@ -648,95 +472,6 @@ int ss_read_self_diag(struct samsung_display_driver_data *vdd)
 	LCD_DEBUG("=====================================================\n");
 
 	inc_dpui_u32_field(DPUI_KEY_PNSDRE, (self_diag & 0x80) ? 0 : 1);
-
-	return 0;
-}
-
-int ss_read_mipi_protocol_err(struct samsung_display_driver_data *vdd)
-{
-	u16 err_status = 0;
-	u8 rbuf[2];
-	int ret;
-
-	ret = ss_panel_data_read(vdd, RX_LDI_DEBUG6, rbuf, LEVEL_KEY_NONE);
-	if (ret) {
-		LCD_ERR("fail to read protocol_err(ret=%d)\n", ret);
-		return ret;
-	}
-
-	err_status = (rbuf[0] << 8) | rbuf[1];
-
-	/* E9h mipi protocol error status register
-	 * ERR[15] : DSI Protocol violation
-	 * ERR[14] : DATA P lane contention detection
-	 * ERR[13] : Invalid Transmission Length
-	 * ERR[12] : DSI VC ID Invalid
-	 * ERR[11] : DSI Data Type Not Recognized
-	 * ERR[10] : Checksum Error
-	 * ERR[9] : ECC Error, multi_bit (detected, not corrected)
-	 * ERR[8] : ECC Error, single−bit (detected and corrected)
-	 * ERR[7] : Data Lane contention detection
-	 * ERR[6] : False Control Error
-	 * ERR[5] : HS RX Timeout
-	 * ERR[4] : Low−Power Transmit Sync Error
-	 * ERR[3] : Escape Mode Entry Command Error
-	 * ERR[2] : EoT Sync Error
-	 * ERR[1] : SoT Sync Error
-	 * ERR[0] : SoT Error
-         */
-	if (err_status) {
-		LCD_ERR("MIPI protocol error: 0x%x\n", err_status);
-	}
-
-	LCD_DEBUG("========== SHOW PANEL [E9h: MIPI PROTOCOL ERROR] INFO ==========\n");
-	LCD_DEBUG("* Reg Value : 0x%02x, Result : %s\n",
-			err_status, (err_status & 0x00) ? "GOOD" : "NG");
-
-	LCD_DEBUG("* DSI Protocol violation : %s\n", (err_status & BIT(15)) ? "ERROR" : "OK");
-	LCD_DEBUG("* DATA P lane contention detection : %s\n", (err_status & BIT(14)) ? "ERROR" : "OK");
-	LCD_DEBUG("* Invalid Transmission Length : %s\n", (err_status & BIT(13)) ? "ERROR" : "OK");
-	LCD_DEBUG("* DSI VC ID Invalid : %s\n", (err_status & BIT(12)) ? "ERROR" : "OK");
-	LCD_DEBUG("* DSI Data Type Not Recognized : %s\n", (err_status & BIT(11)) ? "ERROR" : "OK");
-	LCD_DEBUG("* Checksum Error : %s\n", (err_status & BIT(10)) ? "ERROR" : "OK");
-	LCD_DEBUG("* ECC Error, multi_bit : %s\n", (err_status & BIT(9)) ? "ERROR" : "OK");
-	LCD_DEBUG("* ECC Error, single−bit : %s\n", (err_status & BIT(8)) ? "ERROR" : "OK");
-	LCD_DEBUG("* Data Lane contention detection : %s\n", (err_status & BIT(7)) ? "ERROR" : "OK");
-	LCD_DEBUG("* False Control Error : %s\n", (err_status & BIT(6)) ? "ERROR" : "OK");
-	LCD_DEBUG("* HS RX Timeout : %s\n", (err_status & BIT(5)) ? "ERROR" : "OK");
-	LCD_DEBUG("* Low−Power Transmit Sync Error : %s\n", (err_status & BIT(4)) ? "ERROR" : "OK");
-	LCD_DEBUG("* Escape Mode Entry Command Error : %s\n", (err_status & BIT(3)) ? "ERROR" : "OK");
-	LCD_DEBUG("* EoT Sync Error : %s\n", (err_status & BIT(2)) ? "ERROR" : "OK");
-	LCD_DEBUG("* SoT Sync Error : %s\n", (err_status & BIT(1)) ? "ERROR" : "OK");
-	LCD_DEBUG("* SoT Error : %s\n", (err_status & BIT(0)) ? "ERROR" : "OK");
-	LCD_DEBUG("=====================================================\n");
-
-	return err_status;
-}
-
-
-/* DDI CMD log buffer max size is 512 bytes.
- * But, qct display driver limit max read size to 255 bytes (0xFF)
- * due to panel dtsi. panel dtsi determines length with one byte.
- * samsung,ldi_debug_logbuf_rx_cmds_revA   = [06 01 00 00 00 00 01 9C FF 00];
- */
-
-#define DDI_CMD_LOGBUF_SIZE	255
-
-int ss_read_ddi_cmd_log(struct samsung_display_driver_data *vdd, char *read_buf)
-{
-	int ret;
-	int i;
-
-	ret = ss_panel_data_read(vdd, RX_LDI_DEBUG_LOGBUF, read_buf, LEVEL1_KEY);
-	if (ret) {
-		LCD_ERR("fail to read ddi cmd log buffer(ret=%d)\n", ret);
-		return ret;
-	}
-
-	LCD_INFO("DDI command log:");
-	for (i = 0; i < DDI_CMD_LOGBUF_SIZE; i++)
-		pr_cont(" %02x", read_buf[i]);
-	pr_cont("\n");
 
 	return 0;
 }
@@ -1440,18 +1175,5 @@ void ss_image_logging_update(uint32_t plane_addr, int width, int height, int src
 
 void ss_xlog_vrr_change_in_drm_ioctl(int vrefresh, int sot_hs_mode)
 {
-	struct samsung_display_driver_data *vdd = ss_get_vdd(PRIMARY_DISPLAY_NDX);
-
-	if (vdd->vrr.adjusted_refresh_rate != 0 &&
-			(vdd->vrr.adjusted_refresh_rate != vrefresh ||
-			 vdd->vrr.adjusted_sot_hs_mode != sot_hs_mode)) {
-		LCD_INFO("switch mode: drm_ioctl: %d%s -> %d%s\n",
-				vdd->vrr.adjusted_refresh_rate,
-				vdd->vrr.adjusted_sot_hs_mode ? "HS" : "NM",
-				vrefresh,
-				sot_hs_mode ? "HS" : "NM");
-		SS_XLOG(vdd->vrr.adjusted_refresh_rate,
-				vdd->vrr.adjusted_sot_hs_mode,
-				vrefresh, sot_hs_mode);
-	}
+	return;
 }
