@@ -374,9 +374,6 @@ static int _sde_core_perf_activate_llcc(struct sde_kms *kms,
 	u32 uid, bool activate)
 {
 	struct llcc_slice_desc *slice;
-	struct drm_device *drm_dev;
-	struct device *dev;
-	struct platform_device *pdev;
 	int rc = 0;
 
 	if (!kms || !kms->dev || !kms->dev->dev) {
@@ -384,10 +381,6 @@ static int _sde_core_perf_activate_llcc(struct sde_kms *kms,
 		rc = -EINVAL;
 		goto exit;
 	}
-
-	drm_dev = kms->dev;
-	dev = drm_dev->dev;
-	pdev = to_platform_device(dev);
 
 	/* If LLCC is already in the requested state, skip */
 	SDE_EVT32(activate, kms->perf.llcc_active);
@@ -746,7 +739,6 @@ void sde_core_perf_crtc_release_bw(struct drm_crtc *crtc)
 {
 	struct drm_crtc *tmp_crtc;
 	struct sde_crtc *sde_crtc;
-	struct sde_crtc_state *sde_cstate;
 	struct sde_kms *kms;
 	int i;
 
@@ -762,7 +754,6 @@ void sde_core_perf_crtc_release_bw(struct drm_crtc *crtc)
 	}
 
 	sde_crtc = to_sde_crtc(crtc);
-	sde_cstate = to_sde_crtc_state(crtc->state);
 
 	/* only do this for command mode rt client (non-rsc client) */
 	if ((sde_crtc_get_intf_mode(crtc, crtc->state) != INTF_MODE_CMD) &&

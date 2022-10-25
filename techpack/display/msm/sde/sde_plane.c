@@ -547,7 +547,6 @@ static void _sde_plane_set_ts_prefill(struct drm_plane *plane,
 	struct sde_plane *psde;
 	struct sde_hw_pipe_ts_cfg cfg;
 	struct msm_drm_private *priv;
-	struct sde_kms *sde_kms;
 
 	if (!plane || !plane->dev) {
 		SDE_ERROR("invalid arguments");
@@ -560,7 +559,6 @@ static void _sde_plane_set_ts_prefill(struct drm_plane *plane,
 		return;
 	}
 
-	sde_kms = to_sde_kms(priv->kms);
 	psde = to_sde_plane(plane);
 	if (!psde->pipe_hw) {
 		SDE_ERROR("invalid pipe reference\n");
@@ -1469,7 +1467,7 @@ static int sde_plane_rot_atomic_check(struct drm_plane *plane,
 	struct drm_plane_state *state)
 {
 	struct sde_plane *psde;
-	struct sde_plane_state *pstate, *old_pstate;
+	struct sde_plane_state *pstate;
 	int ret = 0;
 	u32 rotation;
 
@@ -1480,7 +1478,6 @@ static int sde_plane_rot_atomic_check(struct drm_plane *plane,
 
 	psde = to_sde_plane(plane);
 	pstate = to_sde_plane_state(state);
-	old_pstate = to_sde_plane_state(plane->state);
 
 	/* check inline rotation and simplify the transform */
 	rotation = drm_rotation_simplify(
@@ -2398,7 +2395,7 @@ static int _sde_atomic_check_decimation_scaler(struct drm_plane_state *state,
 	uint32_t max_downscale_num_w, max_downscale_denom_w;
 	uint32_t max_downscale_num_h, max_downscale_denom_h;
 	uint32_t max_upscale, max_linewidth = 0;
-	bool inline_rotation, rt_client, has_predown, pre_down_en = false;
+	bool inline_rotation, rt_client;
 	struct drm_crtc *crtc;
 	struct drm_crtc_state *new_cstate;
 	struct sde_kms *kms;
@@ -2442,11 +2439,6 @@ static int _sde_atomic_check_decimation_scaler(struct drm_plane_state *state,
 
 	if (!max_linewidth)
 		max_linewidth = psde->pipe_sblk->maxlinewidth;
-
-	has_predown = _sde_plane_has_pre_downscale(psde);
-	if (has_predown)
-		pre_down_en = _sde_plane_is_pre_downscale_enabled(
-				&pstate->pre_down);
 
 	crtc = state->crtc;
 	new_cstate = drm_atomic_get_new_crtc_state(state->state, crtc);
@@ -2751,7 +2743,6 @@ static int sde_plane_atomic_check(struct drm_plane *plane,
 {
 	int ret = 0;
 	struct sde_plane *psde;
-	struct sde_plane_state *pstate;
 
 	if (!plane || !state) {
 		SDE_ERROR("invalid arg(s), plane %d state %d\n",
@@ -2761,7 +2752,6 @@ static int sde_plane_atomic_check(struct drm_plane *plane,
 	}
 
 	psde = to_sde_plane(plane);
-	pstate = to_sde_plane_state(state);
 
 	SDE_DEBUG_PLANE(psde, "\n");
 
@@ -3158,7 +3148,6 @@ static void _sde_plane_update_sharpening(struct sde_plane *psde)
 static void _sde_plane_update_properties(struct drm_plane *plane,
 	struct drm_crtc *crtc, struct drm_framebuffer *fb)
 {
-	uint32_t nplanes;
 	const struct msm_format *msm_fmt;
 	const struct sde_format *fmt;
 	struct sde_plane *psde;
@@ -3182,7 +3171,6 @@ static void _sde_plane_update_properties(struct drm_plane *plane,
 	}
 
 	fmt = to_sde_format(msm_fmt);
-	nplanes = fmt->num_planes;
 
 	/* update secure session flag */
 	if (pstate->dirty & SDE_PLANE_DIRTY_FB_TRANSLATION_MODE)
@@ -3228,7 +3216,6 @@ static int sde_plane_sspp_atomic_update(struct drm_plane *plane,
 	struct sde_plane *psde;
 	struct drm_plane_state *state;
 	struct sde_plane_state *pstate;
-	struct sde_plane_state *old_pstate;
 	struct drm_crtc *crtc;
 	struct drm_framebuffer *fb;
 	int idx;
@@ -3249,8 +3236,6 @@ static int sde_plane_sspp_atomic_update(struct drm_plane *plane,
 	state = plane->state;
 
 	pstate = to_sde_plane_state(state);
-
-	old_pstate = to_sde_plane_state(old_state);
 
 	crtc = state->crtc;
 	fb = state->fb;

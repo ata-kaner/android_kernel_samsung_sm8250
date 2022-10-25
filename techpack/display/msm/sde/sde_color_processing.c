@@ -2198,7 +2198,6 @@ static void sde_cp_notify_ad_event(struct drm_crtc *crtc_drm, void *arg)
 	struct sde_crtc *crtc;
 	struct drm_event event;
 	int i;
-	struct msm_drm_private *priv;
 	struct sde_kms *kms;
 	int ret;
 
@@ -2223,7 +2222,6 @@ static void sde_cp_notify_ad_event(struct drm_crtc *crtc_drm, void *arg)
 		return;
 	}
 
-	priv = kms->dev->dev_private;
 	ret = pm_runtime_get_sync(kms->dev->dev);
 	if (ret < 0) {
 		SDE_ERROR("failed to enable power resource %d\n", ret);

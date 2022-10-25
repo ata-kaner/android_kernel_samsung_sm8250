@@ -526,14 +526,11 @@ static void sde_hw_set_hdr_plus_metadata(struct sde_hw_mdp *mdp,
 
 static u32 sde_hw_get_autorefresh_status(struct sde_hw_mdp *mdp, u32 intf_idx)
 {
-	struct sde_hw_blk_reg_map *c;
 	u32 autorefresh_status;
 	u32 blk_id = (intf_idx == INTF_2) ? 65 : 64;
 
 	if (!mdp)
 		return 0;
-
-	c = &mdp->hw;
 
 	SDE_REG_WRITE(&mdp->hw, MDP_PERIPH_DBGBUS_CTRL,
 			TEST_MASK(blk_id, AUTOREFRESH_TEST_POINT));

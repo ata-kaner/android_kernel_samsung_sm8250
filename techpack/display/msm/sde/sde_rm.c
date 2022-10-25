@@ -1742,9 +1742,7 @@ int sde_rm_cont_splash_res_init(struct msm_drm_private *priv,
 				struct sde_mdss_cfg *cat)
 {
 	struct sde_rm_hw_iter iter_c;
-	int index = 0, ctl_top_cnt;
-	struct sde_kms *sde_kms = NULL;
-	struct sde_hw_mdp *hw_mdp;
+	int index = 0;
 	struct sde_splash_display *splash_display;
 	u8 intf_sel;
 
@@ -1758,15 +1756,10 @@ int sde_rm_cont_splash_res_init(struct msm_drm_private *priv,
 			cat->ctl_count,
 			cat->dsc_count);
 
-	ctl_top_cnt = cat->ctl_count;
-
 	if (!priv->kms) {
 		SDE_ERROR("invalid kms\n");
 		return -EINVAL;
 	}
-	sde_kms = to_sde_kms(priv->kms);
-
-	hw_mdp = sde_rm_get_mdp(rm);
 
 	sde_rm_init_hw_iter(&iter_c, 0, SDE_HW_BLK_CTL);
 	while (_sde_rm_get_hw_locked(rm, &iter_c)

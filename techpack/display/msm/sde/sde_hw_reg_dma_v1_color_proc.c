@@ -2815,7 +2815,7 @@ void reg_dmav1_setup_scaler3lite_lut(
 	int i, filter, rc;
 	int config_lut = 0x0;
 	unsigned long lut_flags;
-	u32 lut_addr, lut_offset;
+	u32 lut_addr;
 	struct sde_hw_reg_dma_ops *dma_ops;
 	u32 *lut[QSEED3LITE_FILTERS] = {NULL, NULL};
 	static const uint32_t off_tbl[QSEED3LITE_FILTERS] = {0x000, 0x200};
@@ -2844,7 +2844,6 @@ void reg_dmav1_setup_scaler3lite_lut(
 	for (filter = 0; filter < QSEED3LITE_FILTERS && config_lut; filter++) {
 		if (!lut[filter])
 			continue;
-		lut_offset = 0;
 		lut_addr = QSEED3L_COEF_LUT_OFF + offset
 			+ off_tbl[filter];
 		REG_DMA_SETUP_OPS(*buf, lut_addr,

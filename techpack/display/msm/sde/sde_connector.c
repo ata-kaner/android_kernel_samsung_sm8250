@@ -498,15 +498,6 @@ void sde_connector_schedule_status_work(struct drm_connector *connector,
 	if (c_conn->ops.check_status &&
 		(info.capabilities & MSM_DISPLAY_ESD_ENABLED)) {
 		if (en) {
-			u32 interval;
-
-			/*
-			 * If debugfs property is not set then take
-			 * default value
-			 */
-			interval = c_conn->esd_status_interval ?
-				c_conn->esd_status_interval :
-					STATUS_CHECK_INTERVAL_MS;
 #if !defined(CONFIG_DISPLAY_SAMSUNG)
 			/* Schedule ESD status check */
 			schedule_delayed_work(&c_conn->status_work,
@@ -859,7 +850,6 @@ end:
 int sde_connector_prepare_commit(struct drm_connector *connector)
 {
 	struct sde_connector *c_conn;
-	struct sde_connector_state *c_state;
 	struct msm_display_conn_params params;
 	int rc;
 
@@ -869,7 +859,6 @@ int sde_connector_prepare_commit(struct drm_connector *connector)
 	}
 
 	c_conn = to_sde_connector(connector);
-	c_state = to_sde_connector_state(connector->state);
 	if (!c_conn->display) {
 		SDE_ERROR("invalid connector display\n");
 		return -EINVAL;
@@ -2328,14 +2317,8 @@ static void sde_connector_check_status_work(struct work_struct *work)
 	mutex_unlock(&conn->lock);
 
 	if (rc > 0) {
-		u32 interval;
-
 		SDE_DEBUG("esd check status success conn_id: %d enc_id: %d\n",
 				conn->base.base.id, conn->encoder->base.id);
-
-		/* If debugfs property is not set then take default value */
-		interval = conn->esd_status_interval ?
-			conn->esd_status_interval : STATUS_CHECK_INTERVAL_MS;
 #if !defined(CONFIG_DISPLAY_SAMSUNG)
 		schedule_delayed_work(&conn->status_work,
 			msecs_to_jiffies(interval));
@@ -2364,8 +2347,6 @@ static const struct drm_connector_helper_funcs sde_connector_helper_ops_v2 = {
 static int sde_connector_populate_mode_info(struct drm_connector *conn,
 	struct sde_kms_info *info)
 {
-	struct msm_drm_private *priv;
-	struct sde_kms *sde_kms;
 	struct sde_connector *c_conn = NULL;
 	struct drm_display_mode *mode;
 	struct msm_mode_info mode_info;
@@ -2375,9 +2356,6 @@ static int sde_connector_populate_mode_info(struct drm_connector *conn,
 		SDE_ERROR("invalid arguments\n");
 		return -EINVAL;
 	}
-
-	priv = conn->dev->dev_private;
-	sde_kms = to_sde_kms(priv->kms);
 
 	c_conn = to_sde_connector(conn);
 	if (!c_conn->ops.get_mode_info) {
