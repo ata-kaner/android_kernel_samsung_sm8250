@@ -196,4 +196,6 @@ int sde_cp_ltm_off_event_handler(struct drm_crtc *crtc_drm, bool en,
  * @crtc_drm: Pointer to crtc.
  */
 void sde_cp_mode_switch_prop_dirty(struct drm_crtc *crtc_drm);
+
+const struct drm_msm_pcc *sde_cp_crtc_get_pcc_cfg(struct drm_crtc *crtc);
 #endif /*_SDE_COLOR_PROCESSING_H */
