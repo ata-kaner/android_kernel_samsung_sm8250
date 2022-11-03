@@ -49,9 +49,6 @@ static void _kgsl_event_worker(struct work_struct *work)
 	struct kgsl_event *event = container_of(work, struct kgsl_event, work);
 	int __maybe_unused id = KGSL_CONTEXT_ID(event->context);
 
-	trace_kgsl_fire_event(id, event->timestamp, event->result,
-		jiffies - event->created, event->func);
-
 	event->func(event->device, event->group, event->priv, event->result);
 
 	kgsl_context_put(event->context);
@@ -282,8 +279,6 @@ static int kgsl_add_event_common(struct kgsl_device *device,
 	event->prio = prio;
 
 	INIT_WORK(&event->work, _kgsl_event_worker);
-
-	trace_kgsl_register_event(KGSL_CONTEXT_ID(context), timestamp, func);
 
 	spin_lock(&group->lock);
 
