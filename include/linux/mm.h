@@ -3061,7 +3061,7 @@ static inline void setup_nr_node_ids(void) {}
 
 extern int want_old_faultaround_pte;
 
-extern inline bool need_memory_boosting(struct pglist_data *pgdat);
+extern bool need_memory_boosting(struct pglist_data *pgdat);
 #ifdef CONFIG_PROCESS_RECLAIM
 struct reclaim_param {
 	struct vm_area_struct *vma;
