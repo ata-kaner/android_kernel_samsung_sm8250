@@ -651,7 +651,7 @@ static void sde_hw_intr_dispatch_irq(struct sde_hw_intr *intr,
 				else
 					SDE_REG_WRITE(&intr->hw,
 						intr->sde_irq_tbl[reg_idx].clr_off,
-						sde_irq_map[irq_idx].irq_mask);
+						intr->sde_irq_map[irq_idx].irq_mask);
 
 				/*
 				 * When callback finish, clear the irq_status
@@ -878,7 +878,7 @@ static void sde_hw_intr_clear_interrupt_status(struct sde_hw_intr *intr,
 	if (!intr)
 		return;
 
-	reg_idx = sde_irq_map[irq_idx].reg_idx;
+	reg_idx = intr->sde_irq_map[irq_idx].reg_idx;
 	if (reg_idx < 0 || reg_idx > intr->sde_irq_size) {
 		pr_err("invalid irq reg:%d irq:%d\n", reg_idx, irq_idx);
 		return;
@@ -886,7 +886,7 @@ static void sde_hw_intr_clear_interrupt_status(struct sde_hw_intr *intr,
 
 	spin_lock_irqsave(&intr->irq_lock, irq_flags);
 	SDE_REG_WRITE(&intr->hw, intr->sde_irq_tbl[reg_idx].clr_off,
-			sde_irq_map[irq_idx].irq_mask);
+			intr->sde_irq_map[irq_idx].irq_mask);
 	spin_unlock_irqrestore(&intr->irq_lock, irq_flags);
 }
 
