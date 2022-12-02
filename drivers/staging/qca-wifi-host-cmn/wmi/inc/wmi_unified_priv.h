@@ -291,6 +291,26 @@ enum WMI_RECORD_TYPE {
 	WMI_EVT = 2,
 };
 
+#else /*WMI_INTERFACE_EVENT_LOGGING */
+
+static inline void wmi_alert(const char *fmt, ...) {}
+static inline void wmi_err(const char *fmt, ...) {}
+static inline void wmi_warn(const char *fmt, ...) {}
+static inline void wmi_info(const char *fmt, ...) {}
+static inline void wmi_debug(const char *fmt, ...) {}
+
+static inline void wmi_nofl_alert(const char *fmt, ...) {}
+static inline void wmi_nofl_err(const char *fmt, ...) {}
+static inline void wmi_nofl_warn(const char *fmt, ...) {}
+static inline void wmi_nofl_info(const char *fmt, ...) {}
+static inline void wmi_nofl_debug(const char *fmt, ...) {}
+
+static inline void wmi_alert_rl(const char *fmt, ...) {}
+static inline void wmi_err_rl(const char *fmt, ...) {}
+static inline void wmi_warn_rl(const char *fmt, ...) {}
+static inline void wmi_info_rl(const char *fmt, ...) {}
+static inline void wmi_debug_rl(const char *fmt, ...) {}
+
 #endif /*WMI_INTERFACE_EVENT_LOGGING */
 
 #ifdef WLAN_OPEN_SOURCE
