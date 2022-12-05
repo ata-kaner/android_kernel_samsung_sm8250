@@ -451,9 +451,9 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 	}
 
 out:
-	data->last_state_idx = idx;
+	dev->last_state_idx = idx;
 
-	return data->last_state_idx;
+	return dev->last_state_idx;
 }
 
 /**
