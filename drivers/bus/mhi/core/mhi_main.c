@@ -1482,7 +1482,6 @@ int mhi_process_bw_scale_ev_ring(struct mhi_controller *mhi_cntrl,
 
 	if ((void*)dev_rp < ev_ring->base ||
 			(void*)dev_rp >= (ev_ring->base + ev_ring->len)) {
-		MHI_ERR("dev_rp out of bound 0x%llx\n", dev_rp);
 		panic("dev rp out of bound");
 	}
 

@@ -723,7 +723,7 @@ void record_memsize_reserved(const char *name, phys_addr_t base,
 /* This function will be called to by early_init_dt_scan_nodes */
 void record_memsize_memory_hole(void)
 {
-	phys_addr_t base, end;
+	phys_addr_t base = 0, end;
 	phys_addr_t prev_end, hole_s;
 	int idx;
 	struct memblock_region *rgn;

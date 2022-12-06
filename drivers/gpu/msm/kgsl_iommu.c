@@ -2848,29 +2848,8 @@ void kgsl_svm_addr_hole_log(struct kgsl_device *device, pid_t pid, uint64_t memf
 	if (__ratelimit(&_rs)) {
 		memset(&svm_hole_log_data, 0, sizeof(struct kgsl_hole_logging));
 
-		if (!kgsl_gpu_addr_hole_log(device, pid, memflags)) {
+		if (!kgsl_gpu_addr_hole_log(device, pid, memflags))
 			kgsl_cpu_addr_hole_log(pid);
-
-			pr_err("%s GPU pid %d entry_cnt %d used_size %ld biggest_hole_size 0x%lx \
-				0x%lx 0x%lx 0x%lx\n", __func__,
-				pid,
-				svm_hole_log_data.gpu_hole_data.entry_cnt,
-				svm_hole_log_data.gpu_hole_data.used_mem_size,
-				svm_hole_log_data.gpu_hole_data.biggest_hole_size,
-				svm_hole_log_data.gpu_hole_data.biggest_hole_addr,
-				svm_hole_log_data.low,
-				svm_hole_log_data.high);
-
-			pr_err("%s CPU pid %d entry_cnt %d used_size %ld biggest_hole_size 0x%lx \
-				0x%lx 0x%lx 0x%lx\n", __func__,
-				pid,
-				svm_hole_log_data.cpu_hole_data.entry_cnt,
-				svm_hole_log_data.cpu_hole_data.used_mem_size,
-				svm_hole_log_data.cpu_hole_data.biggest_hole_size,
-				svm_hole_log_data.cpu_hole_data.biggest_hole_addr,
-				svm_hole_log_data.low,
-				svm_hole_log_data.high);
-		}
 	}
 }
 #endif

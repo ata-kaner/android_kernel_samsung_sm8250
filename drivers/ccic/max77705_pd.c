@@ -684,7 +684,7 @@ void max77705_current_pdo(struct max77705_usbc_platform_data *usbc_data, unsigne
 	bool do_power_nego = false;
 	U_SEC_PDO_OBJECT pdo_obj;
 	POWER_LIST* pPower_list;
-	POWER_LIST prev_power_list;
+	POWER_LIST prev_power_list = { 0 };
 
 	if (!pd_noti.sink_status.available_pdo_num)
 		do_power_nego = true;

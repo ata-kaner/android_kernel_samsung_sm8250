@@ -3556,7 +3556,7 @@ static int dpui_notifier_callback(struct notifier_block *self,
 	int size, i;
 	u8 *octa_id;
 	int site, rework, poc;
-	int flash_gamma_status;
+	int flash_gamma_status = 0;
 
 	if (dpui == NULL) {
 		LCD_ERR("err: dpui is null\n");

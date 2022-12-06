@@ -402,7 +402,7 @@ static int arm_lpae_init_pte(struct arm_lpae_io_pgtable *data,
 
 	/* We require an unmap first */
 	if (pte & ARM_LPAE_PTE_VALID) {
-		WARN_RATELIMIT(1, "map without unmap for iova=0x%pad\n", iova);
+		WARN_RATELIMIT(1, "map without unmap for iova=0x%ldad\n", iova);
 		return -EEXIST;
 	}
 

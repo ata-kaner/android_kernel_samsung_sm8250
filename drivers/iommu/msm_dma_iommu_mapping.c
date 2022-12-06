@@ -180,8 +180,6 @@ static void print_one_map(void *buffer, struct msm_iommu_map *map, u64 *dmalen_t
 
 	refcount = kref_read(&map->ref);
 	dma_addr = sg_dma_address(map->sgl);
-
-	pr_err("ion_buffer ptr=0x%llx DMAADDR=0x%pad len=0x%x refcount=%d\n", buffer, &dma_addr, dmalen, refcount);
 }
 
 
@@ -201,7 +199,6 @@ void msm_dma_debug_count_buffers(struct device *dev)
 		print_one_map(meta->buffer, map, &dmalen_total);
 	}
 	mutex_unlock(&msm_iommu_map_mutex);
-	pr_err("DEBUG: dmalen total=0x%x\n", dmalen_total);
 }
 
 static inline int __msm_dma_map_sg(struct device *dev, struct scatterlist *sg,

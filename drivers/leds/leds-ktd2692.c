@@ -468,7 +468,6 @@ EXPORT_SYMBOL(ktd2692_led_mode_ctrl);
 
 ssize_t ktd2692_show (struct device *dev,struct device_attribute *attr, char *buf)
 {
-	LED_INFO("KTD2692-SHOW:(%d) (%d)\n", buf,global_ktd2692data->sysfs_input_data);
 	return sprintf(buf, "%d\n", global_ktd2692data->sysfs_input_data);
 }
 EXPORT_SYMBOL(ktd2692_show);

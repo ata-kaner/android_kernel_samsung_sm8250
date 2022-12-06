@@ -2146,7 +2146,7 @@ static ssize_t store_mac_addr(struct kobject *kobj,
 			    const char *buf,
 			    size_t count)
 {
-	sscanf(buf, "%02X:%02X:%02X:%02X:%02X:%02X",
+	sscanf(buf, "%02hhX:%02hhX:%02hhX:%02hhX:%02hhX:%02hhX",
 		(const u8*)&mac_from_macloader[0],
 		(const u8*)&mac_from_macloader[1],
 		(const u8*)&mac_from_macloader[2],

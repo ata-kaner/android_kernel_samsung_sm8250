@@ -191,7 +191,7 @@ int sec_tclm_test_on_probe(struct sec_tclm_data *data)
 
 int sec_tclm_get_nvm_all(struct sec_tclm_data *data)
 {
-	int ret;
+	int ret = 0;
 	int retry = 3;
 
 	/* just don't read tune_fix_version, because this is write_only_value. */

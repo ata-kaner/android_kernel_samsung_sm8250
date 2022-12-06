@@ -266,7 +266,7 @@ static ssize_t mhi_uci_write(struct file *file,
 	struct mhi_device *mhi_dev = uci_dev->mhi_dev;
 	struct uci_chan *uci_chan = &uci_dev->ul_chan;
 	size_t bytes_xfered = 0;
-	int ret, nr_avail;
+	int ret, nr_avail = 0;
 
 	if (!buf || !count)
 		return -EINVAL;

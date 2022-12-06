@@ -4838,7 +4838,8 @@ static void sec_bat_wireless_uno_cntl(struct sec_battery_info *battery, bool en)
 {
 	union power_supply_propval value = {0, };
 
-	battery->uno_en = value.intval = en;
+	battery->uno_en = en;
+	value.intval = en;
 	pr_info("@Tx_Mode %s : Uno control %d\n", __func__, battery->uno_en);
 
 	if (value.intval) {

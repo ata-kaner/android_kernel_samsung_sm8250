@@ -606,7 +606,7 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 	if (phy->phy_rcal_reg) {
 		rcal_code = readl_relaxed(phy->phy_rcal_reg) & phy->rcal_mask;
 
-		dev_dbg(uphy->dev, "rcal_mask:%08x reg:%08x code:%08x\n",
+		dev_dbg(uphy->dev, "rcal_mask:%08x reg:%08x code:%08p\n",
 				phy->rcal_mask, phy->phy_rcal_reg, rcal_code);
 	}
 
@@ -948,7 +948,7 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 			dev_err(dev, "unable to read phy rcal mask\n");
 			phy->phy_rcal_reg = NULL;
 		}
-		dev_dbg(dev, "rcal_mask:%08x reg:%08x\n", phy->rcal_mask,
+		dev_dbg(dev, "rcal_mask:%08x reg:%08p\n", phy->rcal_mask,
 				phy->phy_rcal_reg);
 	}
 

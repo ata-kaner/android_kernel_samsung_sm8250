@@ -2183,9 +2183,6 @@ static int proc_ioctl(struct usb_dev_state *ps, struct usbdevfs_ioctl *ctl)
 		retval = -EINVAL;
 	else switch (ctl->ioctl_code) {
 
-#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
-	dev_info(&ps->dev->dev,"%s ioctl_code %d\n", __func__, ctl->ioctl_code);
-#endif
 	/* disconnect kernel driver from interface */
 	case USBDEVFS_DISCONNECT:
 		if (intf->dev.driver) {

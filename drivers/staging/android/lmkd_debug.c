@@ -42,7 +42,7 @@ static ssize_t psi_full_max_read(struct file *file, char __user *buf,
 	len = snprintf(buffer, sizeof(buffer), "%llu\n", psi_full_max);
 	psi_full_max = 0;
 	#else
-	len = snprintf(buffer, sizeof(buffer), "%llu\n", 0);
+	len = snprintf(buffer, sizeof(buffer), "%u\n", 0);
 	#endif
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }

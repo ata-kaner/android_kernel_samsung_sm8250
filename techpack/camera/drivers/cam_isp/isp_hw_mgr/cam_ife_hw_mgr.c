@@ -6500,7 +6500,7 @@ static int cam_ife_hw_mgr_handle_hw_dump_info(
 	struct cam_ife_hw_mgr_res     *hw_mgr_res = NULL;
 	struct cam_isp_resource_node  *rsrc_node = NULL;
 	struct cam_hw_intf            *hw_intf;
-	uint32_t i, out_port_id, rc;
+	uint32_t i, out_port_id, rc = 0;
 
 	list_for_each_entry(hw_mgr_res,
 		&ife_hw_mgr_ctx->res_list_ife_src, list) {

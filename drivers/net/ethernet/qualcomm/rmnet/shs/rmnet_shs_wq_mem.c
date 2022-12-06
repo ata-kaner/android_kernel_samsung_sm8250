@@ -917,8 +917,6 @@ void rmnet_shs_wq_mem_update_cached_netdevs(void)
 		       priv->stats.coal.coal_pkts);
 		rm_err("SHS_NETDEV: ep %u has udp_rx_bps = %lu \n", count,
 		       ep->udp_rx_bps);
-		rm_err("SHS_NETDEV: ep %u has tcp_rx_bps = %lu \n", count,
-		       ep->tcp_rx_bps);
 
 		/* Set netdev name and ip mismatch count */
 		rmnet_shs_wq_netdev_usr[idx].coal_ip_miss = priv->stats.coal.close.ip_miss;

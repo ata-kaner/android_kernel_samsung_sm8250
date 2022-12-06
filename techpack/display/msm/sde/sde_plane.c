@@ -2597,8 +2597,6 @@ static int _sde_plane_validate_fb(struct sde_plane *psde,
 		if ((fb_ns && (mode != SDE_DRM_FB_NON_SEC)) ||
 			(fb_sec && (mode != SDE_DRM_FB_SEC)) ||
 			(fb_sec_dir && (mode != SDE_DRM_FB_SEC_DIR_TRANS))) {
-			SDE_ERROR_PLANE(psde, "mode: %d fb: %d flag: 0x%x rc:%d\n",
-				 mode, fb->base.id, flags, ret);
 			SDE_EVT32(psde->base.base.id, fb->base.id, flags,
 				fb_ns, fb_sec, fb_sec_dir, ret, SDE_EVTLOG_ERROR);
 			return -EINVAL;

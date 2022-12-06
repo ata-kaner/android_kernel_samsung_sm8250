@@ -3059,7 +3059,6 @@ static ssize_t ois_ext_clk_store(struct device *dev,
 
 	if (buf == NULL || kstrtouint(buf, 10, &clk))
 		return -1;
-	pr_info("new ois ext clk %a\n", clk);
 
 	rc = cam_ois_set_ext_clk(g_o_ctrl, clk);
 	if (rc < 0) {

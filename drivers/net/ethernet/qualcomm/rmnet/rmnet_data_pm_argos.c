@@ -104,8 +104,6 @@ static int rmnet_data_pm_change_rps_map(struct netdev_rx_queue *queue,
 	int err, cpu, i;
 	static DEFINE_MUTEX(rps_map_mutex);
 
-	pr_debug("rmnet_data_pm_change_rps_map %s %d\n", buf, len);
-
 	if (!alloc_cpumask_var(&mask, GFP_KERNEL)){
 		pr_err("%s alloc_cpumask_var fail\n", __func__);
 		return -ENOMEM;

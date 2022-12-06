@@ -3871,9 +3871,6 @@ static void dwc3_gadget_reset_interrupt(struct dwc3 *dwc)
 			dwc->rst_err_noti = true;
 		}
 
-		pr_info("%s rst_err_cnt: %d, time_current: %d, time_before: %d\n",
-			__func__, dwc->rst_err_cnt, current_time, dwc->rst_time_before);
-
 		dwc->rst_time_before = current_time;
 	}
 }
