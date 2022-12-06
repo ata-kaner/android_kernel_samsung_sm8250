@@ -199,11 +199,8 @@ static int max77705_fg_read_vcell(struct max77705_fuelgauge_data *fuelgauge)
 	temp2 = temp / 1000000;
 	vcell += (temp2 << 4);
 
-	if (!(fuelgauge->info.pr_cnt++ % PRINT_COUNT)) {
+	if (!(fuelgauge->info.pr_cnt++ % PRINT_COUNT))
 		fuelgauge->info.pr_cnt = 1;
-		pr_info("%s: VCELL(%d)mV, data(0x%04x)\n",
-			__func__, vcell, (data[1] << 8) | data[0]);
-	}
 
 	if ((fuelgauge->vempty_mode == VEMPTY_MODE_SW_VALERT) &&
 	    (vcell >= fuelgauge->battery_data->sw_v_empty_recover_vol)) {
@@ -212,10 +209,8 @@ static int max77705_fg_read_vcell(struct max77705_fuelgauge_data *fuelgauge)
 					   fuelgauge->pdata->fuel_alert_soc);
 		pr_info("%s : Recoverd from SW V EMPTY Activation\n", __func__);
 #if defined(CONFIG_BATTERY_CISD)
-		if (fuelgauge->valert_count_flag) {
-			pr_info("%s : Vcell(%d) release CISD VALERT COUNT check\n", __func__, vcell);
+		if (fuelgauge->valert_count_flag)
 			fuelgauge->valert_count_flag = false;
-		}
 #endif
 	}
 
@@ -647,9 +642,6 @@ static int max77705_fg_read_current(struct max77705_fuelgauge_data *fuelgauge,
 	if (sign)
 		i_current *= -1;
 
-	pr_debug("%s: current=%d%s\n", __func__, i_current,
-		(unit == SEC_BATTERY_CURRENT_UA)? "uA" : "mA");
-
 	return i_current;
 }
 
@@ -695,9 +687,6 @@ static int max77705_fg_read_avg_current(struct max77705_fuelgauge_data
 		cnt++;
 	}
 
-	pr_debug("%s: avg_current=%d%s\n", __func__, avg_current,
-		(unit == SEC_BATTERY_CURRENT_UA)? "uA" : "mA");
-
 	return avg_current;
 }
 
@@ -734,10 +723,6 @@ static int max77705_fg_read_isys(
 		/* i_current must have a value of inow compensated */
 		i_current = i_current - inow_comp;
 	}
-	if (!(fuelgauge->info.pr_cnt % PRINT_COUNT))
-		pr_info("%s: isys_current=%d%s\n", __func__, i_current,
-			(unit == SEC_BATTERY_CURRENT_UA)? "uA" : "mA");
-
 	return i_current;
 }
 
@@ -774,10 +759,6 @@ static int max77705_fg_read_isys_avg(
 		/* i_current must have a value of inow compensated */
 		avg_current = avg_current - avg_inow_comp;
 	}
-	if (!(fuelgauge->info.pr_cnt % PRINT_COUNT))
-		pr_info("%s: isys_avg_current=%d%s\n", __func__, avg_current,
-			(unit == SEC_BATTERY_CURRENT_UA)? "uA" : "mA");
-
 	return avg_current;
 }
 
@@ -804,10 +785,6 @@ static int max77705_fg_read_iin(
 	default:
 		i_current = temp * 125 / 1000;
 	}
-
-	if (!(fuelgauge->info.pr_cnt % PRINT_COUNT))
-		pr_debug("%s: iin_current=%d%s\n", __func__, i_current,
-			(unit == SEC_BATTERY_CURRENT_UA)? "uA" : "mA");
 
 	return i_current;
 }
