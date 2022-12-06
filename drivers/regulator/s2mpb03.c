@@ -375,7 +375,7 @@ static ssize_t s2mpb03_read_store(struct device *dev,
 {
 	struct s2mpb03_data *s2mpb03 = dev_get_drvdata(dev);
 	int ret;
-	u8 val, reg_addr;
+	u8 val = 0, reg_addr;
 
 	if (buf == NULL) {
 		pr_info("%s: empty buffer\n", __func__);

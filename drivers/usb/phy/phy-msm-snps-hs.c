@@ -603,12 +603,8 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 	readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X2),
 	readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X3));
 
-	if (phy->phy_rcal_reg) {
+	if (phy->phy_rcal_reg)
 		rcal_code = readl_relaxed(phy->phy_rcal_reg) & phy->rcal_mask;
-
-		dev_dbg(uphy->dev, "rcal_mask:%08x reg:%08x code:%08p\n",
-				phy->rcal_mask, phy->phy_rcal_reg, rcal_code);
-	}
 
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_HS_PHY_CTRL_COMMON2,
 				VREGBYPASS, VREGBYPASS);
@@ -948,8 +944,6 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 			dev_err(dev, "unable to read phy rcal mask\n");
 			phy->phy_rcal_reg = NULL;
 		}
-		dev_dbg(dev, "rcal_mask:%08x reg:%08p\n", phy->rcal_mask,
-				phy->phy_rcal_reg);
 	}
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,

@@ -62,11 +62,11 @@ static int get_usb_audio_config(struct usb_host_bos *bos)
 			(struct usb_config_summary_descriptor *)(buffer + len);
 
 		len += conf_summary->bLength;
-		pr_info("%s : bcdVersion=%d, bClass=%d\n", conf_summary->bcdVersion, conf_summary->bClass);
+		pr_info("%s : bcdVersion=%d, bClass=%d\n", __func__, conf_summary->bcdVersion, conf_summary->bClass);
 		if (conf_summary->bcdVersion != USB_CONFIG_SUMMARY_DESC_REV ||
 				conf_summary->bClass != USB_CLASS_AUDIO)
 			continue;
-		pr_info("%s : bConfigurationIndex[0]=%d\n", conf_summary->bConfigurationIndex[0]);
+		pr_info("%s : bConfigurationIndex[0]=%d\n", __func__, conf_summary->bConfigurationIndex[0]);
 		/* return 1st config as per device preference */
 		return conf_summary->bConfigurationIndex[0];
 	}

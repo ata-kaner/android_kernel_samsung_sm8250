@@ -1093,8 +1093,6 @@ static void a96t3x6_set_debug_work(struct a96t3x6_data *data, u8 enable,
 static void a96t3x6_set_firmware_work(struct a96t3x6_data *data, u8 enable,
 	unsigned int time_ms)
 {
-	GRIP_INFO("%s\n", __func__, enable ? "enabled": "disabled");
-	
 	if (enable == 1) {
 		data->firmware_count = 0;
 		schedule_delayed_work(&data->firmware_work,

@@ -619,7 +619,7 @@ static ssize_t s2dos05_read_store(struct device *dev,
 {
 	struct s2dos05_data *s2dos05 = dev_get_drvdata(dev);
 	int ret;
-	u8 val, reg_addr;
+	u8 val = 0, reg_addr;
 
 	if (buf == NULL) {
 		pr_info("%s: empty buffer\n", __func__);
@@ -769,7 +769,7 @@ static ssize_t enable_fd_show(struct device *dev, struct device_attribute *attr,
 {
 	struct s2dos05_data *info = dev_get_drvdata(dev);
 	struct i2c_client *i2c = info->iodev->i2c;
-	u8 uvlo_fd;
+	u8 uvlo_fd = 0;
 	bool enabled;
 
 	s2dos05_read_reg(i2c, S2DOS05_REG_UVLO_FD, &uvlo_fd);

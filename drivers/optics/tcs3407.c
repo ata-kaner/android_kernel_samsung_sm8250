@@ -2509,7 +2509,6 @@ static int tcs3407_eol_mode(struct tcs3407_device_data *data)
 #endif
 		gpio_free(pin_eol_en);
 	} else {
-		ALS_dbg("%s - PWM torch set 0x%x 0x%x\n", __func__, data->pinctrl_pwm, data->pinctrl_out);
 		pinctrl_select_state(data->als_pinctrl, data->pinctrl_pwm);
 
 		pwm_get_state(data->pwm, &state);
@@ -2540,9 +2539,6 @@ static int tcs3407_eol_mode(struct tcs3407_device_data *data)
 						state.duty_cycle = state.period * duty / 100;
 
 					state.polarity = PWM_POLARITY_NORMAL;
-
-					ALS_dbg("%s - pwm state en = %d, pe = %d, du = %d, po = %d\n", __func__,
-						state.enabled, state.period, state.duty_cycle, state.polarity);
 
 					pwm_apply_state(data->pwm, &state);
 
