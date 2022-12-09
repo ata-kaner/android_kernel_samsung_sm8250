@@ -48,7 +48,7 @@ static ssize_t picolcd_debug_reset_write(struct file *f, const char __user *user
 		size_t count, loff_t *ppos)
 {
 	struct picolcd_data *data = ((struct seq_file *)f->private_data)->private;
-	char buf[32];
+	char buf[32] = "";
 	size_t cnt = min(count, sizeof(buf)-1);
 	if (copy_from_user(buf, user_buf, cnt))
 		return -EFAULT;

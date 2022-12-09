@@ -288,7 +288,7 @@ static ssize_t regmap_map_write_file(struct file *file,
 				     const char __user *user_buf,
 				     size_t count, loff_t *ppos)
 {
-	char buf[32];
+	char buf[32] = "";
 	size_t buf_size;
 	char *start = buf;
 	unsigned long reg, value;
@@ -355,7 +355,7 @@ static ssize_t regmap_data_write_file(struct file *file,
 				     const char __user *user_buf,
 				     size_t count, loff_t *ppos)
 {
-	char buf[32];
+	char buf[32] = "";
 	size_t buf_size;
 	char *start = buf;
 	unsigned long value;

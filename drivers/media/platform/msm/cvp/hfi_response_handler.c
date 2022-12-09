@@ -519,7 +519,7 @@ static int hfi_process_session_cvp_msg(u32 device_id,
 			return _deprecated_hfi_msg_process(device_id,
 				pkt, info, inst);
 		}
-		dprintk(CVP_ERR, "Invalid deprecate_bitmask %#x\n",
+		dprintk(CVP_ERR, "Invalid deprecate_bitmask %lu\n",
 					inst->deprecate_bitmask);
 	}
 
@@ -576,9 +576,6 @@ static int hfi_process_session_cvp_dme(u32 device_id,
 	cmd_done.status = hfi_map_err_status(get_msg_errorcode(pkt));
 	cmd_done.size = 0;
 
-	dprintk(CVP_DBG,
-		"%s: device_id=%d cmd_done.status=%d sessionid=%#x\n",
-		__func__, device_id, cmd_done.status, cmd_done.session_id);
 	info->response_type = HAL_SESSION_DME_FRAME_CMD_DONE;
 	info->response.cmd = cmd_done;
 
@@ -604,9 +601,6 @@ static int hfi_process_session_cvp_ica(u32 device_id,
 	cmd_done.status = hfi_map_err_status(get_msg_errorcode(pkt));
 	cmd_done.size = 0;
 
-	dprintk(CVP_DBG,
-		"%s: device_id=%d cmd_done.status=%d sessionid=%#x\n",
-		__func__, device_id, cmd_done.status, cmd_done.session_id);
 	info->response_type = HAL_SESSION_ICA_FRAME_CMD_DONE;
 	info->response.cmd = cmd_done;
 

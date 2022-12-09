@@ -870,7 +870,7 @@ int iommu_dma_map_sg(struct device *dev, struct scatterlist *sg,
 	 * implementation - it knows better than we do.
 	 */
 	if (iommu_map_sg(domain, iova, sg, nents, prot) < iova_len) {
-		pr_err("DEBUG: Map failed for DMAADDR=0x%pad\n", iova);
+		pr_err("DEBUG: Map failed for DMAADDR=0x%llu\n", iova);
 		msm_dma_debug_count_buffers(dev);
 		goto out_free_iova;
 	}

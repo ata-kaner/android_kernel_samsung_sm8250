@@ -3727,7 +3727,7 @@ long kgsl_ioctl_gpuobj_alloc(struct kgsl_device_private *dev_priv,
 	debug_size = param->size >> 10;
 
 	if(debug_size > 200000) {
-		pr_err("kgsl: huge memory %lldKB is requested from pid = %d comm = %s\n", debug_size, private->pid, private->comm);
+		pr_err("kgsl: huge memory %lldKB is requested from pid = %d comm = %s\n", debug_size, pid_nr(private->pid), private->comm);
 	}
 #endif
 	entry = gpumem_alloc_entry(dev_priv, param->size, param->flags);

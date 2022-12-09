@@ -1141,7 +1141,7 @@ ssize_t proc_setgroups_write(struct file *file, const char __user *buf,
 {
 	struct seq_file *seq = file->private_data;
 	struct user_namespace *ns = seq->private;
-	char kbuf[8], *pos;
+	char kbuf[8] = "", *pos;
 	bool setgroups_allowed;
 	ssize_t ret;
 

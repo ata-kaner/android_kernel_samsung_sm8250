@@ -483,7 +483,7 @@ static ssize_t pinconf_dbg_config_write(struct file *file,
 	struct dbg_cfg *dbg = &pinconf_dbg_conf;
 	const struct pinctrl_map_configs *configs;
 	char config[MAX_NAME_LEN + 1];
-	char buf[128];
+	char buf[128] = "";
 	char *b = &buf[0];
 	int buf_size;
 	char *token;

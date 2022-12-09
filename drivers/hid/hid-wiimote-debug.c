@@ -130,7 +130,7 @@ static ssize_t wiidebug_drm_write(struct file *f, const char __user *u,
 	struct seq_file *sf = f->private_data;
 	struct wiimote_debug *dbg = sf->private;
 	unsigned long flags;
-	char buf[16];
+	char buf[16] = "";
 	ssize_t len;
 	int i;
 

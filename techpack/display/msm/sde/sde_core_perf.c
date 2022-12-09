@@ -1069,7 +1069,7 @@ static ssize_t _sde_core_perf_threshold_high_write(struct file *file,
 {
 	struct sde_core_perf *perf = file->private_data;
 	u32 threshold_high = 0;
-	char buf[10];
+	char buf[10] = "";
 
 	if (!perf)
 		return -ENODEV;
@@ -1126,7 +1126,7 @@ static ssize_t _sde_core_perf_mode_write(struct file *file,
 	struct sde_core_perf *perf = file->private_data;
 	struct sde_perf_cfg *cfg = &perf->catalog->perf;
 	u32 perf_mode = 0;
-	char buf[10];
+	char buf[10] = "";
 	int ret = 0;
 
 	if (!perf)

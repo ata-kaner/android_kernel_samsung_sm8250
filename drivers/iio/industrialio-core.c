@@ -320,7 +320,7 @@ static ssize_t iio_debugfs_write_reg(struct file *file,
 {
 	struct iio_dev *indio_dev = file->private_data;
 	unsigned reg, val;
-	char buf[80];
+	char buf[80] = "";
 	int ret;
 
 	count = min_t(size_t, count, (sizeof(buf)-1));

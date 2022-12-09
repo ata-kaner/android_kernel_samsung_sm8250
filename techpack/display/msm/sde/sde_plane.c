@@ -4355,7 +4355,7 @@ static ssize_t _sde_plane_danger_write(struct file *file,
 	struct sde_kms *kms = file->private_data;
 	struct sde_mdss_cfg *cfg = kms->catalog;
 	int disable_panic;
-	char buf[10];
+	char buf[10] = "";
 
 	if (!cfg)
 		return -EFAULT;

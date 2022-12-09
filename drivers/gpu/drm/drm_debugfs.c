@@ -255,7 +255,7 @@ static ssize_t connector_write(struct file *file, const char __user *ubuf,
 {
 	struct seq_file *m = file->private_data;
 	struct drm_connector *connector = m->private;
-	char buf[12];
+	char buf[12] = "";
 
 	if (len > sizeof(buf) - 1)
 		return -EINVAL;

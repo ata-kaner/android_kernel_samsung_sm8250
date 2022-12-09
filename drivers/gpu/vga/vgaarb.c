@@ -1027,7 +1027,7 @@ static ssize_t vga_arb_write(struct file *file, const char __user *buf,
 
 	unsigned int io_state;
 
-	char kbuf[64], *curr_pos;
+	char kbuf[64] = "", *curr_pos;
 	size_t remaining = count;
 
 	int ret_val;

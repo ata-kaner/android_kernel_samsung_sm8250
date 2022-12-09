@@ -192,7 +192,7 @@ static ssize_t npu_debug_off_write(struct file *file,
 {
 	size_t off = 0;
 	uint32_t cnt, reg_cnt;
-	char buf[24];
+	char buf[24] = "";
 	struct npu_device *npu_dev = file->private_data;
 	struct npu_debugfs_ctx *debugfs;
 
@@ -297,7 +297,7 @@ static ssize_t npu_debug_log_read(struct file *file,
 static ssize_t npu_debug_ctrl_write(struct file *file,
 		const char __user *user_buf, size_t count, loff_t *ppos)
 {
-	char buf[24];
+	char buf[24] = "";
 	struct npu_device *npu_dev = file->private_data;
 	struct npu_debugfs_ctx *debugfs;
 	int32_t rc = 0;

@@ -317,7 +317,7 @@ static ssize_t cnss_utils_mac_write(struct file *fp,
 {
 	struct cnss_utils_priv *priv =
 		((struct seq_file *)fp->private_data)->private;
-	char buf[128];
+	char buf[128] = "";
 	char *input, *mac_type, *mac_address;
 	u8 *dest_mac;
 	u8 val;

@@ -5801,7 +5801,7 @@ static ssize_t _sde_crtc_misr_setup(struct file *file,
 	struct drm_crtc *crtc;
 	struct sde_crtc *sde_crtc;
 	int rc;
-	char buf[MISR_BUFF_SIZE + 1];
+	char buf[MISR_BUFF_SIZE + 1] = "";
 	u32 frame_count, enable;
 	size_t buff_copy;
 	struct sde_kms *sde_kms;

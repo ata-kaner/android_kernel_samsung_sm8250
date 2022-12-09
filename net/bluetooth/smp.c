@@ -3418,7 +3418,7 @@ static ssize_t le_min_key_size_write(struct file *file,
 				      size_t count, loff_t *ppos)
 {
 	struct hci_dev *hdev = file->private_data;
-	char buf[32];
+	char buf[32] = "";
 	size_t buf_size = min(count, (sizeof(buf) - 1));
 	u8 key_size;
 
@@ -3462,7 +3462,7 @@ static ssize_t le_max_key_size_write(struct file *file,
 				      size_t count, loff_t *ppos)
 {
 	struct hci_dev *hdev = file->private_data;
-	char buf[32];
+	char buf[32] = "";
 	size_t buf_size = min(count, (sizeof(buf) - 1));
 	u8 key_size;
 

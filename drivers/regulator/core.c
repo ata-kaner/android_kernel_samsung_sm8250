@@ -4383,7 +4383,7 @@ static ssize_t reg_debug_voltage_write(struct file *file,
 			const char __user *ubuf, size_t count, loff_t *ppos)
 {
 	struct regulator *regulator = file->private_data;
-	char buf[MAX_DEBUG_BUF_LEN];
+	char buf[MAX_DEBUG_BUF_LEN] = "";
 	int ret, filled;
 	int min_uV, max_uV = -1;
 

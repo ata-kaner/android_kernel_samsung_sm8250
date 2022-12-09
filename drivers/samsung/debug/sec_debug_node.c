@@ -209,7 +209,7 @@ static void sec_user_fault_dump(void)
 static ssize_t sec_user_fault_write(struct file *file,
 		const char __user *buffer, size_t count, loff_t *offs)
 {
-	char buf[100];
+	char buf[100] = "";
 
 	if (count > sizeof(buf) - 1)
 		return -EINVAL;

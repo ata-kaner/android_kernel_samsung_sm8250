@@ -970,7 +970,7 @@ static ssize_t dsi_parser_write_init(struct file *file,
 	struct dsi_parser *parser = file->private_data;
 	const u8 *data = NULL;
 	u32 size = 0;
-	char buf[SZ_32];
+	char buf[SZ_32] = "";
 	size_t len = 0;
 
 	if (!parser)
@@ -1127,7 +1127,7 @@ static ssize_t dsi_parser_write_node(struct file *file,
 		const char __user *user_buff, size_t count, loff_t *ppos)
 {
 	struct dsi_parser *parser = file->private_data;
-	char buf[SZ_512];
+	char buf[SZ_512] = "";
 	size_t len = 0;
 
 	if (!parser)
