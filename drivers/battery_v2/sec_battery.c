@@ -407,7 +407,7 @@ void sec_bat_set_current_event(struct sec_battery_info *battery,
 	battery->current_event &= ~current_event_mask;
 	battery->current_event |= current_event_val;
 
-	pr_info("%s: current event before(0x%x), after(0x%x)\n",
+	pr_debug("%s: current event before(0x%x), after(0x%x)\n",
 		__func__, temp, battery->current_event);
 
 	mutex_unlock(&battery->current_eventlock);
@@ -7400,7 +7400,7 @@ static int sec_bat_get_property(struct power_supply *psy,
 		} else {
 			val->intval = battery->cable_type;
 		}
-		pr_info("%s cable type = %d sleep_mode = %d\n", __func__, val->intval, sleep_mode);
+		pr_debug("%s cable type = %d sleep_mode = %d\n", __func__, val->intval, sleep_mode);
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
 		val->intval = battery->pdata->technology;
