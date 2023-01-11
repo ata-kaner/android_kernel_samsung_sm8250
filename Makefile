@@ -385,7 +385,7 @@ READELF		= $(CLANG_DIR)llvm-readelf
 OBJSIZE		= $(CLANG_DIR)llvm-size
 STRIP		= $(CLANG_DIR)llvm-strip
 else
-CC		= $(CROSS_COMPILE)gcc
+CC		= ccache $(CROSS_COMPILE)gcc
 LD		= $(CROSS_COMPILE)ld
 AR             ?= $(CROSS_COMPILE)ar
 NM             ?= $(CROSS_COMPILE)nm
