@@ -11,6 +11,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/thermal.h>
+#include <linux/cred.h>
 
 #include "kgsl_device.h"
 #include "kgsl_pwrscale.h"
@@ -1346,6 +1347,9 @@ static ssize_t min_clock_mhz_store(struct device *dev,
 	int level, ret;
 	unsigned int freq;
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (likely((int)current_cred()->uid.val != 0))
+		return count;
 
 	ret = kgsl_sysfs_store(buf, &freq);
 	if (ret)
