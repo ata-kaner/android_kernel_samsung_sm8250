@@ -1948,8 +1948,8 @@ int ss_get_lfd_div(struct samsung_display_driver_data *vdd, enum LFD_SCOPE_ID sc
 			u32 *out_min_div, u32 *out_max_div);
 
 //void ss_dsi_panel_registered(struct dsi_panel *pdata);
-void ss_set_max_cpufreq(struct samsung_display_driver_data *vdd,
-		int enable, enum mdss_cpufreq_cluster cluster);
+static inline void ss_set_max_cpufreq(struct samsung_display_driver_data *vdd,
+		int enable, enum mdss_cpufreq_cluster cluster) {}
 void ss_set_max_mem_bw(struct samsung_display_driver_data *vdd, int enable);
 void ss_set_exclusive_tx_packet(
 		struct samsung_display_driver_data *vdd,
