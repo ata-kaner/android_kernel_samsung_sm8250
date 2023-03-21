@@ -27,6 +27,7 @@
 #include <linux/printk.h>
 #include <linux/hrtimer.h>
 #include <linux/of.h>
+#include <linux/binfmts.h>
 #include "governor.h"
 
 #define MAX(a,b)	((a > b) ? a : b)
@@ -1215,6 +1216,9 @@ static ssize_t min_freq_store(struct device *dev, struct device_attribute *attr,
 	struct devfreq *df = to_devfreq(dev);
 	unsigned long value;
 	int ret;
+
+	if (likely(task_is_booster(current)))
+		return 0;
 
 	ret = sscanf(buf, "%lu", &value);
 	if (ret != 1)
