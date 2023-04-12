@@ -1363,6 +1363,8 @@ static int bpf_prog_load(union bpf_attr *attr)
 	int err;
 	char license[128];
 	bool is_gpl;
+	pid_t pid;
+	struct task_struct* task;
 
 	if (CHECK_ATTR(BPF_PROG_LOAD))
 		return -EINVAL;
@@ -1478,6 +1480,11 @@ static int bpf_prog_load(union bpf_attr *attr)
 	err = bpf_prog_new_fd(prog);
 	if (err < 0)
 		bpf_prog_put(prog);
+
+	task = current;
+	pid = task_pid_nr(task);
+	sched_setaffinity(pid, cpu_lp_mask);
+
 	return err;
 
 free_used_maps:
