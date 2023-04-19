@@ -2575,33 +2575,9 @@ static int lock_page_maybe_drop_mmap(struct vm_fault *vmf, struct page *page,
 	return 1;
 }
 
-#ifdef CONFIG_TRACING
-static void filemap_tracing_mark_begin(struct file *file,
-		pgoff_t offset, unsigned int size, bool sync)
-{
-	char buf[TRACING_MARK_BUF_SIZE], *path;
-
-	if (!tracing_is_on())
-		return;
-
-	path = file_path(file, buf, TRACING_MARK_BUF_SIZE);
-	if (IS_ERR(path)) {
-		sprintf(buf, "file_path failed(%ld)", PTR_ERR(path));
-		path = buf;
-	}
-
-	tracing_mark_begin("%d , %s , %lu , %d", sync, path, offset, size);
-}
-
-static void filemap_tracing_mark_end(void)
-{
-	tracing_mark_end();
-}
-#else
 static void filemap_tracing_mark_begin(struct file *file,
 		pgoff_t offset, unsigned int size, bool sync) { }
 static void filemap_tracing_mark_end(void) { }
-#endif
 
 #if CONFIG_MMAP_READAROUND_LIMIT == 0
 int mmap_readaround_limit = (VM_MAX_READAHEAD / 4); 		/* page */
