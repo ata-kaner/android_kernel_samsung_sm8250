@@ -122,10 +122,9 @@ void selinux_avc_init(struct selinux_avc **avc);
 extern struct selinux_state selinux_state;
 
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
-extern int selinux_enforcing;
 static inline bool enforcing_enabled(struct selinux_state *state)
 {
-	return selinux_enforcing; // SEC_SELINUX_PORTING_COMMON Change to use RKP 
+	return state->enforcing;
 }
 
 static inline void enforcing_set(struct selinux_state *state, bool value)
@@ -133,7 +132,7 @@ static inline void enforcing_set(struct selinux_state *state, bool value)
 #if (defined CONFIG_KDP_CRED && defined CONFIG_SAMSUNG_PRODUCT_SHIP)
 	uh_call(UH_APP_RKP, RKP_KDP_X60, (u64)&selinux_enforcing, (u64)value, 0, 0);
 #else
-	selinux_enforcing = value; // SEC_SELINUX_PORTING_COMMON Change to use RKP 
+	state->enforcing = value;
 #endif
 }
 #else
