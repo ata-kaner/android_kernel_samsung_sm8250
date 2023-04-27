@@ -32,7 +32,6 @@
 #include <linux/uaccess.h>
 #include <linux/highmem.h>
 #include "binder_alloc.h"
-#include "binder_trace.h"
 
 #ifdef CONFIG_SAMSUNG_FREECESS
 #include <linux/freecess.h>
@@ -217,8 +216,6 @@ static int binder_update_page_range(struct binder_alloc *alloc, int allocate,
 	if (end <= start)
 		return 0;
 
-	trace_binder_update_page_range(alloc, allocate, start, end);
-
 	if (allocate == 0)
 		goto free_range;
 
@@ -254,19 +251,15 @@ static int binder_update_page_range(struct binder_alloc *alloc, int allocate,
 		page = &alloc->pages[index];
 
 		if (page->page_ptr) {
-			trace_binder_alloc_lru_start(alloc, index);
-
 			on_lru = list_lru_del(&binder_alloc_lru, &page->lru);
 			WARN_ON(!on_lru);
 
-			trace_binder_alloc_lru_end(alloc, index);
 			continue;
 		}
 
 		if (WARN_ON(!vma))
 			goto err_page_ptr_cleared;
 
-		trace_binder_alloc_page_start(alloc, index);
 		page->page_ptr = alloc_page(GFP_KERNEL |
 					    __GFP_HIGHMEM |
 					    __GFP_ZERO);
@@ -289,7 +282,6 @@ static int binder_update_page_range(struct binder_alloc *alloc, int allocate,
 		if (index + 1 > alloc->pages_high)
 			alloc->pages_high = index + 1;
 
-		trace_binder_alloc_page_end(alloc, index);
 		/* vm_insert_page does not seem to increment the refcount */
 	}
 	if (mm) {
@@ -306,12 +298,9 @@ free_range:
 		index = (page_addr - alloc->buffer) / PAGE_SIZE;
 		page = &alloc->pages[index];
 
-		trace_binder_free_lru_start(alloc, index);
-
 		ret = list_lru_add(&binder_alloc_lru, &page->lru);
 		WARN_ON(!ret);
 
-		trace_binder_free_lru_end(alloc, index);
 		if (page_addr == start)
 			break;
 		continue;
@@ -1050,22 +1039,14 @@ enum lru_status binder_alloc_free_page(struct list_head *item,
 	list_lru_isolate(lru, item);
 	spin_unlock(lock);
 
-	if (vma) {
-		trace_binder_unmap_user_start(alloc, index);
-
+	if (vma)
 		zap_page_range(vma, page_addr, PAGE_SIZE);
 
-		trace_binder_unmap_user_end(alloc, index);
-	}
 	up_read(&mm->mmap_sem);
 	mmput_async(mm);
 
-	trace_binder_unmap_kernel_start(alloc, index);
-
 	__free_page(page->page_ptr);
 	page->page_ptr = NULL;
-
-	trace_binder_unmap_kernel_end(alloc, index);
 
 	spin_lock(lock);
 	mutex_unlock(&alloc->mutex);
