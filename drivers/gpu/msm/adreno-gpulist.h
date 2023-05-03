@@ -15,6 +15,7 @@ static const struct adreno_gpu_core adreno_gpu_core_##_name = { \
 	.features = ADRENO_DEPRECATED, \
 }
 
+#if 0
 static const struct adreno_reglist a306_vbif_regs[] = {
 	{ A3XX_VBIF_ROUND_ROBIN_QOS_ARB, 0x0003 },
 	{ A3XX_VBIF_OUT_RD_LIM_CONF0, 0x0000000A },
@@ -605,6 +606,7 @@ static const struct adreno_a5xx_core adreno_gpu_core_a508 = {
 	.vbif = a530_vbif_regs,
 	.vbif_count = ARRAY_SIZE(a530_vbif_regs),
 };
+#endif
 
 DEFINE_DEPRECATED_CORE(a630v1, ADRENO_REV_A630, 6, 3, 0, 0);
 
@@ -1479,6 +1481,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a702 = {
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {
+#if 0
 	&adreno_gpu_core_a306.base,
 	&adreno_gpu_core_a306a.base,
 	&adreno_gpu_core_a304.base,
@@ -1496,6 +1499,7 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_a540v2.base,
 	&adreno_gpu_core_a512.base,
 	&adreno_gpu_core_a508.base,
+#endif
 	&adreno_gpu_core_a630v1,	/* Deprecated */
 	&adreno_gpu_core_a630v2.base,
 	&adreno_gpu_core_a615.base,

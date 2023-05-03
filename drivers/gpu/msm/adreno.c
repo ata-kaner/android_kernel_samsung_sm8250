@@ -159,16 +159,10 @@ unsigned int adreno_get_rptr(struct adreno_ringbuffer *rb)
 {
 	struct adreno_device *adreno_dev = ADRENO_RB_DEVICE(rb);
 	unsigned int rptr = 0;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (adreno_is_a3xx(adreno_dev))
-		adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_RPTR,
-				&rptr);
-	else {
-		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-		kgsl_sharedmem_readl(&device->scratch, &rptr,
-				SCRATCH_RPTR_OFFSET(rb->id));
-	}
+	kgsl_sharedmem_readl(&device->scratch, &rptr,
+			SCRATCH_RPTR_OFFSET(rb->id));
 
 	return rptr;
 }
@@ -1371,9 +1365,6 @@ static int adreno_probe(struct platform_device *pdev)
 
 	kgsl_pwrscale_init(&pdev->dev, CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR);
 
-	/* Initialize coresight for the target */
-	adreno_coresight_init(adreno_dev);
-
 	/* Get the system cache slice descriptor for GPU */
 	adreno_dev->gpu_llc_slice = adreno_llc_getd(LLCC_GPU);
 	if (IS_ERR(adreno_dev->gpu_llc_slice) &&
@@ -1446,7 +1437,6 @@ static int adreno_remove(struct platform_device *pdev)
 
 	adreno_sysfs_close(adreno_dev);
 
-	adreno_coresight_remove(adreno_dev);
 	adreno_profile_close(adreno_dev);
 
 	/* Release the system cache slice descriptor */
@@ -1641,9 +1631,8 @@ static int adreno_init(struct kgsl_device *device)
 	struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int ret;
 
-	if (!adreno_is_a3xx(adreno_dev))
-		kgsl_sharedmem_set(device, &device->scratch, 0, 0,
-				device->scratch.size);
+	kgsl_sharedmem_set(device, &device->scratch, 0, 0,
+			device->scratch.size);
 
 	ret = kgsl_pwrctrl_change_state(device, KGSL_STATE_INIT);
 	if (ret)
@@ -1700,27 +1689,24 @@ static int adreno_init(struct kgsl_device *device)
 	 * those targets that have the always on timer
 	 */
 
-	if (!adreno_is_a3xx(adreno_dev)) {
-		unsigned int priv = 0;
-		int r;
+	unsigned int priv = 0;
+	int r;
 
-		if (ADRENO_FEATURE(adreno_dev, ADRENO_APRIV))
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_APRIV))
 			priv |= KGSL_MEMDESC_PRIVILEGED;
 
-		r = kgsl_allocate_global(device,
-			&adreno_dev->profile_buffer, PAGE_SIZE,
-			0, priv, "alwayson");
+	r = kgsl_allocate_global(device,
+		&adreno_dev->profile_buffer, PAGE_SIZE,
+		0, priv, "alwayson");
 
-		adreno_dev->profile_index = 0;
+	adreno_dev->profile_index = 0;
 
-		if (r == 0) {
-			set_bit(ADRENO_DEVICE_DRAWOBJ_PROFILE,
-				&adreno_dev->priv);
-			kgsl_sharedmem_set(device,
-				&adreno_dev->profile_buffer, 0, 0,
-				PAGE_SIZE);
-		}
-
+	if (r == 0) {
+		set_bit(ADRENO_DEVICE_DRAWOBJ_PROFILE,
+			&adreno_dev->priv);
+		kgsl_sharedmem_set(device,
+			&adreno_dev->profile_buffer, 0, 0,
+			PAGE_SIZE);
 	}
 
 	return 0;
@@ -1796,15 +1782,8 @@ int adreno_set_unsecured_mode(struct adreno_device *adreno_dev,
 {
 	int ret = 0;
 
-	if (!adreno_is_a5xx(adreno_dev) && !adreno_is_a6xx(adreno_dev))
+	if (!adreno_is_a6xx(adreno_dev))
 		return -EINVAL;
-
-	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CRITICAL_PACKETS) &&
-			adreno_is_a5xx(adreno_dev)) {
-		ret = a5xx_critical_packet_submit(adreno_dev, rb);
-		if (ret)
-			return ret;
-	}
 
 	/* GPU comes up in secured mode, make it unsecured by default */
 	if (adreno_dev->zap_loaded)
@@ -1909,13 +1888,11 @@ static int _adreno_start(struct adreno_device *adreno_dev)
 	/* Send OOB request to turn on the GX */
 	status = gmu_core_dev_oob_set(device, oob_gpu);
 	if (status) {
-		gmu_core_snapshot(device);
 		goto error_mmu_off;
 	}
 
 	status = gmu_core_dev_hfi_start_msg(device);
 	if (status) {
-		gmu_core_snapshot(device);
 		goto error_oob_clear;
 	}
 
@@ -2055,9 +2032,6 @@ static int _adreno_start(struct adreno_device *adreno_dev)
 	 */
 	adreno_llc_setup(device);
 
-	/* Re-initialize the coresight registers if applicable */
-	adreno_coresight_start(adreno_dev);
-
 	adreno_irqctrl(adreno_dev, 1);
 
 	adreno_perfcounter_start(adreno_dev);
@@ -2068,14 +2042,6 @@ static int _adreno_start(struct adreno_device *adreno_dev)
 	status = adreno_ringbuffer_start(adreno_dev);
 	if (status)
 		goto error_oob_clear;
-
-	/*
-	 * At this point it is safe to assume that we recovered. Setting
-	 * this field allows us to take a new snapshot for the next failure
-	 * if we are prioritizing the first unrecoverable snapshot.
-	 */
-	if (device->snapshot)
-		device->snapshot->recovered = true;
 
 	/* Start the dispatcher */
 	adreno_dispatcher_start(device);
@@ -2167,7 +2133,6 @@ static int adreno_stop(struct kgsl_device *device)
 	error = gmu_core_dev_oob_set(device, oob_gpu);
 	if (error) {
 		gmu_core_dev_oob_clear(device, oob_gpu);
-			gmu_core_snapshot(device);
 			error = -EINVAL;
 			goto no_gx_power;
 	}
@@ -2175,9 +2140,6 @@ static int adreno_stop(struct kgsl_device *device)
 	kgsl_pwrscale_update_stats(device);
 
 	adreno_irqctrl(adreno_dev, 0);
-
-	/* Save active coresight registers if applicable */
-	adreno_coresight_stop(adreno_dev);
 
 	/* Save physical performance counter values before GPU power down*/
 	adreno_perfcounter_save(adreno_dev);
@@ -2193,7 +2155,6 @@ static int adreno_stop(struct kgsl_device *device)
 	 */
 
 	if (!error && gmu_core_dev_wait_for_lowest_idle(device)) {
-		gmu_core_snapshot(device);
 		/*
 		 * Assume GMU hang after 10ms without responding.
 		 * It shall be relative safe to clear vbif and stop
@@ -2834,9 +2795,6 @@ int adreno_soft_reset(struct kgsl_device *device)
 	/* Reinitialize the GPU */
 	gpudev->start(adreno_dev);
 
-	/* Re-initialize the coresight registers if applicable */
-	adreno_coresight_start(adreno_dev);
-
 	/* Enable IRQ */
 	adreno_irqctrl(adreno_dev, 1);
 
@@ -2930,7 +2888,6 @@ void adreno_spin_idle_debug(struct adreno_device *adreno_dev,
 				status3, intstatus, cx_status);
 
 		dev_err(device->dev, " hwfault=%8.8X\n", hwfault);
-		gmu_core_snapshot(device);
 	} else {
 		dev_err(device->dev,
 				"rb=%d pos=%X/%X rbbm_status=%8.8X/%8.8X int_0_status=%8.8X\n",
@@ -2938,7 +2895,6 @@ void adreno_spin_idle_debug(struct adreno_device *adreno_dev,
 				status3, intstatus);
 
 		dev_err(device->dev, " hwfault=%8.8X\n", hwfault);
-		kgsl_device_snapshot(device, NULL, false);
 	}
 }
 
@@ -3870,7 +3826,6 @@ static const struct kgsl_functable adreno_functable = {
 	.compat_ioctl = adreno_compat_ioctl,
 	.power_stats = adreno_power_stats,
 	.gpuid = adreno_gpuid,
-	.snapshot = adreno_snapshot,
 	.irq_handler = adreno_irq_handler,
 	.drain = adreno_drain,
 	.device_private_create = adreno_device_private_create,
