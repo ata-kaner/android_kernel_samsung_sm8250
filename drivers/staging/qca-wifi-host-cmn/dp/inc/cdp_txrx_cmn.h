@@ -46,15 +46,8 @@ extern bool is_dp_verbose_debug_enabled;
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
 #define dp_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP, params)
 
-#ifdef DP_PRINT_NO_CONSOLE
-#define dp_err_log(params...) \
-	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
-#define dp_info_rl(params...) \
-	__QDF_TRACE_RL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
-#else
-#define dp_err_log(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP, params)
-#define dp_info_rl(params...) QDF_TRACE_INFO_RL(QDF_MODULE_ID_DP, params)
-#endif /* DP_PRINT_NO_CONSOLE */
+#define dp_err_log(params...) ((void)0)
+#define dp_info_rl(params...) ((void)0)
 
 #ifdef ENABLE_VERBOSE_DEBUG
 /**
