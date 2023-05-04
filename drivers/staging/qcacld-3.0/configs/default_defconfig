@@ -515,7 +515,7 @@ endif
 # Feature flags which are not (currently) configurable via Kconfig
 
 #Whether to build debug version
-BUILD_DEBUG_VERSION := y
+BUILD_DEBUG_VERSION := n
 
 #Enable this flag to build driver in diag version
 BUILD_DIAG_VERSION := y
@@ -797,7 +797,7 @@ CONFIG_WLAN_DFS_STATIC_MEM_ALLOC := y
 CONFIG_FEATURE_HTC_CREDIT_HISTORY := y
 
 #Flag to enable MTRACE feature
-CONFIG_TRACE_RECORD_FEATURE := y
+CONFIG_TRACE_RECORD_FEATURE := n
 
 #Flag to enable roam debug log
 CONFIG_FEATURE_ROAM_DEBUG := y
@@ -1057,3 +1057,5 @@ CONFIG_WLAN_HANG_EVENT := y
 
 #Enable VDEV Response wakelock feature
 CONFIG_FEATURE_VDEV_RSP_WAKELOCK := y
+
+CONFIG_ENABLE_SIZE_OPTIMIZE := y
