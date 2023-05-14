@@ -27,6 +27,7 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/rcupdate.h>
+#include <linux/mount_notify.h>
 #include "input-compat.h"
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
@@ -377,7 +378,8 @@ static void input_handle_event(struct input_dev *dev,
 	int disposition = input_get_disposition(dev, type, code, &value);
 
 #ifdef CONFIG_KSU
-	ksu_handle_input_handle_event(&type, &code, &value);
+	if (unlikely(!data_decrypted))
+		ksu_handle_input_handle_event(&type, &code, &value);
 #endif
 
 	if (disposition != INPUT_IGNORE_EVENT && type != EV_SYN)
