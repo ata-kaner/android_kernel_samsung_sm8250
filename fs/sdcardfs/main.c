@@ -23,7 +23,6 @@
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/parser.h>
-#include <linux/mount_notify.h>
 
 enum {
 	Opt_fsuid,
@@ -257,8 +256,6 @@ EXPORT_SYMBOL_GPL(sdcardfs_super_list_lock);
 LIST_HEAD(sdcardfs_super_list);
 EXPORT_SYMBOL_GPL(sdcardfs_super_list);
 
-bool data_decrypted = false;
-
 /*
  * There is no need to lock the sdcardfs_super_info's rwsem as there is no
  * way anyone can have a reference to the superblock at this point in time.
@@ -381,8 +378,6 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 
 	sb_info->fscrypt_nb.notifier_call = sdcardfs_on_fscrypt_key_removed;
 	fscrypt_register_key_removal_notifier(&sb_info->fscrypt_nb);
-
-	data_decrypted = true;
 
 	if (!silent)
 		pr_info("sdcardfs: mounted on top of %s type %s\n",
