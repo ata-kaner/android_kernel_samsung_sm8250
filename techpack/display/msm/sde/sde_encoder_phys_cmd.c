@@ -184,7 +184,6 @@ static void sde_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
 {
 	struct sde_encoder_phys *phys_enc = arg;
 	u32 scheduler_status = INVALID_CTL_STATUS;
-	struct sde_hw_pp_vsync_info info[MAX_CHANNELS_PER_ENC] = {{0}};
 	struct sde_hw_ctl *ctl;
 	u32 event = 0;
 
@@ -207,8 +206,6 @@ static void sde_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
 				phys_enc, event);
 		spin_unlock(phys_enc->enc_spinlock);
 	}
-
-	sde_encoder_helper_get_pp_line_count(phys_enc->parent, info);
 
 	if (scheduler_status == 0x30)
 		global_flag = 0;	//P200728-01222 disable debug patch from 04710138 due to sluggish issue.
