@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved. */
 
 #include <linux/debugfs.h>
 #include <linux/device.h>
@@ -556,18 +556,6 @@ int mhi_queue_dma(struct mhi_device *mhi_dev,
 		mhi_tre->dword[0] =
 			MHI_RSCTRE_DATA_DWORD0(buf_ring->wp - buf_ring->base);
 		mhi_tre->dword[1] = MHI_RSCTRE_DATA_DWORD1;
-		/*
-		 * on RSC channel IPA HW has a minimum credit requirement before
-		 * switching to DB mode
-		 */
-		n_free_tre = mhi_get_no_free_descriptors(mhi_dev,
-				DMA_FROM_DEVICE);
-		n_queued_tre = tre_ring->elements - n_free_tre;
-		read_lock_bh(&mhi_chan->lock);
-		if (mhi_chan->db_cfg.db_mode &&
-				n_queued_tre < MHI_RSC_MIN_CREDITS)
-			ring_db = false;
-		read_unlock_bh(&mhi_chan->lock);
 	} else {
 		mhi_tre->ptr = MHI_TRE_DATA_PTR(buf_info->p_addr);
 		mhi_tre->dword[0] = MHI_TRE_DATA_DWORD0(buf_info->len);
@@ -585,12 +573,24 @@ int mhi_queue_dma(struct mhi_device *mhi_dev,
 	if (mhi_chan->dir == DMA_TO_DEVICE)
 		atomic_inc(&mhi_cntrl->pending_pkts);
 
-	if (likely(MHI_DB_ACCESS_VALID(mhi_cntrl)) && ring_db) {
-		read_lock_bh(&mhi_chan->lock);
-		mhi_ring_chan_db(mhi_cntrl, mhi_chan);
-		read_unlock_bh(&mhi_chan->lock);
+	read_lock_bh(&mhi_chan->lock);
+	if (mhi_chan->xfer_type == MHI_XFER_RSC_DMA) {
+		/*
+		* on RSC channel IPA HW has a minimum credit requirement before
+		* switching to DB mode
+		*/
+		n_free_tre = mhi_get_no_free_descriptors(mhi_dev,
+			DMA_FROM_DEVICE);
+		n_queued_tre = tre_ring->elements - n_free_tre;
+	if (mhi_chan->db_cfg.db_mode &&
+		n_queued_tre < MHI_RSC_MIN_CREDITS)
+		ring_db = false;
 	}
-
+	if (likely(MHI_DB_ACCESS_VALID(mhi_cntrl)) && ring_db)
+		mhi_ring_chan_db(mhi_cntrl, mhi_chan);
+	
+	read_unlock_bh(&mhi_chan->lock);
+	
 	read_unlock_bh(&mhi_cntrl->pm_lock);
 
 	return 0;
@@ -1329,9 +1329,10 @@ int mhi_process_data_event_ring(struct mhi_controller *mhi_cntrl,
 	while (dev_rp != local_rp && event_quota > 0) {
 		enum MHI_PKT_TYPE type = MHI_TRE_GET_EV_TYPE(local_rp);
 
-		MHI_VERB("Processing Event:0x%llx 0x%08x 0x%08x\n",
-			local_rp->ptr, local_rp->dword[0], local_rp->dword[1]);
-
+		MHI_VERB("Processing Event:0x%llx 0x%08x 0x%08x 0x%llx 0x%llx\n",
+			local_rp->ptr, local_rp->dword[0], local_rp->dword[1],
+			dev_rp, er_ctxt->rp);
+			
 		mhi_event->last_cached_tre.ptr = local_rp->ptr;
 		mhi_event->last_cached_tre.dword[0] = local_rp->dword[0];
 		mhi_event->last_cached_tre.dword[1] = local_rp->dword[1];
@@ -1353,7 +1354,7 @@ int mhi_process_data_event_ring(struct mhi_controller *mhi_cntrl,
 		}
 
 next_er_element:
-		mhi_recycle_ev_ring_element(mhi_cntrl, ev_ring);
+			mhi_recycle_ev_ring_element(mhi_cntrl, ev_ring);
 		local_rp = ev_ring->rp;
 		dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);
 		count++;
@@ -1479,6 +1480,12 @@ int mhi_process_bw_scale_ev_ring(struct mhi_controller *mhi_cntrl,
 	if (ev_ring->rp == dev_rp) {
 		spin_unlock_bh(&mhi_event->lock);
 		goto exit_bw_scale_process;
+	}
+
+	if ((void*)dev_rp < ev_ring->base ||
+			(void*)dev_rp >= (ev_ring->base + ev_ring->len)) {
+		MHI_ERR("dev_rp out of bound 0x%llx\n", dev_rp);
+		panic("dev rp out of bound");
 	}
 
 	/* if rp points to base, we need to wrap it around */
@@ -2230,8 +2237,8 @@ int mhi_debugfs_mhi_event_show(struct seq_file *m, void *d)
 
 	int i;
 
-	if (!mhi_cntrl->mhi_ctxt)
-		return -ENODEV;
+	if (!mhi_cntrl->mhi_event || !mhi_cntrl->mhi_ctxt)
+		return 0;
 
 	seq_printf(m, "[%llu ns]:\n", sched_clock());
 
@@ -2266,8 +2273,8 @@ int mhi_debugfs_mhi_chan_show(struct seq_file *m, void *d)
 	struct mhi_chan_ctxt *chan_ctxt;
 	int i;
 
-	if (!mhi_cntrl->mhi_ctxt)
-		return -ENODEV;
+	if (!mhi_cntrl->mhi_chan || !mhi_cntrl->mhi_ctxt)
+		return 0;
 
 	seq_printf(m, "[%llu ns]:\n", sched_clock());
 

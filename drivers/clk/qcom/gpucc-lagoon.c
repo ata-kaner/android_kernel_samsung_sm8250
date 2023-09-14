@@ -18,7 +18,7 @@
 #include "clk-rcg.h"
 #include "common.h"
 #include "clk-regmap-mux.h"
-#include "vdd-level-lagoon.h"
+#include "vdd-level-lito.h"
 
 static DEFINE_VDD_REGULATORS(vdd_cx, VDD_NUM, 1, vdd_corner);
 static DEFINE_VDD_REGULATORS(vdd_gx, VDD_GX_NUM, 1, vdd_corner);
@@ -122,7 +122,7 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 
 static struct clk_fixed_factor crc_div = {
 	.mult = 1,
-	.div = 2,
+	.div = 1,
 	.hw.init = &(struct clk_init_data){
 		.name = "crc_div",
 		.parent_names = (const char *[]){ "gpu_cc_pll0" },
@@ -135,7 +135,7 @@ static struct clk_fixed_factor crc_div = {
 /* 514MHz Configuration*/
 static const struct alpha_pll_config gpu_cc_pll1_config = {
 	.l = 0x1A,
-	.cal_l = 0x3D,
+	.cal_l = 0x3F,
 	.alpha = 0xC555,
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00002067,

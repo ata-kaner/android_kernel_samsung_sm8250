@@ -45,8 +45,8 @@ static const char * const power_supply_type_text[] = {
 	"USB_DCP", "USB_CDP", "USB_ACA", "USB_C",
 	"USB_PD", "USB_PD_DRP", "BrickID",
 	"USB_HVDCP", "USB_HVDCP_3", "USB_HVDCP_3P5", "Wireless", "USB_FLOAT",
-	"BMS", "Parallel", "Main", "USB_C_UFP", "USB_C_DFP",
-	"Charge_Pump",
+	"BMS", "Parallel", "Main", "Wipower", "USB_C_UFP", "USB_C_DFP",
+	"Charge_Pump", "POWER_SHARING", "OTG", "POGO",
 };
 
 static const char * const power_supply_usb_type_text[] = {
@@ -59,14 +59,15 @@ static const char * const power_supply_status_text[] = {
 };
 
 static const char * const power_supply_charge_type_text[] = {
-	"Unknown", "N/A", "Trickle", "Fast", "Taper"
+	"Unknown", "N/A", "Trickle", "Fast", "Taper", "Slow"
 };
 
 static const char * const power_supply_health_text[] = {
 	"Unknown", "Good", "Overheat", "Dead", "Over voltage",
 	"Unspecified failure", "Cold", "Watchdog timer expire",
 	"Safety timer expire",
-	"Warm", "Cool", "Hot"
+	"Warm", "Cool", "Hot",
+	"Under voltage", "OverheatLimit"
 };
 
 static const char * const power_supply_technology_text[] = {
@@ -302,8 +303,11 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(current_now),
 	POWER_SUPPLY_ATTR(current_avg),
 	POWER_SUPPLY_ATTR(current_boot),
+	POWER_SUPPLY_ATTR(current_full),
+	POWER_SUPPLY_ATTR(power_design),
 	POWER_SUPPLY_ATTR(power_now),
 	POWER_SUPPLY_ATTR(power_avg),
+	POWER_SUPPLY_ATTR(filter_cfg),
 	POWER_SUPPLY_ATTR(charge_full_design),
 	POWER_SUPPLY_ATTR(charge_empty_design),
 	POWER_SUPPLY_ATTR(charge_full),
@@ -311,6 +315,9 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(charge_now),
 	POWER_SUPPLY_ATTR(charge_avg),
 	POWER_SUPPLY_ATTR(charge_counter),
+	POWER_SUPPLY_ATTR(charge_otg_control),
+	POWER_SUPPLY_ATTR(charge_powered_otg_control),
+	POWER_SUPPLY_ATTR(charge_uno_control),
 	POWER_SUPPLY_ATTR(constant_charge_current),
 	POWER_SUPPLY_ATTR(constant_charge_current_max),
 	POWER_SUPPLY_ATTR(constant_charge_voltage),
@@ -490,6 +497,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(manufacturer),
 	POWER_SUPPLY_ATTR(battery_type),
 	POWER_SUPPLY_ATTR(cycle_counts),
+	POWER_SUPPLY_ATTR(afc_charger_mode),
 	POWER_SUPPLY_ATTR(serial_number),
 };
 

@@ -391,16 +391,7 @@ static int a6xx_gmu_start(struct kgsl_device *device)
 	if (timed_poll_check(device,
 			A6XX_GMU_CM3_FW_INIT_RESULT,
 			val, GMU_START_TIMEOUT, mask)) {
-		u32 val;
-
-		/*
-		 * The breadcrumb is written to a gmu virtual mapping
-		 * which points to dtcm byte offset 0x3fdc.
-		 */
-		gmu_core_regread(device,
-			A6XX_GMU_CM3_DTCM_START + (0x3fdc >> 2), &val);
-		dev_err(&gmu->pdev->dev, "GMU doesn't boot: 0x%x\n", val);
-
+		dev_err(&gmu->pdev->dev, "GMU doesn't boot\n");
 		return -ETIMEDOUT;
 	}
 
@@ -1174,18 +1165,19 @@ static int a6xx_gmu_load_firmware(struct kgsl_device *device)
 	int ret, offset = 0;
 
 	/* GMU fw already saved and verified so do nothing new */
-	if (gmu->fw_image)
-		return 0;
+	if (!gmu->fw_image) {
+		if (a6xx_core->gmufw_name == NULL) {
+			dev_err(&gmu->pdev->dev, "Invalid gmufw_name\n");
+			return -EINVAL;
+		}
 
-	if (a6xx_core->gmufw_name == NULL)
-		return -EINVAL;
-
-	ret = request_firmware(&gmu->fw_image, a6xx_core->gmufw_name,
-			device->dev);
-	if (ret) {
-		dev_err(device->dev, "request_firmware (%s) failed: %d\n",
-				a6xx_core->gmufw_name, ret);
-		return ret;
+		ret = request_firmware(&gmu->fw_image, a6xx_core->gmufw_name,
+				device->dev);
+		if (ret) {
+			dev_err(device->dev, "request_firmware (%s) failed: %d\n",
+					a6xx_core->gmufw_name, ret);
+			return ret;
+		}
 	}
 
 	/*
@@ -1208,11 +1200,12 @@ static int a6xx_gmu_load_firmware(struct kgsl_device *device)
 		offset += sizeof(*blk);
 
 		if (blk->type == GMU_BLK_TYPE_PREALLOC_REQ ||
-				blk->type == GMU_BLK_TYPE_PREALLOC_PERSIST_REQ)
+				blk->type == GMU_BLK_TYPE_PREALLOC_PERSIST_REQ) {
 			ret = gmu_prealloc_req(device, blk);
 
-		if (ret)
-			return ret;
+			if (ret)
+				return ret;
+		}
 	}
 
 	 /* Request any other cache ranges that might be required */

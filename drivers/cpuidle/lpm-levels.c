@@ -44,6 +44,18 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/trace_msm_low_power.h>
 
+#ifdef CONFIG_SEC_PM_DEBUG
+#include <linux/sec-pinmux.h>
+#ifdef CONFIG_SEC_GPIO_DVS
+#include <linux/secgpio_dvs.h>
+#endif /* CONFIG_SEC_GPIO_DVS */
+#endif /* CONFIG_SEC_PM_DEBUG */
+
+#include <linux/sec_debug.h>
+#ifdef CONFIG_SEC_PM
+#include <linux/regulator/consumer.h>
+#endif /* CONFIG_SEC_PM */
+
 #define SCLK_HZ (32768)
 #define PSCI_POWER_STATE(reset) (reset << 30)
 #define PSCI_AFFINITY_LEVEL(lvl) ((lvl & 0x3) << 24)
@@ -118,6 +130,13 @@ static void cluster_unprepare(struct lpm_cluster *cluster,
 static void cluster_prepare(struct lpm_cluster *cluster,
 		const struct cpumask *cpu, int child_idx, bool from_idle,
 		int64_t time);
+
+#ifdef CONFIG_SEC_PM_DEBUG
+extern void sec_gpio_debug_print(void);
+extern void msm_gpio_print_enabled(void);
+static int msm_pm_sleep_sec_debug;
+module_param_named(secdebug, msm_pm_sleep_sec_debug, int, 0664);
+#endif /* CONFIG_SEC_PM_DEBUG */
 
 static bool print_parsed_dt;
 module_param_named(print_parsed_dt, print_parsed_dt, bool, 0664);
@@ -1107,6 +1126,10 @@ static int cluster_configure(struct lpm_cluster *cluster, int idx,
 		return -EPERM;
 
 	if (idx != cluster->default_level) {
+		sec_debug_cluster_lpm_log(cluster->cluster_name, idx,
+			cluster->num_children_in_sync.bits[0],
+			cluster->child_cpus.bits[0], from_idle, 1);
+
 		update_debug_pc_event(CLUSTER_ENTER, idx,
 			cluster->num_children_in_sync.bits[0],
 			cluster->child_cpus.bits[0], from_idle);
@@ -1269,6 +1292,10 @@ static void cluster_unprepare(struct lpm_cluster *cluster,
 	trace_cluster_exit(cluster->cluster_name, cluster->last_level,
 			cluster->num_children_in_sync.bits[0],
 			cluster->child_cpus.bits[0], from_idle);
+
+	sec_debug_cluster_lpm_log(cluster->cluster_name, cluster->last_level,
+			cluster->num_children_in_sync.bits[0],
+			cluster->child_cpus.bits[0], from_idle, 0);
 
 	last_level = cluster->last_level;
 	cluster->last_level = cluster->default_level;
@@ -1470,7 +1497,10 @@ static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 	if (need_resched())
 		goto exit;
 
+	sec_debug_cpu_lpm_log(dev->cpu, idx, 0, 1);
+	sec_debug_sched_msg("+Idle(%s)", cpu->levels[idx].name);
 	success = psci_enter_sleep(cpu, idx, true);
+	sec_debug_sched_msg("-Idle(%s)", cpu->levels[idx].name);
 
 exit:
 	end_time = ktime_to_ns(ktime_get());
@@ -1481,6 +1511,8 @@ exit:
 	dev->last_residency = ktime_us_delta(ktime_get(), start);
 	update_history(dev, idx);
 	trace_cpu_idle_exit(idx, success);
+	sec_debug_cpu_lpm_log(dev->cpu, idx, success, 0);
+
 	if (lpm_prediction && cpu->lpm_prediction) {
 		histtimer_cancel();
 		clusttimer_cancel();
@@ -1710,6 +1742,40 @@ static void register_cluster_lpm_stats(struct lpm_cluster *cl,
 static int lpm_suspend_prepare(void)
 {
 	suspend_in_progress = true;
+
+#ifdef CONFIG_SEC_GPIO_DVS
+	/************************ Caution !!! ****************************
+	 * This functiongit a must be located in appropriate
+	 * SLEEP position in accordance with the specification
+	 * of each BB vendor.
+	 ************************ Caution !!! ****************************/
+	gpio_dvs_check_sleepgpio();
+#ifdef SECGPIO_SLEEP_DEBUGGING
+	/************************ Caution !!! ****************************/
+	/* This func. must be located in an appropriate position for
+	 * GPIO SLEEP debugging in accordance with the specification
+	 * of each BB vendor, and the func. must be called after calling
+	 * the function "gpio_dvs_check_sleepgpio"
+	 ************************ Caution !!! ****************************/
+	gpio_dvs_set_sleepgpio();
+#endif /* SECGPIO_SLEEP_DEBUGGING */
+#endif /* CONFIG_SEC_GPIO_DVS */
+
+#ifdef CONFIG_SEC_PM
+	regulator_showall_enabled();
+	clock_debug_print_enabled();
+
+	debug_masterstats_show("entry");
+	debug_rpmstats_show("entry");
+#endif /* CONFIG_SEC_PM */
+
+#ifdef CONFIG_SEC_PM_DEBUG
+	if (msm_pm_sleep_sec_debug) {
+		msm_gpio_print_enabled();
+//		sec_gpio_debug_print();
+	}
+#endif /* CONFIG_SEC_PM_DEBUG */
+
 	lpm_stats_suspend_enter();
 
 	return 0;
@@ -1719,6 +1785,11 @@ static void lpm_suspend_wake(void)
 {
 	suspend_in_progress = false;
 	lpm_stats_suspend_exit();
+
+#ifdef CONFIG_SEC_PM
+	debug_rpmstats_show("exit");
+	debug_masterstats_show("exit");
+#endif
 }
 
 static int lpm_suspend_enter(suspend_state_t state)
@@ -1738,16 +1809,6 @@ static int lpm_suspend_enter(suspend_state_t state)
 		pr_err("Failed suspend\n");
 		return 0;
 	}
-
-	/*
-	 * Print the clocks and regulators which are enabled during
-	 * system suspend.  This debug information is useful to know
-	 * which resources are enabled and preventing the system level
-	 * LPMs (XO and Vmin).
-	 */
-	clock_debug_print_enabled();
-	regulator_debug_print_enabled();
-
 	cpu_prepare(lpm_cpu, idx, false);
 	cluster_prepare(cluster, cpumask, idx, false, 0);
 

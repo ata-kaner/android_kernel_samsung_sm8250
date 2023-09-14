@@ -448,7 +448,7 @@ config THP_SWAP
 	  For selection by architectures with reasonable THP sizes.
 
 config	TRANSPARENT_HUGE_PAGECACHE
-	def_bool y
+	def_bool n
 	depends on TRANSPARENT_HUGEPAGE
 
 #
@@ -843,6 +843,23 @@ config GUP_BENCHMARK
 config ARCH_HAS_PTE_SPECIAL
 	bool
 
+config LARGE_DIRTY_BUFFER
+	bool "Use large dirty_threshold value by enabling dirty_ratio"
+	default n
+	help
+	  This config enables dirty_ratio/dirty_background_ratio,
+	  and it means large dirty_threshold value in 64bit architectures.
+	  If unsure, say N to use kernel default value
+
+config MAX_DIRTY_THRESH_PAGES
+	int "The upper bound of VM dirty_thresh value in number of pages"
+	depends on LARGE_DIRTY_BUFFER
+	default 25600
+	help
+	  This value is the upper bound of VM dirty-thresh. (0 means no limit.)
+	  It is only effective when dirty_ratio is used.
+	  (Setting dirty_bytes disables this option.)
+
 endmenu
 
 config PROCESS_RECLAIM
@@ -860,3 +877,106 @@ config PROCESS_RECLAIM
 	 (addr, addr + size-bytes) of the process.
 
 	 Any other value is ignored.
+
+config PROCESS_RECLAIM_IGNORE_ALL_TYPE
+	bool "ignore RECLAIM_ALL"
+	depends on PROCESS_RECLAIM
+	default n
+	help
+	  This is temporary workaround for app compactor.
+
+config INCREASE_MAXIMUM_SWAPPINESS
+	bool "Allow swappiness to be set up to 200"
+	depends on SWAP
+	default y
+
+config DIRECT_RECLAIM_FILE_PAGES_ONLY
+	bool "Reclaim file pages only on direct reclaim path"
+	depends on SWAP
+	default y
+
+config MMAP_READAROUND_LIMIT
+	int "Limit mmap readaround upperbound"
+	default 0
+	help
+	  Inappropriate mmap readaround size can hurt device performance
+	  during the sluggish situation. Add the hard upper-limit for
+	  mmap readaround.
+
+config KSWAPD_PERFTUNE
+	bool "kswapd cpumask can be limited"
+	depends on !SAMSUNG_PRODUCT_SHIP
+	default y
+	help
+	  This provides sysctl node to set kswapd cpu affinity.
+
+config RBIN
+	bool "RBIN memory support"
+	default n
+	select CLEANCACHE
+	help
+	  This provides RBIN functionality in memory management.
+
+config PAGE_BOOST
+	bool "PAGE_BOOST feature"
+	depends on MMU
+	default y
+	help
+	  Enable this for PAGE_BOOST feature
+
+config PAGE_BOOST_RECORDING
+	bool "PAGE_BOOST recording feature"
+	depends on PAGE_BOOST
+	default y
+	help
+	  Record Everything for the chosen process.
+	  As Android executes an app one by one, only allow 1 recording
+	  at a time.
+
+config KZEROD
+	bool "Support kzerod"
+	default n
+	depends on !NEED_MULTIPLE_NODES
+	help
+	  Support kzerod kernel thread which does prezeroing of free pages.
+
+config HUGEPAGE_POOL
+	bool "hugepage pool management"
+	default n
+	depends on KZEROD && !HIGHMEM && !ZONE_DEVICE
+	depends on TRANSPARENT_HUGEPAGE
+	help
+	  Enable this to provide 2MB hugepage to THP anon, ION, and GPU memory
+	  allocation requests efficiently.
+
+config HUGEPAGE_POOL_DEBUG
+	bool "hugepage pool debug"
+	default n
+	depends on HUGEPAGE_POOL
+	help
+	  Show hugepage pool debug logs in kernel log.
+
+config HUGEPAGE_POOL_ALLOW_ALL
+	bool "allow 2MB page for all to debug hugepage pool"
+	default n
+	depends on HUGEPAGE_POOL
+	help
+	  allow 2MB page for all to debug hugepage pool
+
+config MEMCG_HEIMDALL
+	bool "memcg optimization for heimdall"
+	depends on MEMCG
+	default y
+	help
+	  Enable this will change the memcg-related logics in the way Heimdall
+	  prefers.
+
+config HIGHATOMIC_PAGEBLOCKS
+	int "limit max number of highatomic pageblocks"
+	default 1
+	help
+	  By default, "1 percent of managed pages + 1 pageblock" is reserved as
+	  highatomic pageblocks.
+	  This value limits max number of highatomic pageblocks.
+
+source "mm/sec_mm/Kconfig"

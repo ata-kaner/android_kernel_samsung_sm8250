@@ -120,6 +120,7 @@ void msm_cvp_cdsp_ssr_handler(struct work_struct *work)
 	struct cvp_iface_q_info *iface_q;
 
 	dprintk(CVP_WARN, "%s: Entering CDSP-SSR handler\n", __func__);
+
 	me = container_of(work, struct cvp_dsp_apps, ssr_work);
 	if (!me) {
 		dprintk(CVP_ERR, "%s: Invalid params\n", __func__);
@@ -163,6 +164,7 @@ void msm_cvp_cdsp_ssr_handler(struct work_struct *work)
 	msg_ptr_len =  cmd_msg.msg_ptr_len;
 
 	dprintk(CVP_WARN, "%s: HFI queue cmd after CDSP-SSR\n", __func__);
+
 	err = cvp_dsp_send_cmd_hfi_queue((phys_addr_t *)msg_ptr,
 					msg_ptr_len,
 					(struct iris_hfi_device *)(me->device));

@@ -2357,6 +2357,20 @@ extern int min_free_kbytes;
 extern int watermark_boost_factor;
 extern int watermark_scale_factor;
 
+/* ion rbin heap.. */
+#ifdef CONFIG_ION_RBIN_HEAP
+bool need_ion_rbin_heap(void);
+#endif
+void wake_ion_rbin_heap_prereclaim(void);
+void wake_ion_rbin_heap_shrink(void);
+
+/* rbincache.c */
+int init_rbincache(unsigned long pfn, unsigned long nr_pages);
+extern unsigned long totalrbin_pages;
+extern atomic_t rbin_allocated_pages;
+extern atomic_t rbin_cached_pages;
+extern atomic_t rbin_pool_pages;
+
 /* nommu.c */
 extern atomic_long_t mmap_pages_allocated;
 extern int nommu_shrink_inode_mappings(struct inode *, size_t, size_t);
@@ -2560,8 +2574,9 @@ int __must_check write_one_page(struct page *page);
 void task_dirty_inc(struct task_struct *tsk);
 
 /* readahead.c */
-#define VM_MAX_READAHEAD	512	/* kbytes */
+#define VM_MAX_READAHEAD	128	/* kbytes */
 #define VM_MIN_READAHEAD	16	/* kbytes (includes current page) */
+extern int mmap_readaround_limit;
 
 int force_page_cache_readahead(struct address_space *mapping, struct file *filp,
 			pgoff_t offset, unsigned long nr_to_read);
@@ -3016,6 +3031,7 @@ static inline void setup_nr_node_ids(void) {}
 
 extern int want_old_faultaround_pte;
 
+extern inline bool need_memory_boosting(struct pglist_data *pgdat);
 #ifdef CONFIG_PROCESS_RECLAIM
 struct reclaim_param {
 	struct vm_area_struct *vma;
@@ -3031,10 +3047,41 @@ extern struct reclaim_param reclaim_task_anon(struct task_struct *task,
 extern struct reclaim_param reclaim_task_nomap(struct task_struct *task,
 		int nr_to_reclaim);
 extern int reclaim_address_space(struct address_space *mapping,
-		struct reclaim_param *rp, struct vm_area_struct *vma);
+		struct reclaim_param *rp);
 extern int proc_reclaim_notifier_register(struct notifier_block *nb);
 extern int proc_reclaim_notifier_unregister(struct notifier_block *nb);
 #endif
+
+enum memsize_kernel_type {
+	MEMSIZE_KERNEL_KERNEL = 0,
+	MEMSIZE_KERNEL_PAGING,
+	MEMSIZE_KERNEL_LOGBUF,
+	MEMSIZE_KERNEL_PIDHASH,
+	MEMSIZE_KERNEL_VFSHASH,
+	MEMSIZE_KERNEL_MM_INIT,
+	MEMSIZE_KERNEL_OTHERS,
+	MEMSIZE_KERNEL_STOP,
+};
+#if defined(CONFIG_HAVE_MEMBLOCK)
+extern void set_memsize_reserved_name(const char *name);
+extern void unset_memsize_reserved_name(void);
+extern void set_memsize_kernel_type(enum memsize_kernel_type type);
+extern void free_memsize_reserved(phys_addr_t free_base, phys_addr_t free_size);
+extern void record_memsize_reserved(const char *name, phys_addr_t base,
+				    phys_addr_t size, bool nomap,
+				    bool reusable);
+extern void record_memsize_memory_hole(void);
+#else
+static inline void set_memsize_reserved_name(const char *name) { }
+static inline void unset_memsize_reserved_name(void) { }
+static inline void set_memsize_kernel_type(enum memsize_kernel_type type) { }
+static inline void free_memsize_reserved(phys_addr_t free_base,
+					 phys_addr_t free_size) { }
+static inline void record_memsize_reserved(const char *name, phys_addr_t base,
+				    phys_addr_t size, bool nomap,
+				    bool reusable) { }
+#endif
+extern bool ion_account_print_usage(void);
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_MM_H */

@@ -513,6 +513,7 @@ static int geni_i2c_gsi_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 		struct msm_gpi_tre *go_t = &gi2c->go_t;
 		struct device *rx_dev = gi2c->wrapper_dev;
 		struct device *tx_dev = gi2c->wrapper_dev;
+
 		reinit_completion(&gi2c->xfer);
 
 		gi2c->cur = &msgs[i];

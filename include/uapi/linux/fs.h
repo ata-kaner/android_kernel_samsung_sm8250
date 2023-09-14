@@ -261,6 +261,12 @@ struct fsxattr {
 #define FS_IOC_GETFSLABEL		_IOR(0x94, 49, char[FSLABEL_MAX])
 #define FS_IOC_SETFSLABEL		_IOW(0x94, 50, char[FSLABEL_MAX])
 
+#ifdef CONFIG_DDAR
+#define FS_IOC_GET_DD_POLICY			_IO('P', 0x00)
+#define FS_IOC_SET_DD_POLICY			_IO('P', 0x01)
+#define FS_IOC_GET_DD_INODE_COUNT		_IOR('P', 0x02, long)
+#endif
+
 /*
  * Inode flags (FS_IOC_GETFLAGS / FS_IOC_SETFLAGS)
  *

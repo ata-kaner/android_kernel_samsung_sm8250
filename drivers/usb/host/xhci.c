@@ -5225,6 +5225,7 @@ static phys_addr_t xhci_get_sec_event_ring_phys_addr(struct usb_hcd *hcd,
 	struct device *dev = hcd->self.sysdev;
 	struct sg_table sgt;
 	phys_addr_t pa;
+	int result = 0;
 
 	if (intr_num >= xhci->max_interrupters) {
 		xhci_err(xhci, "intr num %d >= max intrs %d\n", intr_num,
@@ -5236,10 +5237,15 @@ static phys_addr_t xhci_get_sec_event_ring_phys_addr(struct usb_hcd *hcd,
 		xhci->sec_event_ring && xhci->sec_event_ring[intr_num]
 		&& xhci->sec_event_ring[intr_num]->first_seg) {
 
-		dma_get_sgtable(dev, &sgt,
+		result = dma_get_sgtable(dev, &sgt,
 			xhci->sec_event_ring[intr_num]->first_seg->trbs,
 			xhci->sec_event_ring[intr_num]->first_seg->dma,
 			TRB_SEGMENT_SIZE);
+
+		if(result < 0) {
+			xhci_err(xhci, "%s: error occured=%d\n", __func__, result);
+			return 0;
+		}
 
 		*dma = xhci->sec_event_ring[intr_num]->first_seg->dma;
 
@@ -5262,6 +5268,7 @@ static phys_addr_t xhci_get_xfer_ring_phys_addr(struct usb_hcd *hcd,
 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
 	struct sg_table sgt;
 	phys_addr_t pa;
+	int result = 0;
 
 	ret = xhci_check_args(hcd, udev, ep, 1, true, __func__);
 	if (ret <= 0) {
@@ -5275,11 +5282,16 @@ static phys_addr_t xhci_get_xfer_ring_phys_addr(struct usb_hcd *hcd,
 	if (virt_dev->eps[ep_index].ring &&
 		virt_dev->eps[ep_index].ring->first_seg) {
 
-		dma_get_sgtable(dev, &sgt,
+		result = dma_get_sgtable(dev, &sgt,
 			virt_dev->eps[ep_index].ring->first_seg->trbs,
 			virt_dev->eps[ep_index].ring->first_seg->dma,
 			TRB_SEGMENT_SIZE);
 
+		if(result < 0) {
+			xhci_err(xhci, "%s: error occured=%d\n", __func__, result);
+			return 0;
+		}
+			
 		*dma = virt_dev->eps[ep_index].ring->first_seg->dma;
 
 		pa = page_to_phys(sg_page(sgt.sgl));

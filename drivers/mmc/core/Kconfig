@@ -100,3 +100,8 @@ config MMC_IPC_LOGGING
 
 	  If unsure, say N.
 
+config MMC_CPRM
+	tristate "MMC CPRM driver"
+	default n
+	help
+	  Say Y here to enable the MMC cprm driver

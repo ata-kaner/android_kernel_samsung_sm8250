@@ -15,6 +15,10 @@ obj-$(CONFIG_MFD_BD9571MWV)	+= bd9571mwv.o
 cros_ec_core-objs		:= cros_ec.o
 obj-$(CONFIG_MFD_CROS_EC)	+= cros_ec_core.o
 obj-$(CONFIG_MFD_CROS_EC_CHARDEV) += cros_ec_dev.o
+obj-$(CONFIG_MFD_CS35L41)	+= cs35l41-core.o cs35l41-tables.o cs35l41-cal.o cs35l41-bd.o cs35l41-pwr.o cirrus-cal.o cirrus-bd.o cirrus-amp.o cirrus-pwr.o
+obj-$(CONFIG_MFD_CS35L41_SPI)	+= cs35l41-spi.o
+obj-$(CONFIG_MFD_CS35L41_I2C)	+= cs35l41-i2c.o
+
 obj-$(CONFIG_MFD_EXYNOS_LPASS)	+= exynos-lpass.o
 
 obj-$(CONFIG_HTC_PASIC3)	+= htc-pasic3.o
@@ -153,6 +157,7 @@ obj-$(CONFIG_MFD_MAX14577)	+= max14577.o
 obj-$(CONFIG_MFD_MAX77620)	+= max77620.o
 obj-$(CONFIG_MFD_MAX77686)	+= max77686.o
 obj-$(CONFIG_MFD_MAX77693)	+= max77693.o
+obj-$(CONFIG_MFD_MAX77705) 	+= max77705.o max77705-irq.o
 obj-$(CONFIG_MFD_MAX77843)	+= max77843.o
 obj-$(CONFIG_MFD_MAX8907)	+= max8907.o
 max8925-objs			:= max8925-core.o max8925-i2c.o
@@ -242,3 +247,9 @@ obj-$(CONFIG_MFD_SC27XX_PMIC)	+= sprd-sc27xx-spi.o
 obj-$(CONFIG_RAVE_SP_CORE)	+= rave-sp.o
 obj-$(CONFIG_MFD_ROHM_BD718XX)	+= rohm-bd718x7.o
 
+obj-$(CONFIG_MFD_S2MPB02)       += s2mpb02-core.o s2mpb02-irq.o
+obj-$(CONFIG_SEC_PM)		+= sec_ap_pmic.o
+
+CFLAGS_s2mpb02-core.o = -Wformat
+CFLAGS_s2mpb02-irq.o = -Wformat
+CFLAGS_sec_ap_pmic.o = -Wformat

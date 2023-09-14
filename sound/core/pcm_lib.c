@@ -1869,7 +1869,7 @@ static int wait_for_avail(struct snd_pcm_substream *substream,
 					 runtime->rate;
 				wait_time = max(t, wait_time);
 			}
-			wait_time = msecs_to_jiffies(wait_time * 1000);
+			wait_time = msecs_to_jiffies(wait_time * 100);
 		}
 	}
 

@@ -15,6 +15,7 @@
 #include <linux/usb/gadget.h>
 #include "io.h"
 
+extern bool acc_dev_status;
 struct dwc3;
 #define to_dwc3_ep(ep)		(container_of(ep, struct dwc3_ep, endpoint))
 #define gadget_to_dwc(g)	(container_of(g, struct dwc3, gadget))
@@ -126,7 +127,7 @@ int dwc3_gadget_ep0_queue(struct usb_ep *ep, struct usb_request *request,
 		gfp_t gfp_flags);
 int __dwc3_gadget_ep_set_halt(struct dwc3_ep *dep, int value, int protocol);
 void dwc3_stop_active_transfer(struct dwc3 *dwc, u32 epnum, bool force);
-void dwc3_stop_active_transfer_noioc(struct dwc3 *dwc, u32 epnum, bool force);
+int dwc3_stop_active_transfer_noioc(struct dwc3 *dwc, u32 epnum, bool force);
 void dwc3_ep_inc_enq(struct dwc3_ep *dep);
 void dwc3_ep_inc_deq(struct dwc3_ep *dep);
 

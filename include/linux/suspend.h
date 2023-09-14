@@ -469,6 +469,8 @@ static inline bool pm_wakeup_pending(void) { return false; }
 static inline void pm_system_wakeup(void) {}
 static inline void pm_wakeup_clear(bool reset) {}
 static inline void pm_system_irq_wakeup(unsigned int irq_number) {}
+static inline bool pm_get_wakeup_count(unsigned int *count, bool block) { return false; }
+static inline void pm_print_active_wakeup_sources(void) {}
 
 static inline void lock_system_sleep(void) {}
 static inline void unlock_system_sleep(void) {}
@@ -537,6 +539,10 @@ static inline void page_key_free(void) {}
 static inline void page_key_read(unsigned long *pfn) {}
 static inline void page_key_memorize(unsigned long *pfn) {}
 static inline void page_key_write(void *address) {}
+
+#ifdef CONFIG_SEC_PM_DEBUG
+int wakeup_sources_stats_active(void);
+#endif
 
 #endif /* !CONFIG_ARCH_SAVE_PAGE_KEYS */
 

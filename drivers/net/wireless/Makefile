@@ -6,7 +6,6 @@
 obj-$(CONFIG_WLAN_VENDOR_ADMTEK) += admtek/
 obj-$(CONFIG_WLAN_VENDOR_ATH) += ath/
 obj-$(CONFIG_WLAN_VENDOR_ATMEL) += atmel/
-obj-$(CONFIG_WLAN_VENDOR_BROADCOM) += broadcom/
 obj-$(CONFIG_WLAN_VENDOR_CISCO) += cisco/
 obj-$(CONFIG_WLAN_VENDOR_INTEL) += intel/
 obj-$(CONFIG_WLAN_VENDOR_INTERSIL) += intersil/
@@ -19,6 +18,8 @@ obj-$(CONFIG_WLAN_VENDOR_ST) += st/
 obj-$(CONFIG_WLAN_VENDOR_TI) += ti/
 obj-$(CONFIG_WLAN_VENDOR_ZYDAS) += zydas/
 obj-$(CONFIG_WLAN_VENDOR_QUANTENNA) += quantenna/
+
+obj-$(CONFIG_BCM_DHD_WLAN) += broadcom/
 
 # 16-bit wireless PCMCIA client drivers
 obj-$(CONFIG_PCMCIA_RAYCS)	+= ray_cs.o
@@ -35,5 +36,7 @@ obj-$(CONFIG_CNSS2) += cnss2/
 obj-$(CONFIG_CNSS_UTILS) += cnss_utils/
 
 obj-$(CONFIG_WCNSS_MEM_PRE_ALLOC) += cnss_prealloc/
+
+obj-$(CONFIG_QCA_CLD_WLAN)	+= qualcomm/qca6390/qcacld-3.0/
 
 obj-$(CONFIG_CNSS_GENL) += cnss_genl/

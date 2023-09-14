@@ -14,6 +14,7 @@
 #include "acl.h"
 #include "xattr.h"
 #include <trace/events/f2fs.h>
+#include <linux/iversion.h>
 
 static unsigned long dir_blocks(struct inode *inode)
 {
@@ -1033,6 +1034,9 @@ static int f2fs_readdir(struct file *file, struct dir_context *ctx)
 		goto out_free;
 	}
 
+	if (!inode_eq_iversion(inode, file->f_version))
+		file->f_version = inode_query_iversion(inode);
+
 	for (; n < npages; n++, ctx->pos = n * NR_DENTRY_IN_BLOCK) {
 
 		/* allow readdir() to be interrupted */
@@ -1065,6 +1069,14 @@ static int f2fs_readdir(struct file *file, struct dir_context *ctx)
 		err = f2fs_fill_dentries(ctx, &d,
 				n * NR_DENTRY_IN_BLOCK, &fstr);
 		if (err) {
+			struct f2fs_sb_info *sbi = F2FS_P_SB(dentry_page);
+
+			if (err == -EINVAL) {
+				print_block_data(sbi->sb, n,
+					page_address(dentry_page), 0, F2FS_BLKSIZE);
+				f2fs_bug_on(sbi, 1);
+			}
+
 			f2fs_put_page(dentry_page, 0);
 			break;
 		}

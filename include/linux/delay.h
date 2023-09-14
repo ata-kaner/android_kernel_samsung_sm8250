@@ -39,10 +39,39 @@ extern unsigned long loops_per_jiffy;
 #define MAX_UDELAY_MS	5
 #endif
 
+#define MAX_MDELAY	1000
+
+#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_DEBUG_SUMMARY)
+extern unsigned long sec_delay_check;
+#define BUG_MDELAY(condition) do \
+    { \
+        if (unlikely(condition)) { \
+            pr_err("BUG: mdelay function is used in the non-atomic context\n"); \
+            barrier_before_unreachable(); \
+            panic("BUG! - Irrational mdelay usage"); \
+        } \
+    } while (0)
+#endif
+
 #ifndef mdelay
+#if defined(CONFIG_SAMSUNG_PRODUCT_SHIP) || !defined(CONFIG_SEC_DEBUG_SUMMARY)
 #define mdelay(n) (\
 	(__builtin_constant_p(n) && (n)<=MAX_UDELAY_MS) ? udelay((n)*1000) : \
 	({unsigned long __ms=(n); while (__ms--) udelay(1000);}))
+#else
+#define mdelay(n) ({\
+    BUILD_BUG_ON(__builtin_constant_p(n) && (n) > MAX_MDELAY); \
+    if (__builtin_constant_p(n) && (n) <= MAX_UDELAY_MS) \
+        udelay((n) * 1000); \
+    else {\
+        unsigned long __ms = (n); \
+        BUG_ON(irqs_disabled() && (n) >= 2 && sec_delay_check);\
+        BUG_MDELAY(!in_atomic());\
+        while (__ms--) \
+            udelay(1000); \
+        } \
+    })
+#endif
 #endif
 
 #ifndef ndelay

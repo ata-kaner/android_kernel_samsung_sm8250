@@ -17,6 +17,10 @@
 #include <linux/kthread.h>
 #include <linux/mhi.h>
 
+#ifdef CONFIG_SEC_R8Q_PROJECT
+#include <linux/oom.h>
+#endif
+
 #define MHI_NETDEV_DRIVER_NAME "mhi_netdev"
 #define WATCHDOG_TIMEOUT (30 * HZ)
 #define IPC_LOG_PAGES (100)
@@ -28,8 +32,8 @@
 #define MSG_VERB(fmt, ...) do { \
 	if (mhi_netdev->msg_lvl <= MHI_MSG_LVL_VERBOSE) \
 		pr_err("[D][%s] " fmt, __func__, ##__VA_ARGS__);\
-	if (mhi_netdev->ipc_log && (*mhi_netdev->ipc_log_lvl <= \
-				    MHI_MSG_LVL_VERBOSE)) \
+	if (mhi_netdev->ipc_log && mhi_netdev->ipc_log_lvl && \
+					(*mhi_netdev->ipc_log_lvl <= MHI_MSG_LVL_VERBOSE)) \
 		ipc_log_string(mhi_netdev->ipc_log, "[D][%s] " fmt, \
 			       __func__, ##__VA_ARGS__); \
 } while (0)
@@ -37,8 +41,8 @@
 #else
 
 #define MSG_VERB(fmt, ...) do { \
-	if (mhi_netdev->ipc_log && (*mhi_netdev->ipc_log_lvl <= \
-				    MHI_MSG_LVL_VERBOSE)) \
+	if (mhi_netdev->ipc_log && mhi_netdev->ipc_log_lvl && \
+					(*mhi_netdev->ipc_log_lvl <= MHI_MSG_LVL_VERBOSE)) \
 		ipc_log_string(mhi_netdev->ipc_log, "[D][%s] " fmt, \
 			       __func__, ##__VA_ARGS__); \
 } while (0)
@@ -48,8 +52,8 @@
 #define MSG_LOG(fmt, ...) do { \
 	if (mhi_netdev->msg_lvl <= MHI_MSG_LVL_INFO) \
 		pr_err("[I][%s] " fmt, __func__, ##__VA_ARGS__);\
-	if (mhi_netdev->ipc_log && (*mhi_netdev->ipc_log_lvl <= \
-				    MHI_MSG_LVL_INFO)) \
+	if (mhi_netdev->ipc_log && mhi_netdev->ipc_log_lvl &&\
+					(*mhi_netdev->ipc_log_lvl <= MHI_MSG_LVL_INFO)) \
 		ipc_log_string(mhi_netdev->ipc_log, "[I][%s] " fmt, \
 			       __func__, ##__VA_ARGS__); \
 } while (0)
@@ -57,8 +61,8 @@
 #define MSG_ERR(fmt, ...) do { \
 	if (mhi_netdev->msg_lvl <= MHI_MSG_LVL_ERROR) \
 		pr_err("[E][%s] " fmt, __func__, ##__VA_ARGS__); \
-	if (mhi_netdev->ipc_log && (*mhi_netdev->ipc_log_lvl <= \
-				    MHI_MSG_LVL_ERROR)) \
+	if (mhi_netdev->ipc_log && mhi_netdev->ipc_log_lvl &&\
+					(*mhi_netdev->ipc_log_lvl <= MHI_MSG_LVL_ERROR)) \
 		ipc_log_string(mhi_netdev->ipc_log, "[E][%s] " fmt, \
 			       __func__, ##__VA_ARGS__); \
 } while (0)
@@ -284,12 +288,20 @@ static void mhi_netdev_queue(struct mhi_netdev *mhi_netdev,
 	struct list_head *pool = mhi_netdev->recycle_pool;
 	int nr_tre = mhi_get_no_free_descriptors(mhi_dev, DMA_FROM_DEVICE);
 	int i, ret;
-	const int  max_peek = 4;
+	int max_peek = 4;
 
 	MSG_VERB("Enter free_desc:%d\n", nr_tre);
 
 	if (!nr_tre)
 		return;
+#ifdef CONFIG_SEC_R8Q_PROJECT
+	/* R8Q project got many memory issues(cannot alloc order3 page),
+	*  Need to find buffer in recycle_pool even if it is delayed.
+	*/ 
+	max_peek = 20;
+	if (jiffies < (unsigned long)(atomic64_read(&last_oom_jiffies) + (10 * HZ))) 
+		max_peek = 2500;
+#endif
 
 	/* try going thru reclaim pool first */
 	for (i = 0; i < nr_tre; i++) {
@@ -802,6 +814,14 @@ static void mhi_netdev_xfer_dl_cb(struct mhi_device *mhi_dev,
 
 	ndev->stats.rx_packets++;
 	ndev->stats.rx_bytes += mhi_result->bytes_xferd;
+	
+#if defined(CONFIG_RMNET_ARGOS)
+	if (mhi_netdev->chain_skb == false) {
+		pr_err("no chain\n");
+		mhi_netdev_push_skb(mhi_netdev, mhi_buf, mhi_result);
+		return;
+	}
+#endif
 
 	if (unlikely(!chain)) {
 		mhi_netdev_push_skb(mhi_netdev, mhi_buf, mhi_result);
@@ -887,6 +907,28 @@ static int mhi_netdev_debugfs_chain(void *data, u64 val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(debugfs_chain, NULL,
 			 mhi_netdev_debugfs_chain, "%llu\n");
+
+#if defined(CONFIG_RMNET_ARGOS)
+void mhi_set_napi_chained_rx(struct net_device *dev, bool enable) 
+{
+	struct mhi_netdev_priv *mhi_netdev_priv = netdev_priv(dev);
+	struct mhi_netdev *mhi_netdev = mhi_netdev_priv->mhi_netdev;
+	struct mhi_netdev *rsc_dev = mhi_netdev->rsc_dev;
+	
+	if (enable) {
+		pr_info("%s enabled\n", __func__);
+		mhi_netdev->chain_skb = true;
+		if (rsc_dev)
+			rsc_dev->chain_skb = true;
+	} else {
+		pr_info("%s disabled\n", __func__);
+		mhi_netdev->chain_skb = false;
+		if (rsc_dev)
+			rsc_dev->chain_skb = false;
+	}
+}
+EXPORT_SYMBOL(mhi_set_napi_chained_rx);
+#endif
 
 static void mhi_netdev_create_debugfs(struct mhi_netdev *mhi_netdev)
 {
@@ -993,6 +1035,8 @@ static int mhi_netdev_probe(struct mhi_device *mhi_dev,
 	if (!mhi_netdev)
 		return -ENOMEM;
 
+	mhi_netdev->chain_skb = true;
+
 	/* move mhi channels to start state */
 	ret = mhi_prepare_for_transfer(mhi_dev);
 	if (ret) {
@@ -1072,7 +1116,9 @@ static int mhi_netdev_probe(struct mhi_device *mhi_dev,
 		init_waitqueue_head(&mhi_netdev->alloc_event);
 		INIT_LIST_HEAD(mhi_netdev->bg_pool);
 		spin_lock_init(&mhi_netdev->bg_lock);
-		mhi_netdev->bg_pool_limit = mhi_netdev->pool_size / 4;
+		
+		/* incread bg_pool_limit size */
+		mhi_netdev->bg_pool_limit = mhi_netdev->pool_size;
 		mhi_netdev->alloc_task = kthread_run(mhi_netdev_alloc_thread,
 						     mhi_netdev,
 						     mhi_netdev->ndev->name);

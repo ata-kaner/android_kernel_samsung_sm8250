@@ -26,6 +26,10 @@
 #include "fsmap.h"
 #include <trace/events/ext4.h>
 
+#ifdef CONFIG_FSCRYPT_SDP
+#include <linux/fscrypto_sdp_ioctl.h>
+#endif
+
 /**
  * Swap memory between @a and @b for @len bytes.
  *
@@ -1236,6 +1240,22 @@ out:
 		if (!ext4_has_feature_verity(sb))
 			return -EOPNOTSUPP;
 		return fsverity_ioctl_measure(filp, (void __user *)arg);
+#ifdef CONFIG_DDAR
+	case EXT4_IOC_GET_DD_POLICY:
+	case EXT4_IOC_SET_DD_POLICY:
+	case FS_IOC_GET_DD_INODE_COUNT:
+		return fscrypt_dd_ioctl(cmd, &arg, inode);
+#endif
+#ifdef CONFIG_FSCRYPT_SDP
+	case FS_IOC_GET_SDP_INFO:
+	case FS_IOC_SET_SDP_POLICY:
+	case FS_IOC_SET_SENSITIVE:
+	case FS_IOC_SET_PROTECTED:
+	case FS_IOC_ADD_CHAMBER:
+	case FS_IOC_REMOVE_CHAMBER:
+	case FS_IOC_DUMP_FILE_KEY:
+		return fscrypt_sdp_ioctl(filp, cmd, arg);
+#endif
 
 	default:
 		return -ENOTTY;
@@ -1309,6 +1329,15 @@ long ext4_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case FS_IOC_MEASURE_VERITY:
 	case EXT4_IOC_FSGETXATTR:
 	case EXT4_IOC_FSSETXATTR:
+#ifdef CONFIG_FSCRYPT_SDP
+	case FS_IOC_GET_SDP_INFO:
+	case FS_IOC_SET_SDP_POLICY:
+	case FS_IOC_SET_SENSITIVE:
+	case FS_IOC_SET_PROTECTED:
+	case FS_IOC_ADD_CHAMBER:
+	case FS_IOC_REMOVE_CHAMBER:
+	case FS_IOC_DUMP_FILE_KEY:
+#endif
 		break;
 	default:
 		return -ENOIOCTLCMD;

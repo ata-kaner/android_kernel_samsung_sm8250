@@ -128,6 +128,7 @@ static DECLARE_WORK(ipa3_fw_loading_work, ipa3_load_ipa_fw);
 static void ipa_dec_clients_disable_clks_on_wq(struct work_struct *work);
 static DECLARE_DELAYED_WORK(ipa_dec_clients_disable_clks_on_wq_work,
 	ipa_dec_clients_disable_clks_on_wq);
+	
 
 static void ipa_inc_clients_enable_clks_on_wq(struct work_struct *work);
 static DECLARE_WORK(ipa_inc_clients_enable_clks_on_wq_work,
@@ -5965,7 +5966,7 @@ static int ipa3_post_init(const struct ipa3_plat_drv_res *resource_p,
 	gsi_props.rel_clk_cb = NULL;
 	gsi_props.clk_status_cb = ipa3_active_clks_status;
 	gsi_props.enable_clk_bug_on = ipa3_handle_gsi_differ_irq;
-
+ 
 	if (ipa3_ctx->ipa_config_is_mhi) {
 		gsi_props.mhi_er_id_limits_valid = true;
 		gsi_props.mhi_er_id_limits[0] = resource_p->mhi_evid_limits[0];
@@ -6833,6 +6834,13 @@ static int ipa3_pre_init(const struct ipa3_plat_drv_res *resource_p,
 		result = -ENOMEM;
 		goto fail_hdr_offset_cache;
 	}
+	ipa3_ctx->fnr_stats_cache = kmem_cache_create("IPA_FNR_STATS",
+		sizeof(struct ipa_ioc_flt_rt_counter_alloc), 0, 0, NULL);
+	if (!ipa3_ctx->fnr_stats_cache) {
+		IPAERR(":ipa fnr stats cache create failed\n");
+		result = -ENOMEM;
+		goto fail_fnr_stats_cache;
+	}
 	ipa3_ctx->hdr_proc_ctx_cache = kmem_cache_create("IPA_HDR_PROC_CTX",
 		sizeof(struct ipa3_hdr_proc_ctx_entry), 0, 0, NULL);
 	if (!ipa3_ctx->hdr_proc_ctx_cache) {
@@ -7067,6 +7075,8 @@ fail_rt_tbl_cache:
 fail_hdr_proc_ctx_offset_cache:
 	kmem_cache_destroy(ipa3_ctx->hdr_proc_ctx_cache);
 fail_hdr_proc_ctx_cache:
+	kmem_cache_destroy(ipa3_ctx->fnr_stats_cache);
+fail_fnr_stats_cache:
 	kmem_cache_destroy(ipa3_ctx->hdr_offset_cache);
 fail_hdr_offset_cache:
 	kmem_cache_destroy(ipa3_ctx->hdr_cache);
@@ -8781,3 +8791,17 @@ module_param(emulation_type, uint, 0000);
 MODULE_PARM_DESC(
 	emulation_type,
 	"emulation_type=N N can be 13 for IPA 3.5.1, 14 for IPA 4.0, 17 for IPA 4.5");
+
+#if defined(CONFIG_RMNET_ARGOS)
+void ipa3_set_napi_chained_rx(bool enable)
+{
+	if (!ipa3_ctx)
+		return;
+
+	if (enable && !ipa3_ctx->enable_napi_chain)
+		ipa3_ctx->enable_napi_chain = 1;
+	else if (!enable && ipa3_ctx->enable_napi_chain)
+		ipa3_ctx->enable_napi_chain = 0;
+}
+EXPORT_SYMBOL(ipa3_set_napi_chained_rx);
+#endif

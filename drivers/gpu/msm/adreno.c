@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/delay.h>
 #include <linux/input.h>
@@ -27,6 +28,10 @@
 
 /* Include the master list of GPU cores that are supported */
 #include "adreno-gpulist.h"
+
+#if defined(CONFIG_SEC_ABC)
+#include <linux/sti/abc_common.h>
+#endif
 
 static void adreno_input_work(struct work_struct *work);
 static unsigned int counter_delta(struct kgsl_device *device,
@@ -558,6 +563,9 @@ void adreno_hang_int_callback(struct adreno_device *adreno_dev, int bit)
 {
 	dev_crit_ratelimited(KGSL_DEVICE(adreno_dev)->dev,
 				"MISC: GPU hang detected\n");
+#if defined(CONFIG_SEC_ABC)
+        sec_abc_send_event("MODULE=gpu_qc@ERROR=gpu_fault");
+#endif
 	adreno_irqctrl(adreno_dev, 0);
 
 	/* Trigger a fault in the dispatcher - this will effect a restart */
@@ -648,6 +656,7 @@ static irqreturn_t adreno_irq_handler(struct kgsl_device *device)
 	}
 
 	adreno_readreg(adreno_dev, ADRENO_REG_RBBM_INT_0_STATUS, &status);
+	gpudev->rbbm_status = status;
 
 	/*
 	 * Clear all the interrupt bits but ADRENO_INT_RBBM_AHB_ERROR. Because
@@ -1503,6 +1512,8 @@ static int adreno_probe(struct platform_device *pdev)
 
 	adreno_debugfs_init(adreno_dev);
 	adreno_profile_init(adreno_dev);
+	
+	adreno_dev->perfcounter = false;
 
 	adreno_sysfs_init(adreno_dev);
 
@@ -3065,7 +3076,7 @@ void adreno_spin_idle_debug(struct adreno_device *adreno_dev,
 	unsigned int status, status3, intstatus;
 	unsigned int hwfault, cx_status;
 
-	dev_err(device->dev, str);
+	dev_err(device->dev, "%s", str);
 
 	adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_RPTR, &rptr);
 	adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_WPTR, &wptr);

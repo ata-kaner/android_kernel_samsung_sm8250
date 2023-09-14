@@ -39,7 +39,7 @@ struct arch_info {
 #define DLOG "Dev->Host: "
 #define HLOG "Host: "
 
-#define MHI_TSYNC_LOG_PAGES (2)
+#define MHI_TSYNC_LOG_PAGES (10)
 
 #ifdef CONFIG_MHI_DEBUG
 
@@ -49,7 +49,7 @@ enum MHI_DEBUG_LEVEL  mhi_ipc_log_lvl = MHI_MSG_LVL_VERBOSE;
 
 #else
 
-#define MHI_IPC_LOG_PAGES (10)
+#define MHI_IPC_LOG_PAGES (20)
 #define MHI_CNTRL_LOG_PAGES (5)
 enum MHI_DEBUG_LEVEL  mhi_ipc_log_lvl = MHI_MSG_LVL_ERROR;
 

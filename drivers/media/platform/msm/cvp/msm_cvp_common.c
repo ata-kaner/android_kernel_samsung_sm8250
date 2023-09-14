@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/jiffies.h>
@@ -44,6 +44,7 @@ static void dump_hfi_queue(struct iris_hfi_device *device)
 			dprintk(CVP_ERR, "HFI queue not init, fail to dump\n");
 			return;
 		}
+
 		dprintk(CVP_ERR, "queue details: %d %d\n",
 				queue->qhdr_read_idx, queue->qhdr_write_idx);
 		if (queue->qhdr_read_idx != queue->qhdr_write_idx) {
@@ -1825,14 +1826,13 @@ int cvp_comm_release_persist_buffers(struct msm_cvp_inst *inst)
 			dprintk(CVP_DBG,
 			"%s: %x : fd %d %s size %d",
 			"free arp", hash32_ptr(inst->session), buf->smem.fd,
-			buf->smem.dma_buf->buf_name, buf->smem.size);
+			buf->smem.dma_buf->name, buf->smem.size);
 			msm_cvp_smem_free(handle);
 		} else if (buf->buffer_ownership == CLIENT) {
 			dprintk(CVP_DBG,
 			"%s: %x : fd %d %s size %d",
 			"unmap persist", hash32_ptr(inst->session),
-			buf->smem.fd, buf->smem.dma_buf->buf_name,
-			buf->smem.size);
+			buf->smem.fd, buf->smem.dma_buf->name, buf->smem.size);
 			msm_cvp_smem_unmap_dma_buf(inst, &buf->smem);
 		}
 

@@ -51,6 +51,14 @@ int __generic_write_end(struct inode *inode, loff_t pos, unsigned copied,
  */
 extern void __init chrdev_init(void);
 
+#ifdef CONFIG_PROC_DLOG
+/*
+ * dlog_hook.c
+ */
+void dlog_hook(struct dentry *, struct inode *, struct path *);
+void dlog_hook_rmdir(struct dentry *, struct path *);
+#endif
+
 /*
  * namei.c
  */

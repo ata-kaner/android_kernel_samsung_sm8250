@@ -64,3 +64,5 @@ obj-$(CONFIG_SND_SOC_BELLS) += snd-soc-bells.o
 obj-$(CONFIG_SND_SOC_ODROID) += snd-soc-odroid.o
 obj-$(CONFIG_SND_SOC_ARNDALE_RT5631_ALC5631) += snd-soc-arndale-rt5631.o
 obj-$(CONFIG_SND_SOC_SAMSUNG_TM2_WM5110) += snd-soc-tm2-wm5110.o
+obj-$(CONFIG_SND_SOC_SAMSUNG_AUDIO) += sec_audio_sysfs.o
+obj-$(CONFIG_SND_SOC_CS35L41) += bigdata_cirrus_sysfs_cb.o

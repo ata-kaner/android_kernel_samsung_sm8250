@@ -16,6 +16,10 @@
 #include "mhi_internal.h"
 
 static void mhi_special_events_pending(struct mhi_controller *mhi_cntrl);
+#ifdef CONFIG_SEC_DEBUG_MDM_FILE_INFO
+#include <linux/sec_debug.h>
+static char mdmerr_info[128]; /* sec_debug_summary_data_apss */
+#endif
 
 /*
  * Not all MHI states transitions are sync transitions. Linkdown, SSR, and
@@ -253,6 +257,14 @@ int mhi_ready_state_transition(struct mhi_controller *mhi_cntrl)
 	struct mhi_event *mhi_event;
 	enum MHI_PM_STATE cur_state;
 	int ret = -EIO, i;
+
+#ifdef CONFIG_SEC_DEBUG_MDM_FILE_INFO
+    snprintf(mdmerr_info, sizeof(mdmerr_info), 
+				"%x\n", mhi_cntrl->session_id);
+    sec_set_mdm_summary_info(mdmerr_info);
+
+	MHI_ERR("MDM session ID : %s\n", mdmerr_info);
+#endif
 
 	MHI_CNTRL_LOG("Waiting to enter READY state\n");
 
@@ -621,6 +633,11 @@ static void mhi_pm_disable_transition(struct mhi_controller *mhi_cntrl,
 	if (MHI_REG_ACCESS_VALID(prev_state)) {
 		unsigned long timeout = msecs_to_jiffies(mhi_cntrl->timeout_ms);
 
+		if (system_state == SYSTEM_POWER_OFF) {
+			MHI_ERR("Do not Trigger device MHI_RESET, late shutdown\n"); 
+			goto tsklet_kill;
+		}
+
 		MHI_CNTRL_LOG("Trigger device into MHI_RESET\n");
 
 		write_lock_irq(&mhi_cntrl->pm_lock);
@@ -646,7 +663,7 @@ static void mhi_pm_disable_transition(struct mhi_controller *mhi_cntrl,
 
 		mhi_cntrl->initiate_mhi_reset = false;
 	}
-
+tsklet_kill:
 	MHI_CNTRL_LOG(
 		"Waiting for all pending event ring processing to complete\n");
 	mhi_event = mhi_cntrl->mhi_event;
@@ -1061,8 +1078,21 @@ void mhi_control_error(struct mhi_controller *mhi_cntrl)
 				sfr_info->buf_addr);
 	}
 
-	/* link is not down if device is in RDDM */
-	transition_state = (mhi_cntrl->ee == MHI_EE_RDDM) ?
+#ifdef CONFIG_SEC_DEBUG_MDM_FILE_INFO
+    if (mhi_cntrl->name && 
+		!strncmp("esoc0", mhi_cntrl->name, sizeof("esoc0"))) {
+			snprintf(mdmerr_info, sizeof(mdmerr_info), 
+					"%x, Failure reason: %s\n", 
+					mhi_cntrl->session_id,
+					mhi_get_restart_reason(mhi_cntrl->name));
+		sec_set_mdm_summary_info(mdmerr_info);
+
+		MHI_ERR("MDM session ID : %s\n", mdmerr_info);
+	}
+#endif
+
+	/* link is not down if device supports RDDM */
+	transition_state = (mhi_cntrl->rddm_supported) ?
 		MHI_PM_DEVICE_ERR_DETECT : MHI_PM_LD_ERR_FATAL_DETECT;
 
 	write_lock_irq(&mhi_cntrl->pm_lock);
@@ -1511,6 +1541,15 @@ int mhi_pm_fast_resume(struct mhi_controller *mhi_cntrl, bool notify_client)
 	}
 
 	if (mhi_cntrl->rddm_supported) {
+
+		/* check EP is in proper state */
+		if (mhi_cntrl->link_status(mhi_cntrl, mhi_cntrl->priv_data)) {
+			MHI_ERR("Unable to access EP Config space\n");
+			write_unlock_irq(&mhi_cntrl->pm_lock);
+			tasklet_enable(&mhi_cntrl->mhi_event->task);
+			return -ETIMEDOUT;
+		}
+
 		if (mhi_get_exec_env(mhi_cntrl) == MHI_EE_RDDM &&
 		    !mhi_cntrl->power_down) {
 			mhi_cntrl->ee = MHI_EE_RDDM;
