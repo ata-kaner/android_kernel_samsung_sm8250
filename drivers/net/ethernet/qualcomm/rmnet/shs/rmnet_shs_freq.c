@@ -47,13 +47,6 @@ static int rmnet_shs_freq_notify(struct notifier_block *nb,
 
 	switch (val) {
 	case CPUFREQ_ADJUST:
-		if (rmnet_shs_freq_enable) {
-			cpufreq_verify_within_limits(policy,
-						     boost->freq_floor,
-						     MAX_FREQ);
-			trace_rmnet_freq_update(cpu, policy->min,
-						policy->max);
-		}
 		break;
 	}
 
@@ -141,9 +134,6 @@ int rmnet_shs_freq_init(void)
 		return -EFAULT;
 	INIT_WORK(&boost_cpu, update_cpu_policy);
 
-	if (rmnet_shs_freq_enable)
-		cpufreq_register_notifier(&freq_boost_nb,
-					  CPUFREQ_POLICY_NOTIFIER);
 	rmnet_shs_reset_freq();
 	return 0;
 }
@@ -157,9 +147,5 @@ int rmnet_shs_freq_exit(void)
 		destroy_workqueue(shs_boost_wq);
 		shs_boost_wq = NULL;
 	}
-
-	if (rmnet_shs_freq_enable)
-		cpufreq_unregister_notifier(&freq_boost_nb,
-					    CPUFREQ_POLICY_NOTIFIER);
 	return 0;
 }
