@@ -804,25 +804,7 @@ DEFINE_MUTEX(cpufreq_limit_mutex);
 
 int set_freq_limit(unsigned long id, unsigned int freq)
 {
-	int ret = 0;
-	struct cpufreq_limit_handle *handle =
-							cpufreq_limit_get_handle(id);
-
-	pr_debug("%s: id(%d) freq(%d)\n", __func__, (int)id, freq);
-
-	mutex_lock(&cpufreq_limit_mutex);
-
-	if (freq != -1) {
-		ret = cpufreq_limit_get(freq, handle);
-		if (ret)
-			pr_err("%s: cpufreq_limit_get fail %lu, %u, %d\n",
-									__func__, id, freq, ret);
-	} else
-		cpufreq_limit_put(handle);
-
-	mutex_unlock(&cpufreq_limit_mutex);
-
-	return ret;
+	return 0;
 }
 
 static ssize_t cpufreq_table_show(struct kobject *kobj,
