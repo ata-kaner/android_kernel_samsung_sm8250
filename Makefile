@@ -376,13 +376,13 @@ KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 CPP		= $(CC) -E
 AS		= = $(CROSS_COMPILE)as
 ifneq ($(LLVM),)
-CC		= clang
-LD		= ld.lld
-AR		= llvm-ar
-NM		= llvm-nm
-OBJCOPY		= llvm-objcopy
-OBJDUMP		= llvm-objdump
-STRIP		= llvm-strip
+CC		= $(CLANG_DIR)clang
+LD		= $(CLANG_DIR)ld.lld
+AR		= $(CLANG_DIR)llvm-ar
+NM		= $(CLANG_DIR)llvm-nm
+OBJCOPY		= $(CLANG_DIR)llvm-objcopy
+OBJDUMP		= $(CLANG_DIR)llvm-objdump
+STRIP		= $(CLANG_DIR)llvm-strip
 else
 CC		= $(CROSS_COMPILE)gcc
 LD		= $(CROSS_COMPILE)ld
