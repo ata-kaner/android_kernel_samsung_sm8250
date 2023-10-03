@@ -1,57 +1,8 @@
 diff --git a/arch/arm64/boot/dts/vendor/qcom/kona-v2.dtsi b/arch/arm64/boot/dts/vendor/qcom/kona-v2.dtsi
-index 234770659dc5..36430d3839ce 100755
+index f677b379e7a5..73d5c8a1904a 100755
 --- a/arch/arm64/boot/dts/vendor/qcom/kona-v2.dtsi
 +++ b/arch/arm64/boot/dts/vendor/qcom/kona-v2.dtsi
-@@ -6,20 +6,44 @@
- 	qcom,msm-id = <356 0x20000>;
- };
- 
-+&CPU0 {
-+	capacity-dmips-mhz = <448>;
-+	dynamic-power-coefficient = <103>;
-+};
-+
-+&CPU1 {
-+	capacity-dmips-mhz = <448>;
-+	dynamic-power-coefficient = <103>;
-+};
-+
-+&CPU2 {
-+	capacity-dmips-mhz = <448>;
-+	dynamic-power-coefficient = <103>;
-+};
-+
-+&CPU3 {
-+	capacity-dmips-mhz = <448>;
-+	dynamic-power-coefficient = <103>;
-+};
-+
- &CPU4 {
--	dynamic-power-coefficient = <533>;
-+	capacity-dmips-mhz = <1022>;
-+	dynamic-power-coefficient = <340>;
- };
- 
- &CPU5 {
--	dynamic-power-coefficient = <533>;
-+	capacity-dmips-mhz = <1022>;
-+	dynamic-power-coefficient = <340>;
- };
- 
- &CPU6 {
--	dynamic-power-coefficient = <533>;
-+	capacity-dmips-mhz = <1022>;
-+	dynamic-power-coefficient = <340>;
- };
- 
- &CPU7 {
--	dynamic-power-coefficient = <642>;
-+	capacity-dmips-mhz = <1024>;
-+	dynamic-power-coefficient = <409>;
- };
- 
- &clock_camcc {
-@@ -396,38 +420,13 @@
+@@ -396,38 +396,13 @@
  	interrupt-names = "dcvsh0_int", "dcvsh1_int", "dcvsh2_int";
  
  	qcom,cpufreq-table-0 =
@@ -71,7 +22,7 @@ index 234770659dc5..36430d3839ce 100755
 -			<1516800>,
 -			<1612800>,
 -			<1708800>,
-			<1804800>;
+ 			<1804800>;
  
  	qcom,cpufreq-table-1 =
  			< 710400>,
@@ -90,7 +41,7 @@ index 234770659dc5..36430d3839ce 100755
  			<2054400>,
  			<2150400>,
  			<2246400>,
-@@ -436,20 +435,8 @@
+@@ -436,20 +411,8 @@
  
  	qcom,cpufreq-table-2 =
  			< 844800>,
