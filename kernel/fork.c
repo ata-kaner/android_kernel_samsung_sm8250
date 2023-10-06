@@ -108,10 +108,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/task.h>
 
-#ifdef CONFIG_FAST_TRACK
-#include <cpu/ftt/ftt.h>
-#endif
-
 /*
  * Minimum number of threads to boot the kernel
  */
@@ -725,11 +721,6 @@ void __put_task_struct(struct task_struct *tsk)
 	WARN_ON(!tsk->exit_state);
 	WARN_ON(atomic_read(&tsk->usage));
 	WARN_ON(tsk == current);
-
-#ifdef CONFIG_FAST_TRACK
-	if (tsk->se.ftt_mark)
-		fttstat.ftt_cnt--;
-#endif
 
 	cgroup_free(tsk);
 	task_numa_free(tsk, true);
