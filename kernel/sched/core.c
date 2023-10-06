@@ -30,10 +30,6 @@
 
 #include <linux/sec_debug.h>
 
-#ifdef CONFIG_FAST_TRACK
-#include <cpu/ftt/ftt.h>
-#endif
-
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
 /*
@@ -1482,9 +1478,6 @@ static inline bool is_per_cpu_kthread(struct task_struct *p)
  */
 static inline bool is_cpu_allowed(struct task_struct *p, int cpu)
 {
-#ifdef CONFIG_PERF_MGR
-	if (!p->drawing_mig_boost)
-#endif
 		if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
 			return false;
 
@@ -2921,9 +2914,6 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 #endif
 	INIT_LIST_HEAD(&p->se.group_node);
 
-#ifdef CONFIG_FAST_TRACK
-	init_task_ftt_info(p);
-#endif
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	p->se.cfs_rq			= NULL;
 #endif

@@ -46,11 +46,7 @@ void dump_stack_print_info(const char *log_lvl)
 {
 	printk("%sCPU: %d PID: %d Comm: %.20s FTT: %d %lld %s%s %s %.*s\n",
 	       log_lvl, raw_smp_processor_id(), current->pid, current->comm,
-#ifdef CONFIG_FAST_TRACK
-		current->se.ftt_mark, atomic64_read(&current->se.ftt_dyn_mark),
-#else
 		0, 0LL,
-#endif
 	       kexec_crash_loaded() ? "Kdump: loaded " : "",
 	       print_tainted(),
 	       init_utsname()->release,

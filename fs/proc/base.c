@@ -107,11 +107,6 @@
 #ifdef CONFIG_PAGE_BOOST
 #include <linux/delayacct.h>
 #endif
-#if defined(CONFIG_FAST_TRACK)
-#include <cpu/ftt/ftt.h>
-#define GLOBAL_SYSTEM_UID KUIDT_INIT(1000)
-#define GLOBAL_SYSTEM_GID KGIDT_INIT(1000)
-#endif
 
 /* NOTE:
  *	Implementing inode permission operations in /proc is almost
@@ -974,125 +969,6 @@ static const struct file_operations proc_mem_operations = {
 	.open		= mem_open,
 	.release	= mem_release,
 };
-
-#ifdef CONFIG_FAST_TRACK
-static int proc_static_ftt_show(struct seq_file *m, void *v)
-{
-	struct inode *inode = m->private;
-	struct task_struct *p;
-	p = get_proc_task(inode);
-	if (!p) {
-		return -ESRCH;
-	}
-	task_lock(p);
-	seq_printf(m, "%d\n", p->se.ftt_mark);
-	task_unlock(p);
-	put_task_struct(p);
-	return 0;
-}
-
-static ssize_t proc_static_ftt_read(struct file* file, char __user *buf,
-					    size_t count, loff_t *ppos)
-{
-	char buffer[PROC_NUMBUF];
-	struct task_struct *task = NULL;
-	int static_ftt = -1;
-	size_t len = 0;
-
-	task = get_proc_task(file_inode(file));
-	if (!task) {
-		return -ESRCH;
-	}
-	static_ftt = task->se.ftt_mark;
-	put_task_struct(task);
-	len = snprintf(buffer, sizeof(buffer), "%d\n", static_ftt);
-	return simple_read_from_buffer(buf, count, ppos, buffer, len);
-}
-
-static ssize_t proc_static_ftt_write(struct file *file, const char __user *buf,
-			     size_t count, loff_t *ppos)
-{
-	struct task_struct *task;
-	char buffer[PROC_NUMBUF] = {0};
-	const size_t max_len = sizeof(buffer) - 1;
-	int err, static_ftt;
-	u64 prev_vrt, prev_vdelta;
-
-	memset(buffer, 0, sizeof(buffer));
-	if (copy_from_user(buffer, buf, count > max_len ? max_len : count)) {
-		return -EFAULT;
-	}
-	err = kstrtoint(strstrip(buffer), 0, &static_ftt);
-	if(err) {
-		return err;
-	}
-
-	task = get_proc_task(file_inode(file));
-	if (!task) {
-		return -ESRCH;
-	}
-
-	prev_vrt = task->se.vruntime;
-	prev_vdelta = task->se.ftt_vrt_delta;
-	if(task->se.ftt_mark && static_ftt == 0) {
-		fttstat.ftt_cnt--;
-		ftt_unmark(task);
-		printk_deferred("FTT unset pid %d comm %.20s vrt %llu %llu %llu %llu"
-			"fttcount %d pftt %d w %d\n",
-			task->pid, task->comm,
-			prev_vrt, prev_vdelta, task->se.vruntime, task->se.ftt_vrt_delta,
-			fttstat.ftt_cnt, fttstat.pick_ftt, fttstat.wrong);
-	} else if(task->se.ftt_mark == 0 && static_ftt) {
-		fttstat.ftt_cnt++;
-		ftt_mark(task);
-		printk_deferred("FTT set pid %d comm %.20s vrt %llu %llu %llu %llu\n",
-			task->pid, task->comm,
-			prev_vrt, prev_vdelta, task->se.vruntime, task->se.ftt_vrt_delta);
-	}
-
-	put_task_struct(task);
-	return count;
-}
-
-static int proc_static_ftt_open(struct inode* inode, struct file *filp)
-{
-	return single_open(filp, proc_static_ftt_show, inode);
-}
-
-static const struct file_operations proc_static_ftt_operations = {
-	.open       = proc_static_ftt_open,
-	.read       = proc_static_ftt_read,
-	.write      = proc_static_ftt_write,
-	.llseek     = seq_lseek,
-	.release    = single_release,
-};
-
-static int seq_file_ftt_show(struct seq_file *seq, void *v)
-{
-	seq_printf(seq, "static ftt count: %d pickftt %d wrong %d\n",
-		fttstat.ftt_cnt, fttstat.pick_ftt, fttstat.wrong);
-	return 0;
-}
-
-static int fttinfo_open(struct inode *inode, struct file *file)
-{
-        return single_open(file, &seq_file_ftt_show, NULL);
-}
-
-static const struct file_operations proc_fttinfo_operations = {
-        .open           = fttinfo_open,
-        .read           = seq_read,
-        .llseek         = seq_lseek,
-        .release        = seq_release,
-};
-
-static int __init proc_fttinfo_init(void)
-{
-        proc_create("fttinfo", S_IRWXUGO, NULL, &proc_fttinfo_operations);
-        return 0;
-}
-fs_initcall(proc_fttinfo_init);
-#endif
 
 static int environ_open(struct inode *inode, struct file *file)
 {
@@ -2241,21 +2117,6 @@ int pid_getattr(const struct path *path, struct kstat *stat,
 	return 0;
 }
 
-#if defined(CONFIG_FAST_TRACK)
-bool is_special_entry(struct dentry *dentry, const char* special_proc)
-{
-	const unsigned char *name;
-	if (NULL == dentry || NULL == special_proc)
-		return false;
-
-	name = dentry->d_name.name;
-	if (NULL != name && !strncmp(special_proc, name, 32))
-		return true;
-	else
-		return false;
-}
-#endif
-
 /* dentry stuff */
 
 /*
@@ -2287,13 +2148,6 @@ static int pid_revalidate(struct dentry *dentry, unsigned int flags)
 
 	if (task) {
 		pid_update_inode(task, inode);
-#ifdef CONFIG_FAST_TRACK
-		if (is_special_entry(dentry, "static_ftt"))
-		{
-			inode->i_uid = GLOBAL_SYSTEM_UID;
-			inode->i_gid = GLOBAL_SYSTEM_GID;
-		}
-#endif
 		put_task_struct(task);
 		return 1;
 	}
@@ -2931,13 +2785,6 @@ static struct dentry *proc_pident_instantiate(struct dentry *dentry,
 		inode->i_fop = p->fop;
 	ei->op = p->op;
 	pid_update_inode(task, inode);
-#ifdef CONFIG_FAST_TRACK
-	if (p->fop == &proc_static_ftt_operations)
-	{
-		inode->i_uid = GLOBAL_SYSTEM_UID;
-		inode->i_gid = GLOBAL_SYSTEM_GID;
-	}
-#endif
 	d_set_d_op(dentry, &pid_dentry_operations);
 	return d_splice_alias(inode, dentry);
 }
@@ -4359,9 +4206,6 @@ static const struct pid_entry tid_base_stuff[] = {
 #endif
 #ifdef CONFIG_CPU_FREQ_TIMES
 	ONE("time_in_state", 0444, proc_time_in_state_show),
-#endif
-#ifdef CONFIG_FAST_TRACK
-	REG("static_ftt", S_IRUGO | S_IWUSR | S_IWGRP, proc_static_ftt_operations),
 #endif
 };
 
