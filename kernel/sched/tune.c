@@ -100,7 +100,6 @@ struct schedtune {
 	 */
 	bool sched_boost_enabled;
 
-#ifdef CONFIG_SCHED_WALT
 	/*
 	 * Controls whether tasks of this cgroup should be colocated with each
 	 * other and tasks of other cgroups that have the same flag turned on.
@@ -109,7 +108,6 @@ struct schedtune {
 
 	/* Controls whether further updates are allowed to the colocate flag */
 	bool colocate_update_disabled;
-#endif /* CONFIG_SCHED_WALT */
 
 	/* Hint to bias scheduling of tasks on that SchedTune CGroup
 	 * towards idle CPUs */
@@ -449,7 +447,6 @@ int schedtune_can_attach(struct cgroup_taskset *tset)
 	return 0;
 }
 
-#ifdef CONFIG_SCHED_WALT
 static u64 sched_colocate_read(struct cgroup_subsys_state *css,
 						struct cftype *cft)
 {
@@ -487,8 +484,6 @@ bool schedtune_task_colocated(struct task_struct *p)
 
 	return colocated;
 }
-
-#endif /* CONFIG_SCHED_WALT */
 
 void schedtune_cancel_attach(struct cgroup_taskset *tset)
 {
@@ -737,7 +732,6 @@ boost_write(struct cgroup_subsys_state *css, struct cftype *cft,
 }
 
 #ifdef CONFIG_STUNE_ASSIST
-#ifdef CONFIG_SCHED_WALT
 static int sched_boost_override_write_wrapper(struct cgroup_subsys_state *css,
 					      struct cftype *cft, u64 override)
 {
@@ -755,7 +749,6 @@ static int sched_colocate_write_wrapper(struct cgroup_subsys_state *css,
 
 	return sched_colocate_write(css, cft, colocate);
 }
-#endif
 
 static int boost_write_wrapper(struct cgroup_subsys_state *css,
 			       struct cftype *cft, s64 boost)
@@ -782,13 +775,11 @@ static struct cftype files[] = {
 		.read_u64 = sched_boost_override_read,
 		.write_u64 = sched_boost_override_write_wrapper,
 	},
-#ifdef CONFIG_SCHED_WALT
 	{
 		.name = "colocate",
 		.read_u64 = sched_colocate_read,
 		.write_u64 = sched_colocate_write_wrapper,
 	},
-#endif
 	{
 		.name = "boost",
 		.read_s64 = boost_read,
