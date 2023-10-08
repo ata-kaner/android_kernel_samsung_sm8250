@@ -2341,6 +2341,8 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	of_property_read_string(pdev->dev.of_node, "qcom,tzone-name",
 		&pwr->tzone_name);
 
+	kgsl_pwrctrl_max_clock_set(device, 587000000);
+
 	return result;
 
 error_cleanup_bus_ib:
