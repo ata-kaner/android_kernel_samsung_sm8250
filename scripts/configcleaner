@@ -16,12 +16,12 @@
 # (c) 2013 Park Ju Hyung <qkrwngud825@gmail.com>
 # ----------------------------------------------------------------------
 
-cat .config | grep -v "$(
+cat out/.config | grep -v "$(
 echo "$@" | while read configcleaner
 do
 if [ ! -z $configcleaner ]; then
 echo "$configcleaner="
 echo "# $configcleaner is not set"
 fi
-done | sed ':a;N;$!ba;s/\n/\\|/g')" > tempconfig
-mv tempconfig .config
+done | sed ':a;N;$!ba;s/\n/\\|/g')" > out/tempconfig
+mv out/tempconfig out/.config
