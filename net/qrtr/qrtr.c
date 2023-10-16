@@ -552,7 +552,7 @@ static int qrtr_node_enqueue(struct qrtr_node *node, struct sk_buff *skb,
 	struct qrtr_hdr_v1 *hdr;
 	int confirm_rx;
 	size_t len = skb->len;
-	int rc = -ENODEV;
+	int rc;
 
 	if (!atomic_read(&node->hello_sent) && type != QRTR_TYPE_HELLO) {
 		kfree_skb(skb);
@@ -1652,6 +1652,7 @@ static int qrtr_sendmsg(struct socket *sock, struct msghdr *msg, size_t len)
 				  msg->msg_flags & MSG_DONTWAIT, &rc);
 	if (!skb) {
 		QRTR_INFO_NEW(qrtr_ilc, " skb alloc failed in qrtr_resume_tx");
+		rc = -ENOMEM;
 		goto out_node;
 	}
 

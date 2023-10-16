@@ -70,7 +70,7 @@ ENTRY(__guest_enter)
 	// Store the host regs
 	save_callee_saved_regs x1
 
-// Now the host state is stored if we have a pending RAS SError it must
+	// Now the host state is stored if we have a pending RAS SError it must
 	// affect the host. If any asynchronous exception is pending we defer
 	// the guest entry. The DSB isn't necessary before v8.2 as any SError
 	// would be fatal.
@@ -84,7 +84,6 @@ alternative_else_nop_endif
 	ret
 
 1:
-
 	add	x29, x0, #VCPU_CONTEXT
 
 	// Restore guest regs x0-x17

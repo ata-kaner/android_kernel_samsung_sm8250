@@ -247,9 +247,6 @@ bool cfg80211_valid_key_idx(struct cfg80211_registered_device *rdev,
 {
 	int max_key_idx;
 
-	if (key_idx > max_key_idx)
-		return -EINVAL;
-
 	if (pairwise)
 		max_key_idx = 3;
 	else if (wiphy_ext_feature_isset(&rdev->wiphy,

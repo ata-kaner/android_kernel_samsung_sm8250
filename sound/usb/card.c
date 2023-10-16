@@ -121,6 +121,15 @@ static DEFINE_MUTEX(register_mutex);
 static struct snd_usb_audio *usb_chip[SNDRV_CARDS];
 static struct usb_driver usb_audio_driver;
 
+/**
+ * find_snd_usb_substream - helper API to find usb substream context
+ * information using card number, pcm device number and direction.
+ * @card_num: card number
+ * @pcm_idx: pcm device number
+ * @direction: SNDRV_PCM_STREAM_PLAYBACK or SNDRV_PCM_STREAM_CAPTURE
+ * @uchip: substream context.
+ * disconnect_cb: callback to use for cleanup on disconnect.
+ */
 struct snd_usb_substream *find_snd_usb_substream(unsigned int card_num,
 	unsigned int pcm_idx, unsigned int direction, struct snd_usb_audio
 	**uchip, void (*disconnect_cb)(struct snd_usb_audio *chip))
@@ -136,7 +145,7 @@ struct snd_usb_substream *find_snd_usb_substream(unsigned int card_num,
 	 * search using chip->card->number
 	 */
 	for (idx = 0; idx < SNDRV_CARDS; idx++) {
-		if (!usb_chip[idx])
+		if (!usb_chip[idx] || !usb_chip[idx]->card)
 			continue;
 		if (usb_chip[idx]->card->number == card_num) {
 			chip = usb_chip[idx];
@@ -185,6 +194,7 @@ err:
 	mutex_unlock(&register_mutex);
 	return subs;
 }
+EXPORT_SYMBOL_GPL(find_snd_usb_substream);
 
 /*
  * disconnect streams
@@ -749,6 +759,8 @@ static int usb_audio_probe(struct usb_interface *intf,
 			goto __error;
 	}
 
+	set_usb_audio_cardnum(chip->card->number, 0, 1);
+
 	/* we are allowed to call snd_card_register() many times, but first
 	 * check to see if a device needs to skip it or do anything special
 	 */
@@ -757,9 +769,6 @@ static int usb_audio_probe(struct usb_interface *intf,
 		if (err < 0)
 			goto __error;
 	}
-
-	set_usb_audio_cardnum(chip->card->number, 0, 1);
-	pr_info("%s : card %d is registered.\n", __func__, chip->card->number);
 
 	usb_chip[chip->index] = chip;
 	chip->num_interfaces++;
@@ -798,6 +807,7 @@ static void usb_audio_disconnect(struct usb_interface *intf)
 	struct snd_card *card;
 	struct list_head *p;
 
+	pr_info("%s : disconnect!\n", __func__);
 	if (chip == USB_AUDIO_IFACE_UNUSED)
 		return;
 

@@ -1441,7 +1441,6 @@ __writeback_single_inode(struct inode *inode, struct writeback_control *wbc)
 
 	if (newly_dirty)
 		__mark_inode_dirty(inode, I_DIRTY_PAGES);
-
 	/* Don't write the inode if only I_DIRTY_PAGES was set */
 	if (dirty & ~I_DIRTY_PAGES) {
 		int err = write_inode(inode, wbc);

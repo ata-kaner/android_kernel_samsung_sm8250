@@ -273,7 +273,7 @@ struct sock *cookie_v6_check(struct sock *sk, struct sk_buff *skb)
 		fl6.flowi6_uid = sk->sk_uid;
 		security_req_classify_flow(req, flowi6_to_flowi(&fl6));
 
-		dst = ip6_dst_lookup_flow(sock_net(sk), sk, &fl6, final_p);
+		dst = ip6_dst_lookup_flow(sk, &fl6, final_p);
 		if (IS_ERR(dst))
 			goto out_free;
 	}
@@ -284,7 +284,7 @@ struct sock *cookie_v6_check(struct sock *sk, struct sk_buff *skb)
 	if (sk->sk_userlocks & SOCK_RCVBUF_LOCK &&
 	    (req->rsk_window_clamp > full_space || req->rsk_window_clamp == 0))
 		req->rsk_window_clamp = full_space;
-
+	
 #ifdef CONFIG_MPTCP
 	tp->ops->select_initial_window(sk, full_space, req->mss,
 				       &req->rsk_rcv_wnd, &req->rsk_window_clamp,

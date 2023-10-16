@@ -2128,6 +2128,7 @@ found_highest:
 	VM_BUG_ON(gap_end < gap_start);
 	return gap_end;
 }
+EXPORT_SYMBOL_GPL(unmapped_area_topdown);
 
 /* Get an address range which is currently unmapped.
  * For shmat() with addr=0.
@@ -2180,19 +2181,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	info.high_limit = TASK_SIZE;
 	info.align_mask = 0;
 	info.align_offset = 0;
-	addr = vm_unmapped_area(&info);
-	if (addr == -ENOMEM) {
-		if (__ratelimit(&mmap_rs)) {
-			printk(KERN_ERR "%s %d - NOMEM from vm_unmapped_area "
-				"pid=%d total_vm=0x%lx flags=0x%lx length=0x%lx low_limit=0x%lx "
-				"high_limit=0x%lx align_mask=0x%lx\n",
-				__func__, __LINE__,
-				current->pid, current->mm->total_vm,
-				info.flags, info.length, info.low_limit,
-				info.high_limit, info.align_mask);
-		}
-	}
-	return addr;
+	return vm_unmapped_area(&info);
 }
 #endif
 

@@ -220,9 +220,11 @@ static inline void fsnotify_open(struct file *file)
 	if (path->dentry->d_op && path->dentry->d_op->d_canonical_path) {
 		path->dentry->d_op->d_canonical_path(path, &lower_path);
 		fsnotify_parent(&lower_path, NULL, mask);
-		fsnotify(lower_path.dentry->d_inode, mask, &lower_path, FSNOTIFY_EVENT_PATH, NULL, 0);
+		fsnotify(lower_path.dentry->d_inode, mask, &lower_path,
+			 FSNOTIFY_EVENT_PATH, NULL, 0);
 		path_put(&lower_path);
 	}
+
 	fsnotify_parent(path, NULL, mask);
 	fsnotify(inode, mask, path, FSNOTIFY_EVENT_PATH, NULL, 0);
 }

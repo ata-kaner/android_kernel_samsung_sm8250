@@ -2317,11 +2317,7 @@ struct vfsmount *clone_private_mount(const struct path *path)
 	if (IS_ERR(new_mnt))
 		return ERR_CAST(new_mnt);
 
-#ifdef CONFIG_KDP_NS
-	return new_mnt->mnt;
-#else
 	return &new_mnt->mnt;
-#endif
 
 invalid:
 	up_read(&namespace_sem);

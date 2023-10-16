@@ -902,7 +902,7 @@ unsigned int dd_lock_state = 1; // 1: locked 0: unlocked
 module_param_named(lock_state, dd_lock_state, uint, 0600);
 MODULE_PARM_DESC(lock_state, "ddar lock status");
 
-int dd_is_user_deamon_locked(void) {
+int dd_is_user_deamon_locked() {
 	return dd_lock_state;
 }
 

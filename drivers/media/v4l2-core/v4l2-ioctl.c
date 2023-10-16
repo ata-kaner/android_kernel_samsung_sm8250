@@ -3140,6 +3140,7 @@ out:
 	kvfree(mbuf);
 	return err;
 }
+EXPORT_SYMBOL_GPL(video_usercopy);
 
 long video_ioctl2(struct file *file,
 	       unsigned int cmd, unsigned long arg)

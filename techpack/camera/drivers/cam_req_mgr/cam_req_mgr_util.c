@@ -21,7 +21,7 @@ static DEFINE_SPINLOCK(hdl_tbl_lock);
 #if defined(CONFIG_SAMSUNG_SBI)
 bool is_crm_in_ssm_mode = false;
 
-bool cam_req_mgr_get_is_crm_in_ssm_mode(void)
+bool cam_req_mgr_get_is_crm_in_ssm_mode()
 {
     return is_crm_in_ssm_mode;
 }

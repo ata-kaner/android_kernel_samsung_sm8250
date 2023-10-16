@@ -540,6 +540,7 @@ void tcp_v4_err(struct sk_buff *icmp_skb, u32 info)
 				goto out;
 
 			WRITE_ONCE(tp->mtu_info, info);
+
 #ifdef CONFIG_MPTCP
 			if (!sock_owned_by_user(meta_sk)) {
 #else

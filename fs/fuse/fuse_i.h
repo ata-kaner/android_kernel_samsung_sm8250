@@ -225,6 +225,9 @@ struct fuse_out {
 
 	/** Array of arguments */
 	struct fuse_arg args[2];
+
+	/* Path used for completing d_canonical_path */
+	struct path *canonical_path;
 };
 
 /** FUSE page descriptor */
@@ -247,6 +250,9 @@ struct fuse_args {
 		unsigned argvar:1;
 		unsigned numargs;
 		struct fuse_arg args[2];
+
+		/* Path used for completing d_canonical_path */
+		struct path *canonical_path;
 	} out;
 };
 
@@ -382,9 +388,6 @@ struct fuse_req {
 
 	/** Inode used in the request or NULL */
 	struct inode *inode;
-
-	/** Path used for completing d_canonical_path */
-	struct path *canonical_path;
 
 	/** AIO control block */
 	struct fuse_io_priv *io;

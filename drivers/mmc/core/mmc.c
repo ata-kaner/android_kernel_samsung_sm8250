@@ -2976,9 +2976,9 @@ static const struct mmc_bus_ops mmc_ops = {
 	.alive = mmc_alive,
 	.shutdown = mmc_shutdown,
 	.hw_reset = _mmc_hw_reset,
+	.cache_enabled = _mmc_cache_enabled,
 	.change_bus_speed = mmc_change_bus_speed,
 	.change_bus_speed_deferred = mmc_change_bus_speed_deferred,
-	.cache_enabled = _mmc_cache_enabled,
 };
 
 /*

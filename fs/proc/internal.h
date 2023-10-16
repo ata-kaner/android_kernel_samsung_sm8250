@@ -334,7 +334,6 @@ struct proc_filemap_private {
 extern const struct file_operations proc_pid_filemap_list_operations;
 extern const struct file_operations proc_pid_io_record_operations;
 #endif
-
 extern const struct dentry_operations proc_net_dentry_ops;
 static inline void pde_force_lookup(struct proc_dir_entry *pde)
 {

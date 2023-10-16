@@ -658,6 +658,12 @@ static int set_format(struct snd_usb_substream *subs, struct audioformat *fmt)
 
 static int snd_usb_pcm_change_state(struct snd_usb_substream *subs, int state);
 
+/**
+ * snd_usb_enable_audio_stream - Enable/disable the specified usb substream.
+ * @subs: pointer to the usb substream.
+ * @datainterval: data packet interval.
+ * @enable: if true, enable the usb substream. Else disable.
+ */
 int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 	int datainterval, bool enable)
 {
@@ -668,6 +674,9 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 #ifdef CONFIG_USB_NOTIFY_PROC_LOG
 	int on, type;
 #endif
+
+	if (!subs || !subs->stream)
+		return -EINVAL;
 
 	if (!enable) {
 		if (subs->interface >= 0) {
@@ -709,12 +718,19 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 
 	subs->altset_idx = 0;
 	subs->interface = -1;
+
+	if (!subs->stream->chip)
+		return -EINVAL;
+
 	if (atomic_read(&subs->stream->chip->shutdown)) {
 		ret = -ENODEV;
 	} else {
 		ret = set_format(subs, fmt);
 		if (ret < 0)
 			return ret;
+
+		if (!subs->cur_audiofmt)
+			return -EINVAL;
 
 		iface = usb_ifnum_to_if(subs->dev, subs->cur_audiofmt->iface);
 		if (!iface) {
@@ -750,6 +766,7 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(snd_usb_enable_audio_stream);
 
 /*
  * Return the score of matching two audioformats.
@@ -1558,12 +1575,6 @@ static void retire_capture_urb(struct snd_usb_substream *subs,
 			// continue;
 		}
 		bytes = urb->iso_frame_desc[i].actual_length;
-		if (subs->stream_offset_adj > 0) {
-			unsigned int adj = min(subs->stream_offset_adj, bytes);
-			cp += adj;
-			bytes -= adj;
-			subs->stream_offset_adj -= adj;
-		}
 		frames = bytes / stride;
 		if (!subs->txfr_quirk)
 			bytes = frames * stride;

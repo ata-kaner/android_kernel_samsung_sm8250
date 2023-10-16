@@ -111,6 +111,7 @@ int of_fdt_get_ddrhbb(int channel, int rank)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(of_fdt_get_ddrhbb);
 
 /**
  * of_fdt_get_ddrrank - Return the rank of ddr on the current device
@@ -142,6 +143,7 @@ int of_fdt_get_ddrrank(int channel)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(of_fdt_get_ddrrank);
 
 /**
  * of_fdt_get_ddrtype - Return the type of ddr (4/5) on the current device
@@ -1297,8 +1299,16 @@ int __init __weak early_init_dt_mark_hotplug_memory_arch(u64 base, u64 size)
 int __init __weak early_init_dt_reserve_memory_arch(phys_addr_t base,
 					phys_addr_t size, bool nomap)
 {
-	if (nomap)
-		return memblock_remove(base, size);
+	if (nomap) {
+		/*
+		 * If the memory is already reserved (by another region), we
+		 * should not allow it to be marked nomap.
+		 */
+		if (memblock_is_region_reserved(base, size))
+			return -EBUSY;
+
+		return memblock_mark_nomap(base, size);
+	}
 	return memblock_reserve(base, size);
 }
 

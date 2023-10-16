@@ -1896,9 +1896,7 @@ static int __dwc3_gadget_ep_queue(struct dwc3_ep *dep, struct dwc3_request *req)
 		}
 	}
 
-	__dwc3_gadget_kick_transfer(dep);
-
-	return 0;
+	return __dwc3_gadget_kick_transfer(dep);
 }
 
 static int dwc3_gadget_wakeup(struct usb_gadget *g)
@@ -3438,9 +3436,10 @@ static void dwc3_gadget_endpoint_transfer_in_progress(struct dwc3_ep *dep,
 
 	dwc3_gadget_ep_cleanup_completed_requests(dep, event, status);
 
-	if (stop)
+	if (stop) {
 		dwc3_stop_active_transfer(dwc, dep->number, true);
-	else if (dwc3_gadget_ep_should_continue(dep))
+		dep->flags = DWC3_EP_ENABLED;
+	} else if (dwc3_gadget_ep_should_continue(dep))
 		__dwc3_gadget_kick_transfer(dep);
 
 	/*

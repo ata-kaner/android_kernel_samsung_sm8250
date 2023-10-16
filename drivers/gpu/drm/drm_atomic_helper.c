@@ -307,26 +307,6 @@ update_connector_routing(struct drm_atomic_state *state,
 		return 0;
 	}
 
-	crtc_state = drm_atomic_get_new_crtc_state(state,
-						   new_connector_state->crtc);
-	/*
-	 * For compatibility with legacy users, we want to make sure that
-	 * we allow DPMS On->Off modesets on unregistered connectors. Modesets
-	 * which would result in anything else must be considered invalid, to
-	 * avoid turning on new displays on dead connectors.
-	 *
-	 * Since the connector can be unregistered at any point during an
-	 * atomic check or commit, this is racy. But that's OK: all we care
-	 * about is ensuring that userspace can't do anything but shut off the
-	 * display on a connector that was destroyed after its been notified,
-	 * not before.
-	 */
-	if (drm_connector_is_unregistered(connector) && crtc_state->active) {
-		DRM_DEBUG_ATOMIC("[CONNECTOR:%d:%s] is not registered\n",
-				 connector->base.id, connector->name);
-		return -EINVAL;
-	}
-
 	funcs = connector->helper_private;
 
 	if (funcs->atomic_best_encoder)
@@ -371,6 +351,7 @@ update_connector_routing(struct drm_atomic_state *state,
 
 	set_best_encoder(state, new_connector_state, new_encoder);
 
+	crtc_state = drm_atomic_get_new_crtc_state(state, new_connector_state->crtc);
 	crtc_state->connectors_changed = true;
 
 	DRM_DEBUG_ATOMIC("[CONNECTOR:%d:%s] using [ENCODER:%d:%s] on [CRTC:%d:%s]\n",
@@ -2837,6 +2818,7 @@ int __drm_atomic_helper_disable_plane(struct drm_plane *plane,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(__drm_atomic_helper_disable_plane);
 
 static int update_output_state(struct drm_atomic_state *state,
 			       struct drm_mode_set *set)
@@ -3022,6 +3004,7 @@ commit:
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(__drm_atomic_helper_set_config);
 
 static int __drm_atomic_helper_disable_all(struct drm_device *dev,
 					   struct drm_modeset_acquire_ctx *ctx,
