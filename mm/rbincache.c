@@ -755,7 +755,7 @@ static int rc_sysfs_init(void)
 	return 0;
 }
 
-static void rc_sysfs_exit(void)
+static void __maybe_unused rc_sysfs_exit(void)
 {
 	sysfs_remove_group(mm_kobj, &rc_attr_group);
 }
