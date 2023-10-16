@@ -295,19 +295,14 @@ static int propagate_one(struct mount *m)
 #endif
 	if (IS_ERR(child))
 		return PTR_ERR(child);
-#ifdef CONFIG_KDP_NS
-	rkp_reset_mnt_flags(child->mnt,MNT_LOCKED);
-#else
 	child->mnt.mnt_flags &= ~MNT_LOCKED;
-#endif
+	read_seqlock_excl(&mount_lock);
 	mnt_set_mountpoint(m, mp, child);
+	if (m->mnt_master != dest_master)
+		SET_MNT_MARK(m->mnt_master);
+	read_sequnlock_excl(&mount_lock);
 	last_dest = m;
 	last_source = child;
-	if (m->mnt_master != dest_master) {
-		read_seqlock_excl(&mount_lock);
-		SET_MNT_MARK(m->mnt_master);
-		read_sequnlock_excl(&mount_lock);
-	}
 	hlist_add_head(&child->mnt_hash, list);
 	return count_mounts(m->mnt_ns, child);
 }
