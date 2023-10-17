@@ -6,7 +6,6 @@
 #include "sched.h"
 #include "walt.h"
 #include <linux/of.h>
-#include <linux/binfmts.h>
 #include <linux/sched/core_ctl.h>
 #include <trace/events/sched.h>
 
@@ -147,8 +146,7 @@ static int sched_effective_boost(void)
 static void sched_boost_disable(int type)
 {
 	struct sched_boost_data *sb = &sched_boosts[type];
-	int next_boost, prev_boost = sched_boost_type;
-
+	int next_boost;
 
 	if (sb->refcount <= 0)
 		return;
@@ -166,9 +164,6 @@ static void sched_boost_disable(int type)
 	sb->exit();
 
 	next_boost = sched_effective_boost();
-	if(next_boost == prev_boost)
-		return;
-
 	sched_boosts[next_boost].enter();
 }
 
@@ -253,8 +248,6 @@ int sched_set_boost(int type)
 {
 	int ret = 0;
 
-	return 0;
-
 	mutex_lock(&boost_mutex);
 	if (verify_boost_params(type))
 		_sched_set_boost(type);
@@ -270,9 +263,6 @@ int sched_boost_handler(struct ctl_table *table, int write,
 {
 	int ret;
 	unsigned int *data = (unsigned int *)table->data;
-
-	if (task_is_booster(current))
-		return 0;
 
 	mutex_lock(&boost_mutex);
 

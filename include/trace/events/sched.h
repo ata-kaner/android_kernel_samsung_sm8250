@@ -1209,7 +1209,7 @@ TRACE_EVENT(sched_compute_energy,
 		__entry->best_energy	        = best_energy;
 	),
 
-	TP_printk("pid=%d comm=%s util=%lu prev_cpu=%d prev_energy=%lu eval_cpu=%d eval_energy=%lu best_energy_cpu=%d best_energy=%lu",
+	TP_printk("pid=%d comm=%s util=%lu prev_cpu=%d prev_energy=%llu eval_cpu=%d eval_energy=%llu best_energy_cpu=%d best_energy=%llu",
 		__entry->pid, __entry->comm, __entry->util, __entry->prev_cpu,
 		__entry->prev_energy, __entry->eval_cpu, __entry->eval_energy,
 		__entry->best_energy_cpu, __entry->best_energy)
@@ -1267,7 +1267,7 @@ TRACE_EVENT(sched_task_util,
 		__entry->start_cpu		= start_cpu;
 #ifdef CONFIG_SCHED_WALT
 		__entry->unfilter		= p->unfilter;
-		__entry->low_latency		= p->low_latency;
+		__entry->low_latency		= walt_low_latency_task(p);
 #else
 		__entry->unfilter		= 0;
 		__entry->low_latency		= 0;
@@ -1596,6 +1596,28 @@ TRACE_EVENT_CONDITION(sched_overutilized,
 
 	TP_printk("overutilized=%d sd_span=%s",
 		__entry->overutilized ? 1 : 0, __entry->cpulist)
+);
+
+TRACE_EVENT(sched_capacity_update,
+
+	TP_PROTO(int cpu),
+
+	TP_ARGS(cpu),
+
+	TP_STRUCT__entry(
+		__field(unsigned int, cpu)
+		__field(unsigned int, capacity)
+		__field(unsigned int, capacity_orig)
+	),
+
+	TP_fast_assign(
+		__entry->cpu			= cpu;
+		__entry->capacity		= capacity_of(cpu);
+		__entry->capacity_orig		= capacity_orig_of(cpu);
+	),
+
+	TP_printk("cpu=%d capacity=%u capacity_orig=%u",
+		__entry->cpu, __entry->capacity, __entry->capacity_orig)
 );
 
 /*

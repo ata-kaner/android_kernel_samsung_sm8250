@@ -11,7 +11,6 @@
 #include <linux/hrtimer.h>
 #include <linux/sched.h>
 #include <linux/math64.h>
-#include <linux/pm_qos.h>
 
 #include "sched.h"
 #include "walt.h"
@@ -125,7 +124,7 @@ void sched_update_hyst_times(void)
 	for_each_possible_cpu(cpu) {
 		std_time = (BIT(cpu)
 			     & sysctl_sched_busy_hyst_enable_cpus) ?
-			     max(sysctl_sched_busy_hyst, (unsigned int) (pm_qos_request(PM_QOS_BIAS_HYST) * NSEC_PER_MSEC)) : 0;
+			     sysctl_sched_busy_hyst : 0;
 		rtgb_time = ((BIT(cpu)
 			     & sysctl_sched_coloc_busy_hyst_enable_cpus)
 			     && rtgb_active) ? sysctl_sched_coloc_busy_hyst : 0;
@@ -139,10 +138,6 @@ static inline void update_busy_hyst_end_time(int cpu, bool dequeue,
 				unsigned long prev_nr_run, u64 curr_time)
 {
 	bool nr_run_trigger = false, load_trigger = false;
-	bool is_sched_boost = false;
-
-	if (sysctl_sched_boost > 0)
-		is_sched_boost = true;
 
 	if (!per_cpu(hyst_time, cpu))
 		return;
@@ -154,7 +149,7 @@ static inline void update_busy_hyst_end_time(int cpu, bool dequeue,
 			capacity_orig_of(cpu))
 		load_trigger = true;
 
-	if (nr_run_trigger || load_trigger || is_sched_boost)
+	if (nr_run_trigger || load_trigger)
 		atomic64_set(&per_cpu(busy_hyst_end_time, cpu),
 				curr_time + per_cpu(hyst_time, cpu));
 }
@@ -233,3 +228,4 @@ u64 sched_lpm_disallowed_time(int cpu)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(sched_lpm_disallowed_time);
