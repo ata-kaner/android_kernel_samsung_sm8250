@@ -43,5 +43,13 @@ dump_boot;
 
 # end ramdisk changes
 
+oneui=$(file_getprop /system/build.prop ro.build.version.oneui);
+
+if [ $oneui == "60000" ]; then
+   ui_print ""
+   ui_print "OneUI 6.0 detected! Patching selinux"
+   patch_cmdline "androidboot.selinux" "androidboot.selinux=permissive";
+fi
+
 write_boot;
 ## end boot install
