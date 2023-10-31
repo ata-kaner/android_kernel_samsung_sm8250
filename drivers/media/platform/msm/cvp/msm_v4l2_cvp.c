@@ -385,8 +385,10 @@ static int msm_probe_cvp_device(struct platform_device *pdev)
 	list_add_tail(&core->list, &cvp_driver->cores);
 	mutex_unlock(&cvp_driver->lock);
 
+#ifdef CONFIG_DEBUG_FS
 	core->debugfs_root = msm_cvp_debugfs_init_core(
 		core, cvp_driver->debugfs_root);
+#endif
 
 	cvp_driver->sku_version = core->resources.sku_version;
 
@@ -560,16 +562,21 @@ static int __init msm_cvp_init(void)
 
 	INIT_LIST_HEAD(&cvp_driver->cores);
 	mutex_init(&cvp_driver->lock);
+
+#ifdef CONFIG_DEBUG_FS
 	cvp_driver->debugfs_root = msm_cvp_debugfs_init_drv();
 	if (!cvp_driver->debugfs_root)
 		dprintk(CVP_ERR,
 			"Failed to create debugfs for msm_cvp\n");
+#endif
 
 	rc = platform_driver_register(&msm_cvp_driver);
 	if (rc) {
 		dprintk(CVP_ERR,
 			"Failed to register platform driver\n");
+#ifdef CONFIG_DEBUG_FS
 		debugfs_remove_recursive(cvp_driver->debugfs_root);
+#endif
 		kfree(cvp_driver);
 		cvp_driver = NULL;
 		return rc;
@@ -594,7 +601,9 @@ static void __exit msm_cvp_exit(void)
 	kmem_cache_destroy(cvp_driver->internal_buf_cache);
 
 	platform_driver_unregister(&msm_cvp_driver);
+#ifdef CONFIG_DEBUG_FS
 	debugfs_remove_recursive(cvp_driver->debugfs_root);
+#endif
 	mutex_destroy(&cvp_driver->lock);
 	kfree(cvp_driver);
 	cvp_driver = NULL;
