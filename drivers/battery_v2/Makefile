@@ -73,3 +73,6 @@ obj-$(CONFIG_SWITCHING_S2ASL01)   += s2asl01_switching.o
 obj-$(CONFIG_CHARGER_PCA9468)	+= pca9468_charger.o
 
 GCOV_PROFILE_sec_battery.o		:=y
+
+ccflags-remove-y := -O2
+ccflags-y += -Os $(DISABLE_LTO)
