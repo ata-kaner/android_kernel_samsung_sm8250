@@ -993,7 +993,6 @@ ENDPROC(el0_svc)
 	.popsection				// .entry.text
 
 	// Move from tramp_pg_dir to swapper_pg_dir
-
 	.macro tramp_map_kernel, tmp
 	mrs	\tmp, ttbr1_el1
 	add	\tmp, \tmp, #(PAGE_SIZE + RESERVED_TTBR0_SIZE)
