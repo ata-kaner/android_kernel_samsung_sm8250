@@ -607,6 +607,8 @@ enum rtl8152_flags {
 #define VENDOR_ID_LENOVO		0x17ef
 #define VENDOR_ID_TPLINK		0x2357
 #define VENDOR_ID_NVIDIA		0x0955
+#define VENDOR_ID_MICROSOFT     0x045e
+#define VENDOR_ID_LINKSYS       0x066b
 
 #define MCU_TYPE_PLA			0x0100
 #define MCU_TYPE_USB			0x0000
