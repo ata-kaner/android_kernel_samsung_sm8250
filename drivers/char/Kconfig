@@ -654,6 +654,9 @@ config VSERVICES_VTTY_COUNT
 	  This limit applies to both the client and server.
 
 config RANDOM_TRUST_BOOTLOADER
+	bool "Initialize RNG using bootloader-supplied seed"
+	default y
+	help
 	  Initialize the RNG using a seed supplied by the bootloader or boot
 	  environment (e.g. EFI or a bootloader-generated device tree). This
 	  seed is not used directly, but is rather hashed into the main input

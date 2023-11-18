@@ -53,7 +53,7 @@
 #include <linux/uaccess.h>
 #include <linux/siphash.h>
 #include <linux/uio.h>
-#include <crypto/chacha20.h>
+#include <crypto/chacha.h>
 #include <crypto/blake2s.h>
 #include <asm/processor.h>
 #include <asm/irq.h>
@@ -432,7 +432,7 @@ static void _get_random_bytes(void *buf, size_t len)
  * wait_for_random_bytes() should be called and return 0 at least once
  * at any point prior.
  */
-void get_random_bytes(void *buf, size_t len)
+void get_random_bytes(void *buf, int len)
 {
 	warn_unseeded_randomness();
 	_get_random_bytes(buf, len);
@@ -864,7 +864,7 @@ EXPORT_SYMBOL(add_device_randomness);
  * Those devices may produce endless random bits and will be throttled
  * when our pool is full.
  */
-void add_hwgenerator_randomness(const void *buf, size_t len, size_t entropy)
+void add_hwgenerator_randomness(const char *buf, size_t len, size_t entropy)
 {
 	mix_pool_bytes(buf, len);
 	credit_init_bits(entropy);
@@ -873,7 +873,8 @@ void add_hwgenerator_randomness(const void *buf, size_t len, size_t entropy)
 	 * Throttle writing to once every CRNG_RESEED_INTERVAL, unless
 	 * we're not yet initialized.
 	 */
-	if (!kthread_should_stop() && crng_ready())
+	if ((current->flags & PF_KTHREAD) &&
+	    !kthread_should_stop() && crng_ready())
 		schedule_timeout_interruptible(CRNG_RESEED_INTERVAL);
 }
 EXPORT_SYMBOL_GPL(add_hwgenerator_randomness);
