@@ -32,10 +32,6 @@
 #include <trace/events/f2fs.h>
 #include <trace/events/android_fs.h>
 
-#ifdef CONFIG_FSCRYPT_SDP
-#include <linux/fscrypto_sdp_ioctl.h>
-#endif
-
 static vm_fault_t f2fs_filemap_fault(struct vm_fault *vmf)
 {
 	struct inode *inode = file_inode(vmf->vma->vm_file);
@@ -3860,22 +3856,6 @@ long f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return f2fs_set_volume_name(filp, arg);
 	case F2FS_IOC_GET_COMPRESS_BLOCKS:
 		return f2fs_get_compress_blocks(filp, arg);
-#ifdef CONFIG_FSCRYPT_SDP
-	case FS_IOC_GET_SDP_INFO:
-	case FS_IOC_SET_SDP_POLICY:
-	case FS_IOC_SET_SENSITIVE:
-	case FS_IOC_SET_PROTECTED:
-	case FS_IOC_ADD_CHAMBER:
-	case FS_IOC_REMOVE_CHAMBER:
-	case FS_IOC_DUMP_FILE_KEY:
-		return fscrypt_sdp_ioctl(filp, cmd, arg);
-#endif
-#ifdef CONFIG_DDAR
-	case F2FS_IOC_GET_DD_POLICY:
-	case F2FS_IOC_SET_DD_POLICY:
-	case FS_IOC_GET_DD_INODE_COUNT:
-		return fscrypt_dd_ioctl(cmd, &arg, file_inode(filp));
-#endif
 	case F2FS_IOC_RELEASE_COMPRESS_BLOCKS:
 		return f2fs_release_compress_blocks(filp, arg);
 	case F2FS_IOC_RESERVE_COMPRESS_BLOCKS:
@@ -4046,20 +4026,6 @@ long f2fs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case F2FS_IOC_GET_VOLUME_NAME:
 	case F2FS_IOC_SET_VOLUME_NAME:
 	case F2FS_IOC_GET_COMPRESS_BLOCKS:
-#ifdef CONFIG_FSCRYPT_SDP
-	case FS_IOC_GET_SDP_INFO:
-	case FS_IOC_SET_SDP_POLICY:
-	case FS_IOC_SET_SENSITIVE:
-	case FS_IOC_SET_PROTECTED:
-	case FS_IOC_ADD_CHAMBER:
-	case FS_IOC_REMOVE_CHAMBER:
-	case FS_IOC_DUMP_FILE_KEY:
-#endif
-#ifdef CONFIG_DDAR
-	case F2FS_IOC_GET_DD_POLICY:
-	case F2FS_IOC_SET_DD_POLICY:
-	case FS_IOC_GET_DD_INODE_COUNT:
-#endif
 	case F2FS_IOC_RELEASE_COMPRESS_BLOCKS:
 	case F2FS_IOC_RESERVE_COMPRESS_BLOCKS:
 		break;

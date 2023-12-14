@@ -470,36 +470,12 @@ out_release_key:
 	return err;
 }
 
-#ifdef CONFIG_FSCRYPT_SDP
-static void fscrypt_sdp_finalize(struct fscrypt_info *ci)
-{
-	if (!ci || !ci->ci_sdp_info || ci->ci_sdp_info->sdp_flags & SDP_IS_DIRECTORY)
-		return;
-
-	switch (ci->ci_policy.version) {
-	case FSCRYPT_POLICY_V1:
-		fscrypt_sdp_finalize_v1(ci);
-		break;
-	default:
-		break;
-	}
-}
-#endif
-
 static void put_crypt_info(struct fscrypt_info *ci)
 {
 	struct key *key;
 
 	if (!ci)
 		return;
-
-#ifdef CONFIG_DDAR
-	dd_info_try_free(ci->ci_dd_info);
-#endif
-
-#ifdef CONFIG_FSCRYPT_SDP
-	fscrypt_sdp_put_sdp_info(ci->ci_sdp_info);
-#endif
 
 	if (ci->ci_direct_key)
 		fscrypt_put_direct_key(ci->ci_direct_key);
@@ -536,17 +512,8 @@ int fscrypt_get_encryption_info(struct inode *inode)
 	struct fscrypt_mode *mode;
 	struct key *master_key = NULL;
 	int res;
-#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
-	u32 knox_flags;
-#endif
 
 	if (fscrypt_has_encryption_key(inode)) {
-#ifdef CONFIG_DDAR
-		if (fscrypt_dd_encrypted_inode(inode) && fscrypt_dd_is_locked()) {
-			dd_error("Failed to open a DDAR-protected file in lock state (ino:%ld)\n", inode->i_ino);
-			return -ENOKEY;
-		}
-#endif
 		return 0;
 	}
 
@@ -570,25 +537,6 @@ int fscrypt_get_encryption_info(struct inode *inode)
 		memcpy(&ctx, dummy_ctx, res);
 	}
 
-#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
-	switch (ctx.version) {
-	case FSCRYPT_CONTEXT_V1: {
-		if (res == offsetof(struct fscrypt_context_v1, knox_flags)) {
-			ctx.v1.knox_flags = 0;
-			res = sizeof(ctx.v1);
-		}
-		break;
-	}
-	case FSCRYPT_CONTEXT_V2: {
-		if (res == offsetof(struct fscrypt_context_v2, knox_flags)) {
-			ctx.v2.knox_flags = 0;
-			res = sizeof(ctx.v2);
-		}
-		break;
-	}
-	}
-#endif
-
 	crypt_info = kmem_cache_zalloc(fscrypt_info_cachep, GFP_NOFS);
 	if (!crypt_info)
 		return -ENOMEM;
@@ -605,30 +553,6 @@ int fscrypt_get_encryption_info(struct inode *inode)
 	memcpy(crypt_info->ci_nonce, fscrypt_context_nonce(&ctx),
 	       FS_KEY_DERIVATION_NONCE_SIZE);
 
-	// SDP_R_PORTING : to refine switch case as fscrypt_context_nonce.
-#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
-	switch (ctx.version) {
-	case FSCRYPT_CONTEXT_V1:
-		knox_flags = ctx.v1.knox_flags;
-		break;
-	case FSCRYPT_CONTEXT_V2:
-		knox_flags = ctx.v2.knox_flags;
-		break;
-	default:
-		WARN_ON(1);
-		res = -EINVAL;
-		goto out;
-	}
-#endif
-
-#ifdef CONFIG_DDAR
-	crypt_info->ci_dd_info = NULL;
-#endif
-
-#ifdef CONFIG_FSCRYPT_SDP
-	crypt_info->ci_sdp_info = NULL;
-#endif
-
 	if (!fscrypt_supported_policy(&crypt_info->ci_policy, inode)) {
 		res = -EINVAL;
 		goto out;
@@ -642,37 +566,9 @@ int fscrypt_get_encryption_info(struct inode *inode)
 	WARN_ON(mode->ivsize > FSCRYPT_MAX_IV_SIZE);
 	crypt_info->ci_mode = mode;
 
-#ifdef CONFIG_FSCRYPT_SDP
-	if ((FSCRYPT_SDP_PARSE_FLAG_SDP_ONLY(knox_flags) & FSCRYPT_KNOX_FLG_SDP_MASK)) {
-		crypt_info->ci_sdp_info = fscrypt_sdp_alloc_sdp_info();
-		if (!crypt_info->ci_sdp_info) {
-			res = -ENOMEM;
-			goto out;
-		}
-
-		res = fscrypt_sdp_update_sdp_info(inode, &ctx, crypt_info);
-		if (res)
-			goto out;
-	}
-#endif
-
 	res = setup_file_encryption_key(crypt_info, &master_key);
 	if (res)
 		goto out;
-
-#ifdef CONFIG_DDAR
-	if (fscrypt_dd_flg_enabled(knox_flags)) {
-		struct dd_info *di = alloc_dd_info(inode);
-		if (IS_ERR(di)) {
-			dd_error("%s - failed to alloc dd_info(%d)\n", __func__, __LINE__);
-			res = PTR_ERR(di);
-
-			goto out;
-		}
-
-		crypt_info->ci_dd_info = di;
-	}
-#endif
 
 	if (cmpxchg_release(&inode->i_crypt_info, NULL, crypt_info) == NULL) {
 		if (master_key) {
@@ -688,17 +584,6 @@ int fscrypt_get_encryption_info(struct inode *inode)
 		}
 		crypt_info = NULL;
 	}
-#ifdef CONFIG_FSCRYPT_SDP
-	if (crypt_info == NULL) //Call only when i_crypt_info is loaded initially
-		fscrypt_sdp_finalize(inode->i_crypt_info);
-#endif
-#ifdef CONFIG_DDAR
-	if (crypt_info == NULL) {
-		if (inode->i_crypt_info && inode->i_crypt_info->ci_dd_info) {
-			fscrypt_dd_inc_count();
-		}
-	}
-#endif
 	res = 0;
 out:
 	if (master_key) {
@@ -723,15 +608,6 @@ EXPORT_SYMBOL(fscrypt_get_encryption_info);
  */
 void fscrypt_put_encryption_info(struct inode *inode)
 {
-#ifdef CONFIG_DDAR
-	if (inode->i_crypt_info && inode->i_crypt_info->ci_dd_info) {
-		fscrypt_dd_dec_count();
-	}
-#endif
-
-#ifdef CONFIG_FSCRYPT_SDP
-	fscrypt_sdp_cache_remove_inode_num(inode);
-#endif
 	put_crypt_info(inode->i_crypt_info);
 	inode->i_crypt_info = NULL;
 }

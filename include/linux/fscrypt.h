@@ -45,11 +45,7 @@ struct fscrypt_name {
 #define fname_len(p)		((p)->disk_name.len)
 
 /* Maximum value for the third parameter of fscrypt_operations.set_context(). */
-#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
-#define FSCRYPT_SET_CONTEXT_MAX_SIZE	44
-#else
 #define FSCRYPT_SET_CONTEXT_MAX_SIZE	40
-#endif
 
 #ifdef CONFIG_FS_ENCRYPTION
 /*
@@ -63,10 +59,6 @@ struct fscrypt_name {
 struct fscrypt_operations {
 	unsigned int flags;
 	const char *key_prefix;
-#if defined(CONFIG_DDAR) || defined(CONFIG_FSCRYPT_SDP)
-	int (*get_knox_context)(struct inode *, const char *, void *, size_t);
-	int (*set_knox_context)(struct inode *, const char *, const void *, size_t, void *);
-#endif
 	int (*get_context)(struct inode *inode, void *ctx, size_t len);
 	int (*set_context)(struct inode *inode, const void *ctx, size_t len,
 			   void *fs_data);
@@ -261,19 +253,6 @@ int fscrypt_zeroout_range(const struct inode *inode, pgoff_t lblk,
 			  sector_t pblk, unsigned int len);
 
 /* hooks.c */
-#ifdef CONFIG_DDAR
-extern int fscrypt_dd_decrypt_page(struct inode *inode, struct page *page);
-extern int fscrypt_dd_encrypted(struct bio *bio);
-extern int fscrypt_dd_encrypted_inode(const struct inode *inode);
-extern int fscrypt_dd_is_traced_inode(const struct inode *inode);
-extern void fscrypt_dd_trace_inode(const struct inode *inode);
-extern long fscrypt_dd_get_ino(struct bio *bio);
-extern long fscrypt_dd_ioctl(unsigned int cmd, unsigned long *arg, struct inode *inode);
-extern int fscrypt_dd_submit_bio(struct inode *inode, struct bio *bio);
-extern int fscrypt_dd_may_submit_bio(struct bio *bio);
-extern struct inode *fscrypt_bio_get_inode(const struct bio *bio);
-extern bool fscrypt_dd_can_merge_bio(struct bio *bio, struct address_space *mapping);
-#endif
 
 int fscrypt_file_open(struct inode *inode, struct file *filp);
 int __fscrypt_prepare_link(struct inode *inode, struct inode *dir,

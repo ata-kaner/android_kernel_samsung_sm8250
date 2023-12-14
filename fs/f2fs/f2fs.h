@@ -467,11 +467,6 @@ static inline bool __has_cursum_space(struct f2fs_journal *journal,
 #define F2FS_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
 #define F2FS_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
 
-#ifdef CONFIG_DDAR
-#define	F2FS_IOC_GET_DD_POLICY		FS_IOC_GET_DD_POLICY
-#define	F2FS_IOC_SET_DD_POLICY		FS_IOC_SET_DD_POLICY
-#endif
-
 struct f2fs_gc_range {
 	u32 sync;
 	u64 start;

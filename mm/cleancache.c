@@ -224,11 +224,6 @@ void __cleancache_put_page(struct page *page)
 		return;
 	}
 
-#ifdef CONFIG_SDP
-	if (mapping_sensitive(page->mapping))
-		return;
-#endif
-
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 	pool_id = page->mapping->host->i_sb->cleancache_poolid;
 	if (pool_id >= 0 &&
