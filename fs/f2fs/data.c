@@ -749,12 +749,6 @@ int f2fs_submit_page_bio(struct f2fs_io_info *fio)
 	inc_page_count(fio->sbi, is_read_io(fio->op) ?
 			__read_io_type(page): WB_DATA_TYPE(fio->page));
 
-#ifdef CONFIG_FS_HPB
-	if(is_inode_flag_set(inode, FI_HPB_INODE)) { 
-		bio->bi_opf |= REQ_HPB_PREFER;
-	}
-#endif
-
 	__submit_bio(fio->sbi, bio, fio->type);
 	return 0;
 }
@@ -1034,12 +1028,6 @@ alloc_new:
 		goto alloc_new;
 	}
 
-#ifdef CONFIG_FS_HPB
-	if(is_inode_flag_set(inode, FI_HPB_INODE)) {
-		io->bio->bi_opf |= REQ_HPB_PREFER;
-	}
-#endif
-
 	if (fio->io_wbc)
 		wbc_account_io(fio->io_wbc, bio_page, PAGE_SIZE);
 
@@ -1099,11 +1087,6 @@ static struct bio *f2fs_grab_read_bio(struct inode *inode, block_t blkaddr,
 		bio->bi_private = ctx;
 	}
 
-#ifdef CONFIG_FS_HPB
-	if(is_inode_flag_set(inode, FI_HPB_INODE)) {
-		bio->bi_opf |= REQ_HPB_PREFER;
-	}
-#endif
 	return bio;
 }
 
@@ -3689,12 +3672,6 @@ static ssize_t f2fs_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 		if (do_opu)
 			down_read(&fi->i_gc_rwsem[READ]);
 	}
-
-#ifdef CONFIG_FS_HPB
-	if(is_inode_flag_set(inode, FI_HPB_INODE)) {
-		dio_flags |= DIO_HPB_IO;
-	}
-#endif
 
 	err = __blockdev_direct_IO(iocb, inode, inode->i_sb->s_bdev,
 			iter, rw == WRITE ? get_data_block_dio_write :
