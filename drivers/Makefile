@@ -221,9 +221,6 @@ obj-y				+= motor/
 obj-$(CONFIG_FIVE_TEE_DRIVER)	+= security/samsung/five_tee_driver/
 obj-$(CONFIG_ICD)		+= security/samsung/icdrv/
 
-# uH
-obj-$(CONFIG_UH)        += uh/
-
 # OLOG
 obj-y				+= kperfmon/
 

@@ -144,13 +144,14 @@ static inline void sec_debug_save_core_reg(struct sec_debug_core_t *core_reg)
 		"stp x9, x10, [x0], #0x10\n\t"
 		"stp x11, x12, [x0], #0x10\n\t"
 		"stp x13, x14, [x0], #0x10\n\t"
-#if (!defined CONFIG_CFP_ROPP) || (defined CONFIG_CFP_TEST)
+// ata-kaner: Disable ROPP. It's not necessary anymore.
+// #if (!defined CONFIG_CFP_ROPP) || (defined CONFIG_CFP_TEST)
 		"stp x15, x16, [x0], #0x10\n\t"
 		"stp x17, x18, [x0], #0x10\n\t"
-#else
-		"stp x15, x15, [x0], #0x10\n\t"
-		"stp x18, x18, [x0], #0x10\n\t"
-#endif
+// #else
+// 		"stp x15, x15, [x0], #0x10\n\t"
+// 		"stp x18, x18, [x0], #0x10\n\t"
+// #endif
 		"stp x19, x20, [x0], #0x10\n\t"
 		"stp x21, x22, [x0], #0x10\n\t"
 		"stp x23, x24, [x0], #0x10\n\t"

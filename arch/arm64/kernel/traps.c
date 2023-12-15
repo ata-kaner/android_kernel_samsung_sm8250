@@ -55,10 +55,6 @@
 
 #include <linux/sec_debug.h>
 
-#ifdef CONFIG_CFP_ROPP
-#include <linux/cfp.h>
-#endif
-
 static const char *handler[]= {
 	"Synchronous Abort",
 	"IRQ",
@@ -165,9 +161,6 @@ void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
 	unsigned long cur_sp = 0;
 	unsigned long cur_fp = 0;
 
-#if (defined CONFIG_CFP_ROPP) && (defined CONFIG_CFP_TEST)
-	unsigned long value = 0x0;
-#endif
 #ifdef CONFIG_SEC_DEBUG
 	unsigned long prev_fp = 0;
 #endif
@@ -185,11 +178,6 @@ void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
 
 	if (!try_get_task_stack(tsk))
 		return;
-
-#if (defined CONFIG_CFP_ROPP) && (defined CONFIG_CFP_TEST)
-	asm volatile("mrs %0, "STR(RRMK)"\n\t" : "=r" (value));
-	printk("CFP_TEST MK= %lx RRK=%lx RRK^MK=%lx\n", value, task_thread_info(tsk)->rrk, task_thread_info(tsk)->rrk ^ value);
-#endif
 
 	if (tsk == current) {
 		frame.fp = (unsigned long)__builtin_frame_address(0);

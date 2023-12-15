@@ -238,7 +238,6 @@ SECTIONS
 	BSS_SECTION(0, 0, 0)
 
 	. = ALIGN(PAGE_SIZE);
-#ifndef CONFIG_UH_RKP
 	idmap_pg_dir = .;
 	. += IDMAP_DIR_SIZE;
 
@@ -254,7 +253,6 @@ SECTIONS
 	swapper_pg_dir = .;
 	. += SWAPPER_DIR_SIZE;
 	swapper_pg_end = .;
-#endif
 	__pecoff_data_size = ABSOLUTE(. - __initdata_begin);
 	_end = .;
 

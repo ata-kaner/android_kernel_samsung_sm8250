@@ -806,19 +806,6 @@ ifdef CONFIG_DEBUG_INFO_DWARF4
 KBUILD_CFLAGS	+= $(call cc-option, -gdwarf-4,)
 endif
 
-ifdef CONFIG_CFP_JOPP
-# Don't use jump tables for switch statements, since this generates indirect jump (br)
-# instructions, which are very dangerous for kernel control flow integrity.
-KBUILD_CFLAGS	+= -fno-jump-tables
-KBUILD_CFLAGS	+= $(call cc-option, -mllvm -cfp-jopp)
-endif
-
-ifdef CONFIG_CFP_ROPP
-# Register reservation is done by modifying compiler source code.
-# KBUILD_CFLAGS	+= -ffixed-x16 -ffixed-x17
-KBUILD_CFLAGS	+= $(call cc-option, -mllvm -cfp-ropp)
-endif
-
 ifdef CONFIG_DEBUG_INFO_REDUCED
 KBUILD_CFLAGS 	+= $(call cc-option, -femit-struct-debug-baseonly) \
 		   $(call cc-option,-fno-var-tracking)

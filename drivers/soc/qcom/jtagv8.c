@@ -100,10 +100,8 @@ static int dbg_read_arch64_bxr(uint64_t *state, int i, int j)
 		break;
 
 	case 5:
-#ifndef CONFIG_CFP_ROPP
 		state[i++] = dbg_readq(DBGBVR5_EL1);
 		state[i++] = (uint64_t)dbg_readl(DBGBCR5_EL1);
-#endif
 		break;
 
 	case 6:
@@ -177,10 +175,8 @@ static int dbg_write_arch64_bxr(uint64_t *state, int i, int j)
 		break;
 
 	case 5:
-#ifndef CONFIG_CFP_ROPP
 		dbg_write(state[i++], DBGBVR5_EL1);
 		dbg_write(state[i++], DBGBCR5_EL1);
-#endif
 		break;
 
 	case 6:
@@ -493,10 +489,8 @@ static int dbg_read_arch32_bxr(uint32_t *state, int i, int j)
 		break;
 
 	case 5:
-#ifndef CONFIG_CFP_ROPP
 		state[i++] = dbg_read(DBGBVR5);
 		state[i++] = dbg_read(DBGBCR5);
-#endif
 		break;
 
 	case 6:
@@ -569,10 +563,8 @@ static int dbg_write_arch32_bxr(uint32_t *state, int i, int j)
 		dbg_write(state[i++], DBGBCR4);
 		break;
 	case 5:
-#ifndef CONFIG_CFP_ROPP
 		dbg_write(state[i++], DBGBVR5);
 		dbg_write(state[i++], DBGBCR5);
-#endif
 		break;
 	case 6:
 		dbg_write(state[i++], DBGBVR6);
