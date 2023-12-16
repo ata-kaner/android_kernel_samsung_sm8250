@@ -90,11 +90,9 @@ _head:
 	le64sym	_kernel_size_le			// Effective size of kernel image, little-endian
 	le64sym	_kernel_flags_le		// Informative flags, little-endian
 	.quad	0				// reserved
-#ifdef CONFIG_PROCA
-	le64sym	_proca_conf_offset		// memory info for proca ta
-#else
+// ata-kaner: Proca thing, remove if it's unused
 	.quad	0xecefecef			// Magic number for proca ta
-#endif
+// ata-kaner: Proca thing, remove if it's unused
 	.quad	0				// reserved
 	.ascii	"ARM\x64"			// Magic number
 #ifdef CONFIG_EFI
