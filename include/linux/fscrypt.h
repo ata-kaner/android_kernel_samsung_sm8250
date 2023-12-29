@@ -211,17 +211,6 @@ int fscrypt_register_key_removal_notifier(struct notifier_block *nb);
 int fscrypt_unregister_key_removal_notifier(struct notifier_block *nb);
 
 /* keysetup.c */
-#ifdef CONFIG_FSCRYPT_SDP
-extern int fscrypt_get_encryption_key(
-						struct fscrypt_info *crypt_info,
-						struct fscrypt_key *key);
-extern int fscrypt_get_encryption_key_classified(
-						struct fscrypt_info *crypt_info,
-						struct fscrypt_key *key);
-extern int fscrypt_get_encryption_kek(
-						struct fscrypt_info *crypt_info,
-						struct fscrypt_key *kek);
-#endif
 int fscrypt_get_encryption_info(struct inode *inode);
 void fscrypt_put_encryption_info(struct inode *inode);
 void fscrypt_free_inode(struct inode *inode);

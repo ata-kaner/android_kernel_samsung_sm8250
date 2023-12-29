@@ -27,7 +27,6 @@
 #include <linux/fs.h>
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
-#include <linux/uh.h>
 #include <linux/sec_class.h>
 #if defined(CONFIG_ARCH_QCOM)
 #include <linux/sched/signal.h>
@@ -366,14 +365,6 @@ static ssize_t store_hdm_policy(struct device *dev,
 	case HDM_KERNEL_POST:
 		hdm_post_setting(p);
 		break;
-#if defined(CONFIG_ARCH_QCOM)
-#if defined(CONFIG_UH)
-	case HDM_HYP_CALL:
-		uh_call(UH_APP_HDM, 9, 0, p, 0, 0);
-
-		break;
-#endif
-#endif
 	default:
 		goto error;
 	}
@@ -400,11 +391,6 @@ static ssize_t store_hdm_test(struct device *dev, struct device_attribute *attr,
 {
 	unsigned long mode = 0xFFFFF;
 	size_t len = count;
-#if defined(CONFIG_UH)
-	unsigned long command = 0;
-	int i = 0;
-#endif
-
 	if (count == 0) {
 		hdm_err("%s count = 0\n", __func__);
 		goto error;
@@ -435,49 +421,12 @@ static ssize_t store_hdm_test(struct device *dev, struct device_attribute *attr,
 #if defined(CONFIG_ARCH_EXYNOS)
 	hdm_info("%s lsi uh call is supposed to be done here\n", __func__);
 	hdm_info("%s mode : 0x%x\n", __func__, mode);
-
-#if defined(CONFIG_UH)
-	for (i = 0; i < HDM_DEVICE_MAX; i++) {
-		if (mode & (1<<i)) {
-			switch(i) {
-			case HDM_DEVICE_CAMERA:
-				hdm_info("%s CAMERA uh_call\n", __func__);
-				command = APP_HDM_EVENT_CAMERA;
-				break;
-			case HDM_DEVICE_MMC:
-				hdm_info("%s MMC uh_call\n", __func__);
-				command = APP_HDM_EVENT_MMC;
-				break;
-			case HDM_DEVICE_USB:
-				hdm_info("%s USB uh_call\n", __func__);
-				command = APP_HDM_EVENT_USB;
-				break;
-			case HDM_DEVICE_WIFI:
-				hdm_info("%s WIFI uh_call\n", __func__);
-				command = APP_HDM_EVENT_WIFI;
-				break;
-			case HDM_DEVICE_BLUETOOTH:
-				hdm_info("%s BT uh_call\n", __func__);
-				command = APP_HDM_EVENT_BLUETOOTH;
-				break;
-			default:
-				hdm_info("%s wrong cmd\n", __func__);
-				break;
-			}
-			uh_call(UH_APP_HDM, command, 0, 0, 0, 0);
-		}
-	}
-#else
 	hdm_info("%s uh is not enabled yet\n", __func__);
-#endif
 #endif
 
 #if defined(CONFIG_ARCH_QCOM)
 	hdm_info("%s qc smc/hyp call is supposed to be done here\n", __func__);
 	hdm_info("%s mode : 0x%x\n", __func__, mode);
-#if defined(CONFIG_UH)
-	hdm_info("%s i : %d, command : %d\n", __func__, i, command);
-#endif
 #endif
 
 error:
