@@ -408,13 +408,6 @@ if [ -n "${CONFIG_KALLSYMS}" ]; then
 	fi
 fi
 
-# CFP instrumentation will change binary, need to be before FIPS
-if [ -n "${CONFIG_CFP}" ]; then
-	echo '  CFP : instrumenting vmlinux... '
-	python2 "${srctree}/scripts/cfp/instrument.py" --vmlinux "${objtree}/vmlinux" \
-	--config "${objtree}/.config"  --inplace
-fi
-
 # Starting Android Q, the DTB's are part of dtb.img and not part
 # of the kernel image. RTIC DTS relies on the kernel environment
 # and could not build outside of the kernel. Generate RTIC DTS after
