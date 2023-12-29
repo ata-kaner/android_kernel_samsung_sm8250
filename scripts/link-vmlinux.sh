@@ -415,11 +415,6 @@ if [ -n "${CONFIG_CFP}" ]; then
 	--config "${objtree}/.config"  --inplace
 fi
 
-if [ -n "${CONFIG_CRYPTO_FIPS}" ]; then
-	echo '  FIPS : Generating hmac of crypto and updating vmlinux... '
-	PYTHONDONTWRITEBYTECODE=0 "${srctree}/scripts/crypto/fips_crypto_integrity.py" "${objtree}/vmlinux"
-fi
-
 # Starting Android Q, the DTB's are part of dtb.img and not part
 # of the kernel image. RTIC DTS relies on the kernel environment
 # and could not build outside of the kernel. Generate RTIC DTS after
