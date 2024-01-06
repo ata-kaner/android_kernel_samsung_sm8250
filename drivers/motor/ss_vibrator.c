@@ -744,7 +744,7 @@ static ssize_t intensity_show(struct device *dev,
 {
 	struct ss_vib *vib = dev_get_drvdata(dev);
 
-	return sprintf(buf, "intensity: %u\n", vib->intensity);
+	return sprintf(buf, "%u\n", vib->intensity);
 }
 
 static DEVICE_ATTR(intensity, 0660, intensity_show, intensity_store);
