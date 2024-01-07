@@ -3634,7 +3634,7 @@ wl_cfg80211_sched_scan_stop(struct wiphy *wiphy, struct net_device *dev)
 		if (cfg->sched_scan_running && wl_get_drv_status(cfg, SCANNING, dev)) {
 			/* If targetted escan for PNO is running, abort it */
 			WL_INFORM_MEM(("abort targetted escan\n"));
-			wl_cfgscan_scan_abort(cfg);
+			_wl_cfgscan_cancel_scan(cfg);
 			wl_clr_drv_status(cfg, SCANNING, dev);
 		} else {
 			WL_INFORM_MEM(("pno escan state:%d\n",

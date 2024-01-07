@@ -251,6 +251,12 @@ struct adc_sample_info {
 	int index;
 };
 
+enum slate_mode_info {
+	SB_SLATE_NONE = 0,
+	SB_SLATE_NORMAL,
+	SB_SLATE_SMART,
+};
+
 #if defined(CONFIG_BATTERY_SAMSUNG_MHS)
 struct cable_info {
 	int cable_type;
@@ -708,6 +714,7 @@ struct sec_battery_info {
 	int raw_bat_temp;
 
 	bool support_unknown_wpcthm;
+	unsigned int slate_mode;
 };
 
 /* event check */

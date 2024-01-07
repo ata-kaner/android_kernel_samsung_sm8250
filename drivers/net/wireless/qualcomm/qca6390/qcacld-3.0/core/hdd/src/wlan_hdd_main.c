@@ -2219,7 +2219,7 @@ static void hdd_component_cfg_chan_to_freq(struct wlan_objmgr_pdev *pdev)
 }
 
 static uint32_t hdd_update_band_cap_from_dot11mode(
-	struct hdd_context *hdd_ctx, uint32_t band_capability)
+		struct hdd_context *hdd_ctx, uint32_t band_capability)
 {
 	if (hdd_ctx->config->dot11Mode == eHDD_DOT11_MODE_AUTO)
 		return band_capability;

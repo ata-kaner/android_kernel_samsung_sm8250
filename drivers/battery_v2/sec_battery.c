@@ -6343,6 +6343,16 @@ static void sec_bat_cable_work(struct work_struct *work)
 					   SEC_BAT_CURRENT_EVENT_USB_STATE |
 					   SEC_BAT_CURRENT_EVENT_SEND_UVDM));
 
+		/* slate_mode needs to be clear manually since smart switch does not disable slate_mode sometimes */
+		if (is_slate_mode(battery)) {
+			pr_info("%s: slate_mode (%d)\n", __func__, battery->slate_mode);
+			if (battery->slate_mode == SB_SLATE_SMART) {
+				battery->slate_mode = SB_SLATE_NONE;
+				sec_bat_set_current_event(battery, 0, SEC_BAT_CURRENT_EVENT_SLATE);
+				dev_info(battery->dev,
+						"%s: disable slate mode(smart switch) manually\n", __func__);
+			}
+		}
 #if defined(CONFIG_ENABLE_100MA_CHARGING_BEFORE_USB_CONFIGURED)
 		cancel_delayed_work(&battery->slowcharging_work);
 #endif

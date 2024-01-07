@@ -12598,8 +12598,8 @@ static int dhd_wait_for_file_dump(dhd_pub_t *dhdp)
 		timeleft = dhd_os_busbusy_wait_bitmask(dhdp,
 				&dhdp->dhd_bus_busy_state, DHD_BUS_BUSY_IN_HALDUMP, 0);
 		if ((dhdp->dhd_bus_busy_state & DHD_BUS_BUSY_IN_HALDUMP) != 0) {
-			DHD_ERROR(("%s: Timed out(%d) dhd_bus_busy_state=0x%x\n",
-					__FUNCTION__, timeleft, dhdp->dhd_bus_busy_state));
+			DHD_ERROR(("%s: Time left(%d) dhd_bus_busy_state=0x%x\n",
+				__FUNCTION__, timeleft, dhdp->dhd_bus_busy_state));
 			ret = BCME_ERROR;
 		}
 	} else {
@@ -14046,8 +14046,13 @@ dhd_os_busbusy_wait_bitmask(dhd_pub_t *pub, uint *var,
 	/* Convert timeout in millsecond to jiffies */
 	timeout = msecs_to_jiffies(DHD_BUS_BUSY_TIMEOUT);
 
-	timeout = wait_event_timeout(dhd->dhd_bus_busy_state_wait,
-			((*var & bitmask) == condition), timeout);
+	if (bitmask == DHD_BUS_BUSY_IN_HALDUMP) {
+		timeout = wait_event_timeout(dhd->dhd_bus_busy_state_wait,
+			((*var & bitmask) == condition || !pub->up), timeout);
+	} else {
+		timeout = wait_event_timeout(dhd->dhd_bus_busy_state_wait,
+				((*var & bitmask) == condition), timeout);
+	}
 
 	return timeout;
 }

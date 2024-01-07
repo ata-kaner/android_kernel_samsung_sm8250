@@ -427,7 +427,7 @@ static int sr100_dev_transceive(struct sr100_dev* sr100_dev, int op_mode, int co
         count -= NORMAL_MODE_HEADER_LEN;
       }
       if(count > 0) {
-        udelay(10);
+        usleep_range(30, 50);
         /* UCI Payload write */
         ret = spi_write(sr100_dev->spi, sr100_dev->tx_buffer + NORMAL_MODE_HEADER_LEN, count);
         if (ret < 0) {

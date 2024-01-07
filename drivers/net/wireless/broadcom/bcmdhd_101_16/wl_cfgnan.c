@@ -3268,9 +3268,8 @@ wl_cfgnan_delayed_disable(struct work_struct *work)
 	} else {
 		WL_INFORM_MEM(("nan is in disabled state\n"));
 	}
-	rtnl_unlock();
-
 	DHD_NAN_WAKE_UNLOCK(cfg->pub);
+	rtnl_unlock();
 
 	return;
 }
@@ -6214,10 +6213,13 @@ wl_cfgnan_get_capablities_handler(struct net_device *ndev,
 
 	NAN_DBG_ENTER();
 
+	RETURN_EIO_IF_NOT_UP(cfg);
+
 	/* Do not query fw about nan if feature is not supported */
 	if (!FW_SUPPORTED(dhdp, nan)) {
 		WL_DBG(("NAN is not supported\n"));
-		return ret;
+		ret = BCME_NOTUP;
+		goto fail;
 	}
 
 	if (cfg->nancfg->nan_init_state) {
