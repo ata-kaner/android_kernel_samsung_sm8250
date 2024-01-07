@@ -679,7 +679,7 @@ int secdp_show_hmd_dev(char *buf)
 end:
 	return rc;
 }
-#endif
+#endif/*CONFIG_SEC_DISPLAYPORT_ENG*/
 
 int secdp_store_hmd_dev(char *str, size_t len, int num_hmd)
 {
@@ -873,6 +873,21 @@ void secdp_debug_prefer_ratio_store(int ratio)
 
 	dp->sec.prefer_ratio = ratio;
 	DP_DEBUG("ratio: %d\n", dp->sec.prefer_ratio);
+}
+
+int secdp_show_link_param(char *buf)
+{
+	struct dp_display_private *dp = g_secdp_priv;
+	int rc = 0;
+
+	rc += scnprintf(buf + rc, PAGE_SIZE - rc,
+			"v_level: %u, p_level: %u\nlane_cnt: %u\nbw_code: 0x%x\n",
+			dp->link->phy_params.v_level,
+			dp->link->phy_params.p_level,
+			dp->link->link_params.lane_count,
+			dp->link->link_params.bw_code);
+
+	return rc;
 }
 #endif/*CONFIG_SEC_DISPLAYPORT_ENG*/
 

@@ -2609,7 +2609,7 @@ static int check_vma(unsigned long hostptr, u64 size)
 			return false;
 
 		cur = vma->vm_end;
-}
+	}
 
 	return true;
 }

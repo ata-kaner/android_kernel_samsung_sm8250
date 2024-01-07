@@ -124,6 +124,7 @@ extern char *sec_cable_type[];
 #define BATT_MISC_EVENT_BATTERY_HEALTH			0x000F0000
 #define BATT_MISC_EVENT_HEALTH_OVERHEATLIMIT		0x00100000
 #define BATT_MISC_EVENT_ABNORMAL_PAD		0x00200000
+#define BATT_MISC_EVENT_FULL_CAPACITY		0x01000000
 
 #define BATTERY_HEALTH_SHIFT                16
 enum misc_battery_health {
@@ -338,6 +339,7 @@ struct sec_battery_info {
 	bool safety_timer_set;
 	bool lcd_status;
 	bool skip_swelling;
+	bool wc_auth_retried;
 
 	int status;
 	int health;
@@ -561,6 +563,7 @@ struct sec_battery_info {
 	int wpc_vout_level;
 	int wpc_max_vout_level;
 	unsigned int current_event;
+	bool refresh_current;
 
 	/* wireless charging enable */
 	struct mutex wclock;
@@ -715,6 +718,7 @@ struct sec_battery_info {
 
 	bool support_unknown_wpcthm;
 	unsigned int slate_mode;
+	int batt_full_capacity;
 };
 
 /* event check */
@@ -779,8 +783,10 @@ extern void sec_bat_set_temp_control_test(struct sec_battery_info *battery, bool
 extern void sec_bat_get_battery_info(struct sec_battery_info *battery);
 extern int sec_bat_set_charge(struct sec_battery_info *battery, int chg_mode);
 extern int sec_bat_set_charging_current(struct sec_battery_info *battery);
+extern void sec_bat_refresh_charging_current(struct sec_battery_info *battery);
 extern void sec_bat_aging_check(struct sec_battery_info *battery);
 extern void sec_wireless_set_tx_enable(struct sec_battery_info *battery, bool wc_tx_enable);
+extern void sec_bat_check_wc_re_auth(struct sec_battery_info *battery);
 
 #if defined(CONFIG_WIRELESS_FIRMWARE_UPDATE)
 extern void sec_bat_fw_update_work(struct sec_battery_info *battery, int mode);

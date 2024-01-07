@@ -27,7 +27,7 @@ extern bool sysfs_flash_op_kt;
 extern bool sysfs_flash_op;
 #endif
 
-#if defined(CONFIG_LEDS_KTD2692) || defined(CONFIG_LEDS_RT8547)
+#if defined(CONFIG_LEDS_KTD2692)
 static unsigned int system_rev __read_mostly;
 
 static int __init sec_hw_rev_setup(char *p)
@@ -58,7 +58,6 @@ struct cam_flash_frame_setting g_flash_data;
 
 extern struct cam_flash_ctrl *g_flash_ctrl;
 struct cam_flash_frame_setting g_flash_data;
-
 
 typedef struct {
         uint32_t level;
@@ -2344,6 +2343,5 @@ ssize_t flash_power_store(struct device *dev, struct device_attribute *attr, con
         }
         return size;
 }
-
 EXPORT_SYMBOL(flash_power_store);
 #endif

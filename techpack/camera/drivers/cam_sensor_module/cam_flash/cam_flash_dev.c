@@ -13,7 +13,7 @@
 struct cam_flash_ctrl *g_flash_ctrl;
 #endif
 
-#if defined(CONFIG_LEDS_S2MPB02)  || defined(CONFIG_LEDS_KTD2692)
+#if defined(CONFIG_LEDS_S2MPB02) || defined(CONFIG_LEDS_KTD2692)
 #include <cam_sensor_cmn_header.h>
 #include <cam_sensor_util.h>
 struct msm_pinctrl_info flash_pctrl;

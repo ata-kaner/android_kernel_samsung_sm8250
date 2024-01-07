@@ -184,7 +184,6 @@ static int ktd2692_write_data(unsigned data)
 }
 
 ssize_t ktd2692_store(struct device *dev,struct device_attribute *attr, const char *buf,size_t count)
-//ssize_t ktd2692_store(const char *buf)
 {
 	int value = 0;
 	int brightness_value = 0;
@@ -243,7 +242,6 @@ ssize_t ktd2692_store(struct device *dev,struct device_attribute *attr, const ch
 
 		global_ktd2692data->mode_status = KTD2692_ENABLE_TORCH_MODE;
 		global_ktd2692data->is_torch_enable = true;
-		LED_INFO("KTD2692 is_torch_enable = true");
 		spin_lock_irqsave(&global_ktd2692data->int_lock, flags);
 		ktd2692_write_data(global_ktd2692data->LVP_Voltage|
 							KTD2692_ADDR_LVP_SETTING);
@@ -254,12 +252,12 @@ ssize_t ktd2692_store(struct device *dev,struct device_attribute *attr, const ch
 		LED_INFO("KTD2692_ADDR_FLASH_TIMEOUT_SETTING");
 #endif
 		if (value == 100 || value == 1) {/* value 1 is getting used for turning on torch using side key */
-			LED_INFO("KTD2692-TORCH ON.1 : E(%d), current(%d)\n", value, global_ktd2692data->factory_torch_current_value);
+			LED_INFO("KTD2692-TORCH ON : E(%d), current(%d)\n", value, global_ktd2692data->factory_torch_current_value);
 			ktd2692_write_data(global_ktd2692data->factory_torch_current_value|
 								KTD2692_ADDR_VIDEO_CURRENT_SETTING);
-			LED_INFO("KTD2692-TORCH ON.2 : X(%d), current(%d)\n", value, global_ktd2692data->factory_torch_current_value);
+			LED_INFO("KTD2692-TORCH ON : X(%d), current(%d)\n", value, global_ktd2692data->factory_torch_current_value);
 		} else if (1001 <= value && value <= 1010) {
-			LED_INFO("KTD2692-TORCH ON. 3: E(%d)\n", value);
+			LED_INFO("KTD2692-TORCH ON. : E(%d)\n", value);
 			brightness_value = value - 1001;
 			if (global_ktd2692data->torch_table[brightness_value] != 0) {
 				torch_intensity = KTD2692_CAL_VIDEO_CURRENT(KTD2692_TORCH_STEP_LEVEL_CURRENT(global_ktd2692data->torch_table[brightness_value], global_ktd2692data->max_current),
@@ -271,17 +269,16 @@ ssize_t ktd2692_store(struct device *dev,struct device_attribute *attr, const ch
 			}
 			ktd2692_write_data(torch_intensity|
 								KTD2692_ADDR_VIDEO_CURRENT_SETTING);
-			LED_INFO("KTD2692-TORCH ON. 4: X(%d)\n", value);
+			LED_INFO("KTD2692-TORCH ON. : X(%d)\n", value);
 		} else {
-			LED_INFO("KTD2692-FLASH ON. 5 : E(%d), current(%d)\n", value, global_ktd2692data->flash_current_value);
+			LED_INFO(" KTD2692-FLASH ON : E(%d), current(%d)\n", value, global_ktd2692data->flash_current_value);
 			global_ktd2692data->mode_status = KTD2692_ENABLE_FLASH_MODE;
 			/*ktd2692_write_data(global_ktd2692data->flash_current_value|
 								KTD2692_ADDR_FLASH_CURRENT_SETTING);*/
-			if (gpio_is_valid(global_ktd2692data->flash_en)){
-				LED_INFO("KTD2692 flas_en in Flash ON");
+			if (gpio_is_valid(global_ktd2692data->flash_en))
 				__gpio_set_value(global_ktd2692data->flash_en, 1);
-			}
-			LED_INFO("KTD2692-FLASH ON. 6 : X(%d), current(%d)\n", value, global_ktd2692data->flash_current_value);
+			
+			LED_INFO(" KTD2692-FLASH ON. : X(%d), current(%d)\n", value, global_ktd2692data->flash_current_value);
 		}
 		ktd2692_write_data(global_ktd2692data->mode_status|
 							KTD2692_ADDR_VIDEO_FLASHMODE_CONTROL);
@@ -345,52 +342,49 @@ int32_t ktd2692_led_mode_ctrl(int state, u32 intensity)
 			break;
 		case 1:
 			/* FlashLight Mode TORCH */
-			/*if (gpio_is_valid(global_ktd2692data->flash_en)) {
+			/*if (gpio_is_valid(global_ktd2692data->flash_en)) 
 				ret = gpio_request(global_ktd2692data->flash_en, "ktd2692_led_en");
-				LED_INFO("KTD2692-TORCH gpio enabled  (%d)\n",ret );
+
 				if (ret) {
 					gpio_free(global_ktd2692data->flash_control);
 					LED_ERROR("Failed to request ktd2692_led_en\n");
 				}
-			}*/
+			
 			if (global_ktd2692data->is_torch_enable == true) {
 				LED_INFO("KTD2692-TORCH is already ON\n");
 				return 0;
-			}
-			LED_INFO("BEFORE KTD2692-TORCH ON 5 E(%d) video current [%d] [%d] \n", state, global_ktd2692data->video_current_value ,global_ktd2692data->is_torch_enable);
+			}*/
+			
 			global_ktd2692data->mode_status = KTD2692_ENABLE_TORCH_MODE;
-			//global_ktd2692data->is_torch_enable = true;
-			LED_INFO("AFTER KTD2692-TORCH ON 5 E(%d) video current [%d] [%d] \n", state, global_ktd2692data->video_current_value ,global_ktd2692data->is_torch_enable);
+			LED_INFO("KTD2692 global video current [%d] [%d] \n", state, global_ktd2692data->video_current_value );
 			spin_lock_irqsave(&global_ktd2692data->int_lock, flags);
 			ktd2692_write_data(global_ktd2692data->LVP_Voltage|
 								KTD2692_ADDR_LVP_SETTING);
 			if (intensity > 0) {
 				ktd2692_write_data((uint8_t)(KTD2692_VIDEO_CURRENT(intensity, KTD2692_MAX_CURRENT)) |
 									KTD2692_ADDR_VIDEO_CURRENT_SETTING);
-				LED_INFO("[%s]Intensity(%u) Current-Index (%d)\n", __func__, intensity,
+				LED_INFO("[%s] : Intensity(%u) Current-Index (%d)\n", __func__, intensity,
 						 KTD2692_VIDEO_CURRENT(intensity, KTD2692_MAX_CURRENT));
 			} else {
 				ktd2692_write_data(global_ktd2692data->video_current_value|
 									KTD2692_ADDR_VIDEO_CURRENT_SETTING);
-				LED_INFO("[%s] Intensity(%u) Current-Index (%d)\n", __func__, intensity,
+				LED_INFO("[%s] : Intensity(%u) Current-Index (%d)\n", __func__, intensity,
 						 KTD2692_VIDEO_CURRENT(intensity, KTD2692_MAX_CURRENT))	;				
 			}
 			
 			ktd2692_write_data(global_ktd2692data->mode_status|
 								KTD2692_ADDR_VIDEO_FLASHMODE_CONTROL);
-			LED_INFO("[%s]Intensity(%u) Current-Index (%d)\n", __func__, intensity,
-						 KTD2692_VIDEO_CURRENT(intensity, KTD2692_MAX_CURRENT));
 										
 			/*if (gpio_is_valid(global_ktd2692data->flash_en))
 				gpio_free(global_ktd2692data->flash_en);*/
 			spin_unlock_irqrestore(&global_ktd2692data->int_lock, flags);
-			LED_INFO("KTD2692-TORCH ON  6 X(%d)\n", state);
+			LED_INFO("KTD2692-TORCH ON X(%d)\n", state);
 			break;
 		case 2:
 			/* FlashLight Mode Flash */
 			/*if (gpio_is_valid(global_ktd2692data->flash_en)) {
 				ret = gpio_request(global_ktd2692data->flash_en, "ktd2692_led_en");
-	       LED_INFO(" KTD2692-FLASH gpio enabled  (%d)\n",ret );
+				LED_INFO("KTD2692-FLASH gpio enabled  (%d)\n",ret );
 				if (ret) {
 					gpio_free(global_ktd2692data->flash_control);
 					LED_ERROR("Failed to request ktd2692_led_en\n");
@@ -422,9 +416,8 @@ int32_t ktd2692_led_mode_ctrl(int state, u32 intensity)
 			break;
 		case 3:
 			/* FlashLight Mode Flicker */
-	        LED_INFO("KTD2692-flicker\n" );
 			LED_INFO("KTD2692-FLASH ON E(%d)\n", state);
-			//global_ktd2692data->mode_status = KTD2692_ENABLE_FLASH_MODE;
+			/*global_ktd2692data->mode_status = KTD2692_ENABLE_FLASH_MODE;*/
 			spin_lock_irqsave(&global_ktd2692data->int_lock, flags);
 			ktd2692_write_data(global_ktd2692data->LVP_Voltage|
 								KTD2692_ADDR_LVP_SETTING);
@@ -469,16 +462,11 @@ int32_t ktd2692_led_mode_ctrl(int state, u32 intensity)
 		LED_INFO("KTD2692 free flash_ctrl");
 		gpio_free(global_ktd2692data->flash_control);
 	}
-	/*if (gpio_is_valid(global_ktd2692data->flash_en)){
-			gpio_free(global_ktd2692data->flash_en);
-			LED_INFO("KTD2692 free flah_en");
-	}*/
 	return ret;
 }
 EXPORT_SYMBOL(ktd2692_led_mode_ctrl);
 
 ssize_t ktd2692_show (struct device *dev,struct device_attribute *attr, char *buf)
-//ssize_t ktd2692_show(char *buf)
 {
 	LED_INFO("KTD2692-SHOW:(%d) (%d)\n", buf,global_ktd2692data->sysfs_input_data);
 	return sprintf(buf, "%d\n", global_ktd2692data->sysfs_input_data);
@@ -507,7 +495,7 @@ static int ktd2692_parse_dt(struct device *dev,
 	pdata->video_current_value = KTD2692_VIDEO_CURRENT(KTD2692_VIDEO_DEFAULT_CURRENT, KTD2692_MAX_CURRENT);
 	pdata->factory_torch_current_value = KTD2692_VIDEO_CURRENT(KTD2692_FACTORY_TORCH_CURRENT, KTD2692_MAX_CURRENT);
 	pdata->mode_status = KTD2692_DISABLES_TORCH_FLASH_MODE;
-    LED_INFO("Before dt parse pdata->min_current_value = %d   pdata->flash_current_value=%d  pdata->video_current_value =%d  pdata->factory_torch_current_value=%d \n" ,pdata->min_current_value,pdata->flash_current_value,pdata->video_current_value ,pdata->factory_torch_current_value);
+
 	/* get gpio */
 	pdata->flash_control = of_get_named_gpio(dnode, "flash_control", 0);
 	if (!gpio_is_valid(pdata->flash_control)) {
@@ -559,7 +547,7 @@ static int ktd2692_parse_dt(struct device *dev,
 	} else {
 		pdata->torch_table_enable = 0;
 	}
-	LED_INFO("After dt parse pdata->min_current_value = %d   pdata->flash_current_value=%d  pdata->video_current_value =%d  pdata->factory_torch_current_value=%d \n" ,pdata->min_current_value,pdata->flash_current_value,pdata->video_current_value ,pdata->factory_torch_current_value);
+
 	return ret;
 }
 
@@ -654,12 +642,13 @@ static struct platform_driver ktd2692_driver = {
 	.remove = ktd2692_remove,
 };
 
+
 #if defined(CONFIG_SEC_R8Q_PROJECT)
 static unsigned int system_rev __read_mostly;
 
 static int __init sec_hw_rev_setup(char *p)
 {
-	int ret = 0;
+	int ret;
 
 	ret = kstrtouint(p, 0, &system_rev);
 	if (unlikely(ret < 0)) {
@@ -681,7 +670,7 @@ static unsigned int sec_hw_rev(void)
 
 static int __init ktd2692_init(void)
 {
-	int rc ;
+	int rc = 0;
 	
 	#if defined(CONFIG_SEC_R8Q_PROJECT)
 	unsigned int board_rev = sec_hw_rev();
@@ -699,7 +688,6 @@ static int __init ktd2692_init(void)
 		return rc;
 	}
 	return rc;
-	
 }
 
 static void __exit ktd2692_exit(void)
@@ -712,5 +700,3 @@ module_exit(ktd2692_exit);
 
 MODULE_DESCRIPTION("KTD2692 driver");
 MODULE_LICENSE("GPL");
-
-
