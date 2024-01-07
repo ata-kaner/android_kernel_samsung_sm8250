@@ -794,10 +794,12 @@ static int a96t3x6_ccic_handle_notification(struct notifier_block *nb,
 			usb_typec_info.attach == MUIC_NOTIFY_CMD_DETACH) {
 			cmd = CMD_ON;
 			schedule_work(&grip_data->cmdon_work);
+			a96t3x6_enter_unknown_mode(grip_data, TYPE_USB);
 		} else if (usb_typec_info.id == CCIC_NOTIFY_ID_POWER_STATUS &&
 			usb_typec_info.attach == MUIC_NOTIFY_CMD_ATTACH) {
 			cmd = CMD_OFF;
 			schedule_work(&grip_data->cmdoff_work);
+			a96t3x6_enter_unknown_mode(grip_data, TYPE_USB);
 		} else {
 			return 0;
 		}
@@ -834,6 +836,8 @@ static int a96t3x6_ccic_handle_notification(struct notifier_block *nb,
 				schedule_work(&grip_data->cmdoff_work);
 			} else
 				schedule_work(&grip_data->cmdon_work);
+
+			a96t3x6_enter_unknown_mode(grip_data, TYPE_USB);
 #endif
 			GRIP_INFO("attach = %d, cmd = %d", usb_typec_info.attach, cmd);
 			break;
@@ -843,13 +847,6 @@ static int a96t3x6_ccic_handle_notification(struct notifier_block *nb,
 	}
 
 	pre_attach = usb_typec_info.attach;
-
-#if defined(CONFIG_SENSORS_SKIP_CABLE_RESET) && defined(CONFIG_TABLET_MODEL_CONCEPT)
-	GRIP_INFO("CCIC event, grip reset skip");
-#else
-	a96t3x6_enter_unknown_mode(grip_data, TYPE_USB);
-#endif
-
 	return 0;
 }
 #endif
@@ -857,7 +854,9 @@ static int a96t3x6_ccic_handle_notification(struct notifier_block *nb,
 static int a96t3x6_hall_ic_notify(struct notifier_block *nb,
 		unsigned long flip_cover, void *v) 
 {
+#if IS_ENABLED(CONFIG_TABLET_MODEL_CONCEPT)
 	struct hall_notifier_context *hall_notifier = v;
+#endif
 	struct a96t3x6_data *data = container_of(nb, struct a96t3x6_data,
 					hall_nb);
 	if (data == NULL) {
@@ -901,7 +900,11 @@ static int a96t3x6_pogo_notifier(struct notifier_block *nb,
 
 	switch (action) {
 	case POGO_NOTIFIER_ID_ATTACHED:
-		schedule_work(&data->cmdoff_work);
+#if defined(CONFIG_SENSORS_A96T3X6_HALL_NOTIFIER)
+		schedule_delayed_work(&data->reset_work, msecs_to_jiffies(1));
+#else
+		a96t3x6_grip_sw_reset(data);
+#endif
 		GRIP_INFO("pogo attach\n");
 		break;
 	case POGO_NOTIFIER_ID_DETACHED:
@@ -975,6 +978,22 @@ static void a96t3x6_debug_work_func(struct work_struct *work)
 	wacom_hall_state = a96t3x6_get_hallic_state(WACOM_HALL_PATH);
 #endif
 
+#if defined(CONFIG_TABLET_MODEL_CONCEPT)
+	if ((hall_state == HALL_CLOSE_STATE && hall_prev_state != hall_state)) {
+		GRIP_INFO("%s - hall is closed %d %d\n", __func__, hall_state, cert_hall_state);
+		GRIP_INFO("%s - hall reset skip for tablet only\n", __func__);
+	} else if ((cert_hall_state == HALL_CLOSE_STATE && cert_hall_prev_state != cert_hall_state)
+#if defined(CONFIG_WACOM_HALL)
+	    || (wacom_hall_state == HALL_CLOSE_STATE && wacom_hall_prev_state != wacom_hall_state)
+#endif
+		) {
+		GRIP_INFO("%s - certi hall is closed %d\n", __func__, cert_hall_state);
+#if defined(CONFIG_WACOM_HALL)
+		GRIP_INFO("%s - wacom hall is closed %d\n", __func__, wacom_hall_state);
+#endif
+		a96t3x6_grip_sw_reset(data);
+	}
+#else
 	if ((hall_state == HALL_CLOSE_STATE && hall_prev_state != hall_state)
 		||(cert_hall_state == HALL_CLOSE_STATE && cert_hall_prev_state != cert_hall_state)
 #if defined(CONFIG_WACOM_HALL)
@@ -987,6 +1006,7 @@ static void a96t3x6_debug_work_func(struct work_struct *work)
 #endif
 		a96t3x6_grip_sw_reset(data);
 	}
+#endif
 
 	if ((hall_prev_state != hall_state)
 		|| (cert_hall_prev_state != cert_hall_state)
@@ -3591,6 +3611,7 @@ static int a96t3x6_probe(struct i2c_client *client,
 	if (!noti_input_dev) {
 		GRIP_ERR("Failed to allocate memory for input device\n");
 		ret = -ENOMEM;
+		input_free_device(input_dev);
 		goto err_noti_input_alloc;
 	}
 
@@ -3614,12 +3635,16 @@ static int a96t3x6_probe(struct i2c_client *client,
 	ret = a96t3x6_parse_dt(data, &client->dev);
 	if (ret) {
 		GRIP_ERR("failed to a96t3x6_parse_dt\n");
+		input_free_device(input_dev);
+		input_free_device(noti_input_dev);
 		goto err_config;
 	}
 
 	ret = a96t3x6_irq_init(&client->dev, data);
 	if (ret) {
 		GRIP_ERR("failed to init reg\n");
+		input_free_device(input_dev);
+		input_free_device(noti_input_dev);
 		goto pwr_config;
 	}
 
@@ -3641,6 +3666,8 @@ static int a96t3x6_probe(struct i2c_client *client,
 	ret = a96t3x6_fw_check(data);
 	if (ret) {
 		GRIP_ERR("failed to firmware check (%d)\n", ret);
+		input_free_device(input_dev);
+		input_free_device(noti_input_dev);
 		goto err_reg_input_dev;
 	}
 #else
@@ -3651,6 +3678,8 @@ static int a96t3x6_probe(struct i2c_client *client,
 	ret = a96t3x6_i2c_read(client, REG_MODEL_NO, &buf, 1);
 	if (ret) {
 		GRIP_ERR("i2c is failed %d\n", ret);
+		input_free_device(input_dev);
+		input_free_device(noti_input_dev);
 		goto err_reg_input_dev;
 	} else {
 		GRIP_INFO("i2c is normal, model_no = 0x%2x\n", buf);
@@ -3691,6 +3720,8 @@ static int a96t3x6_probe(struct i2c_client *client,
 	if (ret) {
 		GRIP_ERR("failed to register input dev (%d)\n",
 			ret);
+		input_free_device(input_dev);
+		input_free_device(noti_input_dev);
 		goto err_reg_input_dev;
 	}
 
@@ -3698,6 +3729,7 @@ static int a96t3x6_probe(struct i2c_client *client,
 					data->input_dev->name);
 	if (ret < 0) {
 		GRIP_ERR("Failed to create sysfs symlink\n");
+		input_free_device(noti_input_dev);
 		goto err_sysfs_symlink;
 	}
 
@@ -3705,6 +3737,7 @@ static int a96t3x6_probe(struct i2c_client *client,
 				&a96t3x6_attribute_group);
 	if (ret < 0) {
 		GRIP_ERR("Failed to create sysfs group\n");
+		input_free_device(noti_input_dev);
 		goto err_sysfs_group;
 	}
 
@@ -3718,6 +3751,7 @@ static int a96t3x6_probe(struct i2c_client *client,
 	if (ret) {
 		GRIP_ERR("failed to register input dev (%d)\n",
 			ret);
+		input_free_device(noti_input_dev);
 		goto err_reg_noti_input_dev;
 	}
 
@@ -3767,7 +3801,7 @@ static int a96t3x6_probe(struct i2c_client *client,
 err_req_irq:
 	sensors_unregister(data->dev, grip_sensor_attributes);
 err_sensor_register:
-	input_unregister_device(input_dev);
+	input_unregister_device(noti_input_dev);
 err_reg_noti_input_dev:
 	sysfs_remove_group(&data->input_dev->dev.kobj,
 			&a96t3x6_attribute_group);
@@ -3783,9 +3817,7 @@ err_reg_input_dev:
 pwr_config:
 err_config:
 	wake_lock_destroy(&data->grip_wake_lock);
-	input_free_device(noti_input_dev);
 err_noti_input_alloc:
-	input_free_device(input_dev);
 err_input_alloc:
 	kfree(data);
 err_alloc:

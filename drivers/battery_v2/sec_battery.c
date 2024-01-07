@@ -1094,16 +1094,37 @@ void sec_bat_check_lrp_temp(
 				*input_current = battery->pdata->lrp_curr[LRP_25W].st_icl[lrp_step - 1];
 				*charging_current = battery->pdata->lrp_curr[LRP_25W].st_fcc[lrp_step - 1];
 			} else {
-				if (*input_current > (60000 / battery->input_voltage))
-					*input_current = 60000 / battery->input_voltage;
+				if (lcd_sts) {
+					if (*input_current > (60000 / battery->input_voltage))
+						*input_current = 60000 / battery->input_voltage;
+				} else {
+					if (*input_current > battery->pdata->chg_input_limit_current)
+						*input_current = battery->pdata->chg_input_limit_current;
+					if (*charging_current > battery->pdata->chg_charging_limit_current)
+						*charging_current = battery->pdata->chg_charging_limit_current;
+				}
 			}
 		} else if (is_hv_wire_type(ct)) {
 			if (is_hv_wire_12v_type(battery->cable_type)) {
-				if (*input_current > battery->pdata->siop_hv_12v_input_limit_current)
-					*input_current = battery->pdata->siop_hv_12v_input_limit_current;
+				if (lcd_sts) {
+					if (*input_current > battery->pdata->siop_hv_12v_input_limit_current)
+						*input_current = battery->pdata->siop_hv_12v_input_limit_current;
+				} else {
+					if (*input_current > battery->pdata->chg_input_limit_current)
+						*input_current = battery->pdata->chg_input_limit_current;
+					if (*charging_current > battery->pdata->chg_charging_limit_current)
+						*charging_current = battery->pdata->chg_charging_limit_current;
+				}
 			} else {
-				if (*input_current > battery->pdata->siop_hv_input_limit_current)
-					*input_current = battery->pdata->siop_hv_input_limit_current;
+				if (lcd_sts) {
+					if (*input_current > battery->pdata->siop_hv_input_limit_current)
+						*input_current = battery->pdata->siop_hv_input_limit_current;
+				} else {
+					if (*input_current > battery->pdata->chg_input_limit_current)
+						*input_current = battery->pdata->chg_input_limit_current;
+					if (*charging_current > battery->pdata->chg_charging_limit_current)
+						*charging_current = battery->pdata->chg_charging_limit_current;
+				}
 			}
 		} else {
 			if (*input_current > battery->pdata->siop_input_limit_current)
@@ -2176,7 +2197,7 @@ static void sec_bat_send_cs100(struct sec_battery_info *battery)
 	union power_supply_propval value = {0, };
 	bool send_cs100_cmd = true;
 
-	if (is_wireless_type(battery->cable_type)) {
+	if (is_wireless_fake_type(battery->cable_type)) {
 #ifdef CONFIG_CS100_JPNCONCEPT
 		psy_do_property(battery->pdata->wireless_charger_name, get,
 			POWER_SUPPLY_EXT_PROP_WIRELESS_TX_ID, value);
