@@ -126,6 +126,10 @@ obj-$(CONFIG_HAS_IOMEM) += iomem.o
 obj-$(CONFIG_ZONE_DEVICE) += memremap.o
 obj-$(CONFIG_RSEQ) += rseq.o
 
+obj-$(CONFIG_FAST_TRACK) += ftt/
+
+obj-$(CONFIG_INTELLIGENCE) += intelligence.o
+
 $(obj)/configs.o: $(obj)/config_data.h
 
 targets += config_data.gz

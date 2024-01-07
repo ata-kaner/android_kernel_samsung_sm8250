@@ -35,6 +35,8 @@ static int dp_gpio_hpd_connect(struct dp_gpio_hpd_private *gpio_hpd, bool hpd)
 		goto error;
 	}
 
+	DP_DEBUG("+++\n");
+
 	gpio_hpd->base.hpd_high = hpd;
 	gpio_hpd->base.alt_mode_cfg_done = hpd;
 	gpio_hpd->base.hpd_irq = false;
@@ -65,6 +67,8 @@ static int dp_gpio_hpd_attention(struct dp_gpio_hpd_private *gpio_hpd)
 		rc = -EINVAL;
 		goto error;
 	}
+
+	DP_DEBUG("+++\n");
 
 	gpio_hpd->base.hpd_irq = true;
 
@@ -122,6 +126,8 @@ static void dp_gpio_hpd_work(struct work_struct *work)
 		struct dp_gpio_hpd_private, work);
 	int ret;
 
+	DP_DEBUG("+++\n");
+
 	if (gpio_hpd->hpd) {
 		devm_free_irq(gpio_hpd->dev,
 			gpio_hpd->irq, gpio_hpd);
@@ -157,6 +163,8 @@ static int dp_gpio_hpd_simulate_connect(struct dp_hpd *dp_hpd, bool hpd)
 		goto error;
 	}
 
+	DP_DEBUG("+++\n");
+
 	gpio_hpd = container_of(dp_hpd, struct dp_gpio_hpd_private, base);
 
 	dp_gpio_hpd_connect(gpio_hpd, hpd);
@@ -174,6 +182,8 @@ static int dp_gpio_hpd_simulate_attention(struct dp_hpd *dp_hpd, int vdo)
 		rc = -EINVAL;
 		goto error;
 	}
+
+	DP_DEBUG("+++\n");
 
 	gpio_hpd = container_of(dp_hpd, struct dp_gpio_hpd_private, base);
 
@@ -224,6 +234,8 @@ struct dp_hpd *dp_gpio_hpd_get(struct device *dev,
 		rc = -EINVAL;
 		goto error;
 	}
+
+	DP_DEBUG("+++\n");
 
 	gpio_hpd = devm_kzalloc(dev, sizeof(*gpio_hpd), GFP_KERNEL);
 	if (!gpio_hpd) {
@@ -288,6 +300,8 @@ void dp_gpio_hpd_put(struct dp_hpd *dp_hpd)
 
 	if (!dp_hpd)
 		return;
+
+	DP_DEBUG("+++\n");
 
 	gpio_hpd = container_of(dp_hpd, struct dp_gpio_hpd_private, base);
 

@@ -3781,6 +3781,9 @@ exit:
 }
 
 static const struct rx_macro_reg_mask_val rx_macro_reg_init[] = {
+	{BOLERO_CDC_RX_RX0_RX_PATH_DSM_CTL, 0x01, 0x01},
+	{BOLERO_CDC_RX_RX1_RX_PATH_DSM_CTL, 0x01, 0x01},
+	{BOLERO_CDC_RX_RX2_RX_PATH_DSM_CTL, 0x01, 0x01},
 	{BOLERO_CDC_RX_RX0_RX_PATH_SEC7, 0x07, 0x02},
 	{BOLERO_CDC_RX_RX1_RX_PATH_SEC7, 0x07, 0x02},
 	{BOLERO_CDC_RX_RX2_RX_PATH_SEC7, 0x07, 0x02},

@@ -29,6 +29,12 @@
 #include "sd.h"
 #include "sd_ops.h"
 
+#ifdef CONFIG_MMC_SUPPORT_STLOG
+#include <linux/fslog.h>
+#else
+#define ST_LOG(fmt, ...)
+#endif
+
 static const unsigned int tran_exp[] = {
 	10000,		100000,		1000000,	10000000,
 	0,		0,		0,		0
@@ -138,6 +144,11 @@ static int mmc_decode_csd(struct mmc_card *card)
 			csd->erase_size = UNSTUFF_BITS(resp, 39, 7) + 1;
 			csd->erase_size <<= csd->write_blkbits - 9;
 		}
+
+		m = UNSTUFF_BITS(resp, 13, 1);
+		if (m)
+			mmc_card_set_readonly(card);
+
 		break;
 	case 1:
 		/*
@@ -172,6 +183,11 @@ static int mmc_decode_csd(struct mmc_card *card)
 		csd->write_blkbits = 9;
 		csd->write_partial = 0;
 		csd->erase_size = 1;
+
+		m = UNSTUFF_BITS(resp, 13, 1);
+		if (m)
+			mmc_card_set_readonly(card);
+
 		break;
 	default:
 		pr_err("%s: unrecognised CSD structure version %d\n",
@@ -427,13 +443,13 @@ static void sd_update_bus_speed_mode(struct mmc_card *card)
 	if ((card->host->caps & MMC_CAP_UHS_SDR104) &&
 	    (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR104)) {
 		card->sd_bus_speed = UHS_SDR104_BUS_SPEED;
-	} else if ((card->host->caps & MMC_CAP_UHS_DDR50) &&
-		   (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_DDR50)) {
-		card->sd_bus_speed = UHS_DDR50_BUS_SPEED;
 	} else if ((card->host->caps & (MMC_CAP_UHS_SDR104 |
 		    MMC_CAP_UHS_SDR50)) && (card->sw_caps.sd3_bus_mode &
 		    SD_MODE_UHS_SDR50)) {
 		card->sd_bus_speed = UHS_SDR50_BUS_SPEED;
+	} else if ((card->host->caps & MMC_CAP_UHS_DDR50) &&
+		   (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_DDR50)) {
+		card->sd_bus_speed = UHS_DDR50_BUS_SPEED;
 	} else if ((card->host->caps & (MMC_CAP_UHS_SDR104 |
 		    MMC_CAP_UHS_SDR50 | MMC_CAP_UHS_SDR25)) &&
 		   (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR25)) {
@@ -1221,8 +1237,6 @@ static void mmc_sd_detect(struct mmc_host *host)
 {
 	int err;
 
-	mmc_get_card(host->card, NULL);
-
 	if (host->ops->get_cd && !host->ops->get_cd(host)) {
 		err = -ENOMEDIUM;
 		mmc_card_set_removed(host->card);
@@ -1230,14 +1244,35 @@ static void mmc_sd_detect(struct mmc_host *host)
 		goto out;
 	}
 
+#if 1
+	/*
+	 * Try to acquire claim host. If failed to get the lock in 2 sec,
+	 * just return; This is to ensure that when this call is invoked
+	 * due to pm_suspend, not to block suspend for longer duration.
+	 */
+	pm_runtime_get_sync(&host->card->dev);
+	if (!mmc_try_claim_host(host, 2000)) {
+		pm_runtime_mark_last_busy(&host->card->dev);
+		pm_runtime_put_autosuspend(&host->card->dev);
+		return;
+	}
+
+#ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
+	if (mmc_bus_needs_resume(host))
+		mmc_resume_bus(host);
+#endif
+#else
+	mmc_get_card(host->card, NULL);
+#endif
+
 	/*
 	 * Just check if our card has been removed.
 	 */
 	err = _mmc_detect_card_removed(host);
 
-out:
 	mmc_put_card(host->card, NULL);
 
+out:
 	if (err) {
 		mmc_sd_remove(host);
 
@@ -1261,6 +1296,14 @@ static int _mmc_sd_suspend(struct mmc_host *host)
 
 	mmc_claim_host(host);
 	mmc_log_string(host, "Enter\n");
+
+#ifndef CONFIG_MMC_CLKGATE
+	if (SEC_mmc_pm_state_is_runtime_suspend(host)) {
+		mmc_gate_clock(host);
+		goto out;
+	} else
+		mmc_ungate_clock(host);
+#endif
 
 	if (mmc_card_suspended(host->card))
 		goto out;
@@ -1307,6 +1350,13 @@ static int _mmc_sd_resume(struct mmc_host *host)
 
 	mmc_claim_host(host);
 	mmc_log_string(host, "Enter\n");
+
+#ifndef CONFIG_MMC_CLKGATE
+	if (SEC_mmc_pm_state_is_runtime_suspend(host)) {
+		mmc_ungate_clock(host);
+		goto out;
+	}
+#endif
 
 	if (!mmc_card_suspended(host->card))
 		goto out;
@@ -1468,6 +1518,7 @@ static const struct mmc_bus_ops mmc_sd_ops = {
 	.resume = mmc_sd_resume,
 	.deferred_resume = mmc_sd_deferred_resume,
 	.alive = mmc_sd_alive,
+	.shutdown = mmc_sd_suspend,
 	.hw_reset = mmc_sd_hw_reset,
 	.change_bus_speed = mmc_sd_change_bus_speed,
 	.change_bus_speed_deferred = mmc_sd_change_bus_speed_deferred,
@@ -1548,6 +1599,8 @@ err:
 	mmc_detach_bus(host);
 
 	pr_err("%s: error %d whilst initialising SD card\n",
+		mmc_hostname(host), err);
+	ST_LOG("%s: error %d whilst initialising SD card\n",
 		mmc_hostname(host), err);
 
 	return err;

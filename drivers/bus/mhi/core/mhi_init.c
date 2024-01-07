@@ -267,12 +267,15 @@ static ssize_t bus_vote_store(struct device *dev,
 			      size_t count)
 {
 	struct mhi_device *mhi_dev = to_mhi_device(dev);
+	struct mhi_controller *mhi_cntrl = mhi_dev->mhi_cntrl;
 	int ret = -EINVAL;
 
 	if (sysfs_streq(buf, "get")) {
 		ret = mhi_device_get_sync(mhi_dev, MHI_VOTE_BUS);
+		MHI_ERR("MHI bus vote from sysfs\n");
 	} else if (sysfs_streq(buf, "put")) {
 		mhi_device_put(mhi_dev, MHI_VOTE_BUS);
+		MHI_ERR("MHI bus unvote from sysfs\n");
 		ret = 0;
 	}
 
@@ -296,12 +299,15 @@ static ssize_t device_vote_store(struct device *dev,
 				 size_t count)
 {
 	struct mhi_device *mhi_dev = to_mhi_device(dev);
+	struct mhi_controller *mhi_cntrl = mhi_dev->mhi_cntrl;
 	int ret = -EINVAL;
 
 	if (sysfs_streq(buf, "get")) {
 		ret = mhi_device_get_sync(mhi_dev, MHI_VOTE_DEVICE);
+		MHI_ERR("MHI device vote from sysfs\n");
 	} else if (sysfs_streq(buf, "put")) {
 		mhi_device_put(mhi_dev, MHI_VOTE_DEVICE);
+		MHI_ERR("MHI device unvote from sysfs\n");
 		ret = 0;
 	}
 

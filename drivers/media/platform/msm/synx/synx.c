@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- */
+* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+*/
 #define pr_fmt(fmt) "synx: " fmt
 
 #include <linux/fs.h>
@@ -75,6 +75,44 @@ static struct dma_fence_ops synx_fence_ops = {
 	.release = synx_fence_release,
 };
 
+static bool dump_synx_table = true;
+
+void synx_dump_table(void)
+{
+    int i, j;
+    struct synx_obj_node *obj_node;
+    struct synx_table_row *row;
+
+    /* dump the table on first resource exhaustion only */
+    if (!dump_synx_table)
+        return;
+
+    for (i = 1; i < SYNX_MAX_OBJS; i++) {
+        row = &synx_dev->synx_table[i];
+
+        mutex_lock(&synx_dev->row_locks[row->index]);
+        pr_info("synx dump[%u] state:%u, fence:%pK, bound:%u\n",
+            row->index, synx_status(row), row->fence,
+            row->num_bound_synxs);
+        if (row->fence)
+            pr_info("synx dump[%u] ref count %u\n",
+                row->index,
+                kref_read(&row->fence->refcount));
+        list_for_each_entry(obj_node,
+            &row->synx_obj_list, list)
+            pr_info("synx dump[%u] handle:0x%x (%d)\n",
+                row->index, obj_node->synx_obj, obj_node->synx_obj);
+        for (j = 0; j < row->num_bound_synxs; j++)
+            pr_info("synx dump[%u] cam sync id %d\n",
+                row->index,
+                row->bound_synxs[j].external_data->synx_obj);
+        mutex_unlock(&synx_dev->row_locks[row->index]);
+    }
+
+    dump_synx_table = false;
+}
+
+
 int synx_create(s32 *synx_obj, const char *name)
 {
 	int rc;
@@ -87,8 +125,10 @@ int synx_create(s32 *synx_obj, const char *name)
 
 	do {
 		idx = find_first_zero_bit(synx_dev->bitmap, SYNX_MAX_OBJS);
-		if (idx >= SYNX_MAX_OBJS)
-			return -ENOMEM;
+        if (idx >= SYNX_MAX_OBJS) {
+            synx_dump_table();
+            return -ENOMEM;
+        }
 		pr_debug("index location available at idx: %ld\n", idx);
 		bit = test_and_set_bit(idx, synx_dev->bitmap);
 	} while (bit);

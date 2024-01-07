@@ -42,9 +42,14 @@ struct csid_device_soc_info {
  * @is_custom:             for custom csid hw
  *
  */
+#if defined(CONFIG_SAMSUNG_SBI)
 int cam_ife_csid_init_soc_resources(struct cam_hw_soc_info *soc_info,
-	irq_handler_t csid_irq_handler, void *irq_data, bool is_custom);
-
+				    irq_handler_t csid_irq_handler,
+				    void *irq_data, bool is_custom);
+#else
+int cam_ife_csid_init_soc_resources(struct cam_hw_soc_info *soc_info,
+	irq_handler_t csid_irq_handler, void *irq_data);
+#endif /*CONFIG_SAMSUNG_SBI*/
 
 /**
  * cam_ife_csid_deinit_soc_resources()

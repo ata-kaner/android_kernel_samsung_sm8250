@@ -15,6 +15,7 @@
 #include <linux/usb/gadget.h>
 #include "io.h"
 
+extern bool acc_dev_status;
 struct dwc3;
 #define to_dwc3_ep(ep)		(container_of(ep, struct dwc3_ep, endpoint))
 #define gadget_to_dwc(g)	(container_of(g, struct dwc3, gadget))

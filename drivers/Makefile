@@ -22,6 +22,7 @@ obj-y				+= pci/
 
 obj-$(CONFIG_PARISC)		+= parisc/
 obj-$(CONFIG_RAPIDIO)		+= rapidio/
+obj-$(CONFIG_VBUS_NOTIFIER)	+= staging/samsung/sec_notifier/
 obj-y				+= video/
 obj-y				+= idle/
 
@@ -42,6 +43,8 @@ obj-$(CONFIG_DMADEVICES)	+= dma/
 
 # SOC specific infrastructure drivers.
 obj-y				+= soc/
+
+obj-y				+= samsung/
 
 obj-$(CONFIG_VIRTIO)		+= virtio/
 obj-$(CONFIG_XEN)		+= xen/
@@ -86,6 +89,7 @@ obj-$(CONFIG_ATA)		+= ata/
 obj-$(CONFIG_TARGET_CORE)	+= target/
 obj-$(CONFIG_MTD)		+= mtd/
 obj-$(CONFIG_SPI)		+= spi/
+obj-$(CONFIG_SENSORS_FINGERPRINT)	+= fingerprint/
 obj-$(CONFIG_SPMI)		+= spmi/
 obj-$(CONFIG_HSI)		+= hsi/
 obj-$(CONFIG_SLIMBUS)		+= slimbus/
@@ -105,6 +109,7 @@ obj-$(CONFIG_ATA_OVER_ETH)	+= block/aoe/
 obj-$(CONFIG_PARIDE) 		+= block/paride/
 obj-$(CONFIG_TC)		+= tc/
 obj-$(CONFIG_UWB)		+= uwb/
+obj-$(CONFIG_SAMSUNG_UWB)	+= uwb/
 obj-$(CONFIG_USB_PHY)		+= usb/
 obj-$(CONFIG_USB)		+= usb/
 obj-$(CONFIG_USB_SUPPORT)	+= usb/
@@ -158,6 +163,7 @@ obj-$(CONFIG_MAILBOX)		+= mailbox/
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
 obj-$(CONFIG_REMOTEPROC)	+= remoteproc/
 obj-$(CONFIG_RPMSG)		+= rpmsg/
+#obj-$(CONFIG_SENSORS_FINGERPRINT)	+= fingerprint/
 obj-$(CONFIG_SOUNDWIRE)		+= soundwire/
 
 obj-$(CONFIG_ENERGY_MODEL)	+= energy_model/
@@ -167,6 +173,7 @@ obj-$(CONFIG_VIRT_DRIVERS)	+= virt/
 obj-$(CONFIG_HYPERV)		+= hv/
 
 obj-$(CONFIG_PM_DEVFREQ)	+= devfreq/
+obj-$(CONFIG_USE_MUIC)		+= muic/
 obj-$(CONFIG_MEMORY)		+= memory/
 obj-$(CONFIG_IIO)		+= iio/
 obj-$(CONFIG_VME_BUS)		+= vme/
@@ -192,3 +199,50 @@ obj-$(CONFIG_UNISYS_VISORBUS)	+= visorbus/
 obj-$(CONFIG_SIOX)		+= siox/
 obj-$(CONFIG_GNSS)		+= gnss/
 obj-$(CONFIG_SENSORS_SSC)	+= sensors/
+obj-$(CONFIG_SENSORS_TCS3407)	+= optics/
+obj-$(CONFIG_ADSP_FACTORY)      += adsp_factory/
+
+obj-$(CONFIG_SWITCH)		+= switch/
+
+# CCIC
+obj-y				+= ccic/
+
+ifeq ($(CONFIG_BATTERY_SAMSUNG_V2), y)
+	obj-$(CONFIG_BATTERY_SAMSUNG)	+= battery_v2/
+endif
+
+# COMBO REDRIVER
+obj-$(CONFIG_REDRIVER)	        += redriver/
+
+# Motor
+obj-y				+= motor/
+
+# FIVE TEE driver
+obj-$(CONFIG_FIVE_TEE_DRIVER)	+= security/samsung/five_tee_driver/
+obj-$(CONFIG_ICD)		+= security/samsung/icdrv/
+
+# uH
+obj-$(CONFIG_UH)        += uh/
+
+# OLOG
+obj-y				+= kperfmon/
+
+# streamline
+ifeq ($(CONFIG_GATOR), y)
+	obj-$(CONFIG_GATOR)				+= gator/
+endif
+ifeq ($(CONFIG_PERF_MGR), y)
+	obj-$(CONFIG_PERF_MGR)	+= perf_mgr/
+endif
+
+#TZIC
+obj-y  += security/samsung/tzic/
+
+# KUnit
+obj-y				+= kunit/
+
+# GNSS
+obj-$(CONFIG_GPS_BCM4753)	+= gps/
+
+# SPU signature verify
+obj-$(CONFIG_SPU_VERIFY) += spu_verify/

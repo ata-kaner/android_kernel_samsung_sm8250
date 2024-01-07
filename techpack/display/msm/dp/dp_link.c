@@ -6,6 +6,12 @@
 #include "dp_link.h"
 #include "dp_panel.h"
 #include "dp_debug.h"
+#ifdef CONFIG_SEC_DISPLAYPORT
+#include "secdp.h"
+#ifdef CONFIG_SEC_DISPLAYPORT_BIGDATA
+#include <linux/displayport_bigdata.h>
+#endif
+#endif
 
 enum dynamic_range {
 	DP_DYNAMIC_RANGE_RGB_VESA = 0x00,
@@ -882,6 +888,18 @@ static void dp_link_parse_sink_status_field(struct dp_link_private *link)
 		link->link_status);
 	if (len < DP_LINK_STATUS_SIZE)
 		DP_ERR("DP link status read failed\n");
+#ifdef CONFIG_SEC_DISPLAYPORT
+	else {
+		int i;
+
+		pr_cont("[drm-dp] %s: ", __func__);
+		for (i = 0; i < DP_LINK_STATUS_SIZE; i++) {
+			pr_cont("0x%x: 0x%02x ", DP_LANE0_1_STATUS + i,
+				link->link_status[i]);
+		}
+		pr_cont("\n");
+	}
+#endif
 	dp_link_parse_request(link);
 }
 
@@ -943,6 +961,8 @@ static int dp_link_psm_config(struct dp_link *dp_link,
 		DP_ERR("invalid params\n");
 		return -EINVAL;
 	}
+
+	DP_DEBUG("+++, enable(%d)\n", enable);
 
 	link = container_of(dp_link, struct dp_link_private, dp_link);
 
@@ -1251,6 +1271,102 @@ static void dp_link_reset_data(struct dp_link_private *link)
 	link->dp_link.test_response = 0;
 }
 
+#ifdef CONFIG_SEC_DISPLAYPORT
+void secdp_clear_link_status_update_cnt(struct dp_link *dp_link)
+{
+	dp_link->poor_connection = false;
+	dp_link->status_update_cnt = 0;
+}
+
+void secdp_reset_link_status(struct dp_link *dp_link)
+{
+	struct dp_link_private *link;
+
+	if (!dp_link) {
+		DP_ERR("invalid input\n");
+		goto exit;
+	}
+
+	link = container_of(dp_link, struct dp_link_private, dp_link);
+	if (!link) {
+		DP_ERR("link is null\n");
+		goto exit;
+	}
+
+	DP_DEBUG("+++\n");
+
+	if (!(get_link_status(link->link_status, DP_SINK_STATUS) &
+			DP_RECEIVE_PORT_0_STATUS)) {
+		DP_ERR("[205h] port0: out of sync, reset!\n");
+		link->link_status[DP_SINK_STATUS - DP_LANE0_1_STATUS] |= DP_RECEIVE_PORT_0_STATUS;
+	}
+
+	if (!(get_link_status(link->link_status, DP_LANE_ALIGN_STATUS_UPDATED) &
+			DP_INTERLANE_ALIGN_DONE)) {
+		DP_ERR("[204h] interlane_align_done is zero, reset!\n");
+		link->link_status[DP_LANE_ALIGN_STATUS_UPDATED - DP_LANE0_1_STATUS] |= DP_INTERLANE_ALIGN_DONE;
+	}
+
+exit:
+	return;
+}
+
+/**
+ * @retval true if connection is stable
+ * @retval false if connection is unstable(poor)
+ */
+bool secdp_check_link_stable(struct dp_link *dp_link)
+{
+	bool stable = false;
+	struct dp_link_private *link;
+
+	if (!dp_link) {
+		DP_ERR("invalid input\n");
+		goto exit;
+	}
+
+	link = container_of(dp_link, struct dp_link_private, dp_link);
+	if (!link) {
+		DP_ERR("link is null\n");
+		goto exit;
+	}
+
+	if (secdp_is_mst_receiver() == SECDP_ADT_MST) {
+		DP_INFO("MST connection! ignore\n");
+		stable = true;
+		goto exit;
+	}
+
+	if (!(get_link_status(link->link_status, DP_SINK_STATUS) &
+			DP_RECEIVE_PORT_0_STATUS)) {
+		DP_ERR("[205h] port0: out of sync\n");
+		goto exit;
+	}
+/*
+ *	if (!(get_link_status(link->link_status, DP_LANE_ALIGN_STATUS_UPDATED) &
+ *			DP_LINK_STATUS_UPDATED)) {
+ *		DP_ERR("[204h] link_status_updated is zero!\n");
+ *		goto exit;
+ *	}
+ */
+	if (!(get_link_status(link->link_status, DP_LANE_ALIGN_STATUS_UPDATED) &
+			DP_INTERLANE_ALIGN_DONE)) {
+		DP_ERR("[204h] interlane_align_done is zero!\n");
+		goto exit;
+	}
+
+	stable = true;
+exit:
+	DP_DEBUG("connection is <%s>\n", stable ? "stable" : "unstable");
+
+#ifdef CONFIG_SEC_DISPLAYPORT_BIGDATA
+	if (!stable)
+		secdp_bigdata_inc_error_cnt(ERR_INF_IRQHPD);
+#endif
+	return stable;
+}
+#endif
+
 /**
  * dp_link_process_request() - handle HPD IRQ transition to HIGH
  * @link: pointer to link module data
@@ -1275,6 +1391,12 @@ static int dp_link_process_request(struct dp_link *dp_link)
 
 	dp_link_parse_sink_status_field(link);
 
+#ifdef CONFIG_SEC_DISPLAYPORT
+	if (secdp_get_power_status() && !secdp_check_link_stable(dp_link)) {
+		dp_link->status_update_cnt++;
+		DP_INFO("status_update_cnt %d\n", dp_link->status_update_cnt);
+	}
+#endif
 	if (dp_link_is_test_edid_read(link)) {
 		dp_link->sink_request |= DP_TEST_LINK_EDID_READ;
 		goto exit;

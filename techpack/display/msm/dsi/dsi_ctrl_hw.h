@@ -669,6 +669,8 @@ struct dsi_ctrl_hw_ops {
 	 * Return: List of active error interrupts.
 	 */
 	u64 (*get_error_status)(struct dsi_ctrl_hw *ctrl);
+	void (*dma_read_before_trigger)(struct dsi_ctrl_hw *ctrl);
+	u32 (*read_mdp_line_count)(struct dsi_ctrl_hw *ctrl);
 
 	/**
 	 * clear_error_status() - clears the specified errors

@@ -107,6 +107,11 @@ void dsi_phy_hw_v3_0_clamp_ctrl(struct dsi_phy_hw *phy, bool enable);
 int dsi_phy_hw_v3_0_lane_reset(struct dsi_phy_hw *phy);
 void dsi_phy_hw_v3_0_toggle_resync_fifo(struct dsi_phy_hw *phy);
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+void dsi_phy_hw_v4_0_store_str(struct dsi_phy_hw *phy, u32 *val);
+void dsi_phy_hw_v4_0_store_emphasis(struct dsi_phy_hw *phy, u32 *val);
+#endif
+
 /* Definitions for 7nm PHY hardware driver */
 void dsi_phy_hw_v4_0_enable(struct dsi_phy_hw *phy, struct dsi_phy_cfg *cfg);
 void dsi_phy_hw_v4_0_disable(struct dsi_phy_hw *phy, struct dsi_phy_cfg *cfg);
@@ -135,6 +140,8 @@ void dsi_ctrl_hw_cmn_enable_status_interrupts(struct dsi_ctrl_hw *ctrl,
 					     u32 ints);
 
 u64 dsi_ctrl_hw_cmn_get_error_status(struct dsi_ctrl_hw *ctrl);
+void dsi_ctrl_hw_cmn_dma_read_before_trigger(struct dsi_ctrl_hw *ctrl);
+u32 dsi_ctrl_hw_cmn_read_mdp_line_count(struct dsi_ctrl_hw *ctrl);
 void dsi_ctrl_hw_cmn_clear_error_status(struct dsi_ctrl_hw *ctrl, u64 errors);
 void dsi_ctrl_hw_cmn_enable_error_interrupts(struct dsi_ctrl_hw *ctrl,
 					    u64 errors);

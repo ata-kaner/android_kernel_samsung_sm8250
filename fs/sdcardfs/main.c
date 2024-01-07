@@ -77,6 +77,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	opts->gid_derivation = false;
 	opts->default_normal = false;
 	opts->nocache = false;
+	opts->unshared_obb = false;
 
 	*debug = 0;
 
@@ -193,6 +194,7 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 				return 0;
 			vfsopts->mask = option;
 			break;
+		case Opt_nocache:
 		case Opt_unshared_obb:
 		case Opt_default_normal:
 		case Opt_multiuser:
@@ -200,7 +202,6 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 		case Opt_fsuid:
 		case Opt_fsgid:
 		case Opt_reserved_mb:
-			pr_warn("Option \"%s\" can't be changed during remount\n", p);
 		case Opt_gid_derivation:
 			if (!silent)
 				pr_warn("Option \"%s\" can't be changed during remount\n", p);
@@ -280,7 +281,6 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 
 	pr_info("sdcardfs: dev_name -> %s\n", dev_name);
 	pr_info("sdcardfs: options -> %s\n", (char *)raw_data);
-	pr_info("sdcardfs: mnt -> %p\n", mnt);
 
 	/* parse lower path */
 	err = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY,

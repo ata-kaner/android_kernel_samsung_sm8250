@@ -75,8 +75,11 @@ int cam_ife_csid_probe(struct platform_device *pdev)
 	csid_hw_data = (struct cam_ife_csid_hw_info  *)match_dev->data;
 	/* need to setup the pdev before call the ife hw probe init */
 	csid_dev->csid_info = csid_hw_data;
-
+#if defined(CONFIG_SAMSUNG_SBI)
 	rc = cam_ife_csid_hw_probe_init(csid_hw_intf, csid_dev_idx, false);
+#else /*CONFIG_SAMSUNG_SBI*/
+	rc = cam_ife_csid_hw_probe_init(csid_hw_intf, csid_dev_idx);
+#endif /*CONFIG_SAMSUNG_SBI*/
 	if (rc)
 		goto free_dev;
 

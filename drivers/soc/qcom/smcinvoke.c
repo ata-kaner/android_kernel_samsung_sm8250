@@ -477,10 +477,8 @@ static int put_pending_cbobj_locked(uint16_t srvr_id, int16_t obj_id)
 	struct list_head *head = NULL;
 	struct smcinvoke_cbobj *cbobj = NULL;
 
-	if (!srvr_info) {
-		pr_err("%s, server id : %u not found\n", __func__, srvr_id);
+	if (!srvr_info)
 		return ret;
-	}
 
 	head = &srvr_info->pending_cbobjs;
 	list_for_each_entry(cbobj, head, list)
@@ -1543,6 +1541,7 @@ static long process_accept_req(struct file *filp, unsigned int cmd,
 						unsigned long arg)
 {
 	int ret = -1;
+	sigset_t pending_sig;
 	struct smcinvoke_file_data *server_obj = filp->private_data;
 	struct smcinvoke_accept user_args = {0};
 	struct smcinvoke_cb_txn *cb_txn = NULL;
@@ -1641,10 +1640,14 @@ static long process_accept_req(struct file *filp, unsigned int cmd,
 			 * server_info invalid. Other accept/invoke threads are
 			 * using server_info and would crash. So dont do that.
 			 */
-			mutex_lock(&g_smcinvoke_lock);
-			server_info->state = SMCINVOKE_SERVER_STATE_DEFUNCT;
-			mutex_unlock(&g_smcinvoke_lock);
-			wake_up_interruptible(&server_info->rsp_wait_q);
+			pending_sig = (&current->pending)->signal;
+			if (sigismember(&pending_sig, SIGKILL)) {
+				mutex_lock(&g_smcinvoke_lock);
+				server_info->state =
+					SMCINVOKE_SERVER_STATE_DEFUNCT;
+				wake_up_interruptible(&server_info->rsp_wait_q);
+				mutex_unlock(&g_smcinvoke_lock);
+			}
 			goto out;
 		}
 		mutex_lock(&g_smcinvoke_lock);

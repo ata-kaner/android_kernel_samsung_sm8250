@@ -12,6 +12,10 @@
 
 #include "ion.h"
 
+#ifdef CONFIG_HUGEPAGE_POOL
+#include <linux/hugepage_pool.h>
+#endif
+
 /*
  * We avoid atomic_long_t to minimize cache flushes at the cost of possible
  * race which would result in a small accounting inaccuracy that we can
@@ -58,7 +62,17 @@ static inline struct page *ion_page_pool_alloc_pages(struct ion_page_pool *pool)
 {
 	if (fatal_signal_pending(current))
 		return NULL;
+
+#ifdef CONFIG_HUGEPAGE_POOL
+	/* we assume that this path is only being used by system heap */
+	if (pool->order == HUGEPAGE_ORDER)
+		return alloc_zeroed_hugepage(pool->gfp_mask, pool->order, true,
+					     HPAGE_ION);
+	else
+		return alloc_pages(pool->gfp_mask, pool->order);
+#else
 	return alloc_pages(pool->gfp_mask, pool->order);
+#endif
 }
 
 static void ion_page_pool_free_pages(struct ion_page_pool *pool,
@@ -126,6 +140,26 @@ static struct page *ion_page_pool_remove(struct ion_page_pool *pool, bool high)
 	nr_total_pages -= 1 << pool->order;
 	mod_node_page_state(page_pgdat(page), NR_KERNEL_MISC_RECLAIMABLE,
 							-(1 << pool->order));
+	return page;
+}
+
+struct page *ion_page_pool_only_alloc(struct ion_page_pool *pool)
+{
+	struct page *page = NULL;
+
+	BUG_ON(!pool);
+
+	if (!pool->high_count && !pool->low_count)
+		goto done;
+
+	if (mutex_trylock(&pool->mutex)) {
+		if (pool->high_count)
+			page = ion_page_pool_remove(pool, true);
+		else if (pool->low_count)
+			page = ion_page_pool_remove(pool, false);
+		mutex_unlock(&pool->mutex);
+	}
+done:
 	return page;
 }
 

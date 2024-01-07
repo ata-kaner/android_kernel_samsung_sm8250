@@ -15,4 +15,7 @@ int kgsl_pwr_limits_set_gpu_fmax(void *limit, unsigned int freq);
 void kgsl_pwr_limits_set_default(void *limit);
 unsigned int kgsl_pwr_limits_get_freq(u32 id);
 
+int kgsl_pwrctrl_register_state_awake_notifier(struct notifier_block *nb);
+int kgsl_pwrctrl_unregister_state_awake_notifier(struct notifier_block *nb);
+
 #endif /* _MSM_KGSL_H */

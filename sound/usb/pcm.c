@@ -35,6 +35,9 @@
 #include "pcm.h"
 #include "clock.h"
 #include "power.h"
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+#include <linux/usb_notify.h>
+#endif
 
 #define SUBSTREAM_FLAG_DATA_EP_STARTED	0
 #define SUBSTREAM_FLAG_SYNC_EP_STARTED	1
@@ -656,6 +659,9 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 	struct usb_host_interface *alts;
 	struct usb_interface *iface;
 	int ret;
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+	int on, type;
+#endif
 
 	if (!enable) {
 		if (subs->interface >= 0) {
@@ -667,6 +673,14 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 		}
 
 		snd_usb_autosuspend(subs->stream->chip);
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+		if (subs->direction == SNDRV_PCM_STREAM_PLAYBACK)
+			type = NOTIFY_PCM_PLAYBACK;
+		else
+			type = NOTIFY_PCM_CAPTURE;
+		on = 0;
+		store_usblog_notify(type, (void *)&on, NULL);
+#endif
 		return 0;
 	}
 
@@ -718,6 +732,15 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 
 	subs->interface = fmt->iface;
 	subs->altset_idx = fmt->altset_idx;
+
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+	if (subs->direction == SNDRV_PCM_STREAM_PLAYBACK)
+		type = NOTIFY_PCM_PLAYBACK;
+	else
+		type = NOTIFY_PCM_CAPTURE;
+	on = 1;
+	store_usblog_notify(type, (void *)&on, NULL);
+#endif
 
 	return 0;
 }

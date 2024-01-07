@@ -8,11 +8,23 @@
 
 #include "../cam_csiphy_dev.h"
 
+#if defined(CONFIG_SEC_BLOOMXQ_PROJECT)
 struct csiphy_reg_parms_t csiphy_v1_2_1 = {
 	.mipi_csiphy_interrupt_status0_addr = 0x8B0,
 	.mipi_csiphy_interrupt_clear0_addr = 0x858,
 	.mipi_csiphy_glbl_irq_cmd_addr = 0x828,
-	.csiphy_interrupt_status_size = 11,
+	.csiphy_common_array_size = 7,
+	.csiphy_reset_array_size = 9,
+	.csiphy_2ph_config_array_size = 20,
+	.csiphy_3ph_config_array_size = 33,
+	.csiphy_2ph_clock_lane = 0x1,
+	.csiphy_2ph_combo_ck_ln = 0x10,
+};
+#else
+struct csiphy_reg_parms_t csiphy_v1_2_1 = {
+	.mipi_csiphy_interrupt_status0_addr = 0x8B0,
+	.mipi_csiphy_interrupt_clear0_addr = 0x858,
+	.mipi_csiphy_glbl_irq_cmd_addr = 0x828,
 	.csiphy_common_array_size = 7,
 	.csiphy_reset_array_size = 5,
 	.csiphy_2ph_config_array_size = 20,
@@ -20,6 +32,7 @@ struct csiphy_reg_parms_t csiphy_v1_2_1 = {
 	.csiphy_2ph_clock_lane = 0x1,
 	.csiphy_2ph_combo_ck_ln = 0x10,
 };
+#endif
 
 struct csiphy_reg_t csiphy_common_reg_1_2_1[] = {
 	{0x0814, 0xd5, 0x00, CSIPHY_LANE_ENABLE},
@@ -31,6 +44,19 @@ struct csiphy_reg_t csiphy_common_reg_1_2_1[] = {
 	{0x0800, 0x0E, 0x00, CSIPHY_3PH_REGS},
 };
 
+#if defined(CONFIG_SEC_BLOOMXQ_PROJECT)
+struct csiphy_reg_t csiphy_reset_reg_1_2_1[] = {
+	{0x0800, 0x01, 0x01, CSIPHY_DEFAULT_PARAMS},
+	{0x0800, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
+	{0x0814, 0x00, 0x05, CSIPHY_LANE_ENABLE},
+	{0x0818, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
+	{0x081C, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
+	{0x0800, 0x01, 0x01, CSIPHY_DEFAULT_PARAMS},
+	{0x0800, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
+	{0x0094, 0x00, 0x00, CSIPHY_RESET_POLL_2PH_REG,0xFF},
+	{0x01F8, 0x00, 0x00, CSIPHY_RESET_POLL_3PH_REG,0xFF},
+};
+#else
 struct csiphy_reg_t csiphy_reset_reg_1_2_1[] = {
 	{0x0814, 0x00, 0x05, CSIPHY_LANE_ENABLE},
 	{0x0818, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
@@ -38,6 +64,7 @@ struct csiphy_reg_t csiphy_reset_reg_1_2_1[] = {
 	{0x0800, 0x01, 0x01, CSIPHY_DEFAULT_PARAMS},
 	{0x0800, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
 };
+#endif
 
 struct csiphy_reg_t csiphy_irq_reg_1_2_1[] = {
 	{0x082c, 0xFF, 0x00, CSIPHY_DEFAULT_PARAMS},

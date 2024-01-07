@@ -53,6 +53,11 @@
 /* max size supported for dsi cmd transfer using TPG */
 #define DSI_CTRL_MAX_CMD_FIFO_STORE_SIZE 64
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+/* max size supported for dsi cmd transfer using DMA */
+#define DSI_CTRL_MAX_CMD_FET_MEMORY_SIZE 200
+#endif
+
 /**
  * enum dsi_power_state - defines power states for dsi controller.
  * @DSI_CTRL_POWER_VREG_OFF:    Digital and analog supplies for DSI controller
@@ -861,6 +866,8 @@ void dsi_ctrl_set_continuous_clk(struct dsi_ctrl *dsi_ctrl, bool enable);
  * @dsi_ctrl:                      DSI controller handle.
  */
 int dsi_ctrl_wait4dynamic_refresh_done(struct dsi_ctrl *ctrl);
+void dsi_ctrl_mask_overflow(struct dsi_ctrl *dsi_ctrl, bool enable);
+int dsi_ctrl_cmd_clear_interrupt(struct dsi_ctrl *dsi_ctrl, u32 flags);
 
 /**
  * dsi_ctrl_mask_overflow() -	API to mask/unmask overflow errors.

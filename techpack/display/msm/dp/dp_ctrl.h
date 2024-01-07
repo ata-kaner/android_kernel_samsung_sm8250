@@ -30,6 +30,9 @@ struct dp_ctrl {
 	void (*set_mst_channel_info)(struct dp_ctrl *dp_ctrl,
 			enum dp_stream_id strm,
 			u32 ch_start_slot, u32 ch_tot_slots);
+#ifdef CONFIG_SEC_DISPLAYPORT
+	bool (*get_link_train_status)(struct dp_ctrl *dp_ctrl);
+#endif
 };
 
 struct dp_ctrl_in {

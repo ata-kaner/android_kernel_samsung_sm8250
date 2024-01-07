@@ -20,6 +20,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
 
+#include <linux/sec_debug.h>
+
 #define MSM_DUMP_TABLE_VERSION		MSM_DUMP_MAKE_VERSION(2, 0)
 
 #define SCM_CMD_DEBUG_LAR_UNLOCK	0x4
@@ -783,8 +785,8 @@ static int mem_dump_alloc(struct platform_device *pdev)
 	struct msm_dump_entry dump_entry;
 	struct md_region md_entry;
 	size_t total_size;
-	u32 size, id;
-	int ret, no_of_nodes;
+	u32 size, id, align;
+	int ret;
 	dma_addr_t dma_handle;
 	phys_addr_t phys_addr;
 	struct sg_table mem_dump_sgt;
@@ -793,7 +795,7 @@ static int mem_dump_alloc(struct platform_device *pdev)
 	uint32_t ns_vm_perms[] = {PERM_READ | PERM_WRITE};
 	u64 shm_bridge_handle;
 
-	total_size = size = ret = no_of_nodes = 0;
+	total_size = size = ret = 0;
 	/* For dump table registration with IMEM */
 	total_size = sizeof(struct msm_dump_table) * 2;
 	for_each_available_child_of_node(node, child_node) {
@@ -804,11 +806,15 @@ static int mem_dump_alloc(struct platform_device *pdev)
 			continue;
 		}
 
+		total_size += MSM_DUMP_DATA_SIZE;
+		ret = of_property_read_u32(child_node,
+						"qcom,dump-align", &align);
+		if (!ret)
+			total_size = ALIGN(total_size, align);
+
 		total_size += size;
-		no_of_nodes++;
 	}
 
-	total_size += (MSM_DUMP_DATA_SIZE * no_of_nodes);
 	total_size = ALIGN(total_size, SZ_4K);
 	dump_vaddr = dma_alloc_coherent(&pdev->dev, total_size,
 						&dma_handle, GFP_KERNEL);
@@ -834,7 +840,6 @@ static int mem_dump_alloc(struct platform_device *pdev)
 	}
 
 	memset(dump_vaddr, 0x0, total_size);
-
 	ret = init_memory_dump(dump_vaddr, phys_addr, total_size);
 	if (ret) {
 		dev_err(&pdev->dev, "Memory Dump table set up is failed\n");
@@ -859,12 +864,23 @@ static int mem_dump_alloc(struct platform_device *pdev)
 		}
 
 		dump_data = dump_vaddr;
-		dump_data->addr = phys_addr + MSM_DUMP_DATA_SIZE;
 		dump_data->len = size;
 		dump_entry.id = id;
+		dump_entry.addr = phys_addr;
 		strlcpy(dump_data->name, child_node->name,
 					sizeof(dump_data->name));
-		dump_entry.addr = phys_addr;
+
+		phys_addr += MSM_DUMP_DATA_SIZE;
+		dump_vaddr += MSM_DUMP_DATA_SIZE;
+		ret = of_property_read_u32(child_node,
+						"qcom,dump-align", &align);
+		if (!ret) {
+			dump_vaddr = (void *)(ALIGN((unsigned long long)
+						(dump_vaddr), align));
+			phys_addr = ALIGN(phys_addr, align);
+		}
+
+		dump_data->addr = phys_addr;
 		ret = msm_dump_data_register_nominidump(MSM_DUMP_TABLE_APPS,
 					&dump_entry);
 		if (ret)
@@ -872,7 +888,7 @@ static int mem_dump_alloc(struct platform_device *pdev)
 				id);
 
 		md_entry.phys_addr = dump_data->addr;
-		md_entry.virt_addr = (uintptr_t)dump_vaddr + MSM_DUMP_DATA_SIZE;
+		md_entry.virt_addr = (uintptr_t)dump_vaddr;
 		md_entry.size = size;
 		md_entry.id = id;
 		strlcpy(md_entry.name, child_node->name, sizeof(md_entry.name));
@@ -882,14 +898,15 @@ static int mem_dump_alloc(struct platform_device *pdev)
 
 		if (id == CPUSS_REGDUMP)
 			cpuss_regdump_init(pdev,
-				(dump_vaddr + MSM_DUMP_DATA_SIZE), size);
+				dump_vaddr, size);
 
-		dump_vaddr += (size + MSM_DUMP_DATA_SIZE);
-		phys_addr += (size  + MSM_DUMP_DATA_SIZE);
+		dump_vaddr += size;
+		phys_addr += size;
 	}
 
 	return ret;
 }
+
 
 static int mem_dump_probe(struct platform_device *pdev)
 {
@@ -919,3 +936,11 @@ static int __init mem_dump_init(void)
 }
 
 pure_initcall(mem_dump_init);
+
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
+void sec_debug_summary_set_msm_memdump_info(struct sec_debug_summary_data_apss *apss)
+{
+	apss->msm_memdump_paddr = (uint64_t)memdump.table_phys;
+	pr_info("%s : 0x%llx\n", __func__, apss->msm_memdump_paddr);
+}
+#endif

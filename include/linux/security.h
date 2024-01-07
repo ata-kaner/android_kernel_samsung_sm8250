@@ -53,6 +53,11 @@ struct msg_msg;
 struct xattr;
 struct xfrm_sec_ctx;
 struct mm_struct;
+#ifdef CONFIG_KDP_CRED
+/* For understanding size of struct cred*/
+#include <linux/rkp.h>
+#include <linux/kdp.h>
+#endif
 
 /* Default (no) options for the capable function */
 #define CAP_OPT_NONE 0x0
@@ -72,6 +77,10 @@ struct timezone;
 enum lsm_event {
 	LSM_POLICY_CHANGE,
 };
+
+#ifndef CONFIG_KDP_CRED
+#define security_integrity_current()  0
+#endif
 
 /* These functions are in security/commoncap.c */
 extern int cap_capable(const struct cred *cred, struct user_namespace *ns,

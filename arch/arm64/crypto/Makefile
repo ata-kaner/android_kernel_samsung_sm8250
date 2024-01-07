@@ -7,12 +7,29 @@
 # it under the terms of the GNU General Public License version 2 as
 # published by the Free Software Foundation.
 #
+ccflags-y += $(DISABLE_LTO_CLANG) $(DISABLE_CFI_CLANG) -fno-data-sections -fno-function-sections
+#Keep this at the top
+#FIPS_140_2
+obj-$(CONFIG_CRYPTO_FIPS) += fips140_first_file_asm.o
 
 obj-$(CONFIG_CRYPTO_SHA1_ARM64_CE) += sha1-ce.o
 sha1-ce-y := sha1-ce-glue.o sha1-ce-core.o
 
 obj-$(CONFIG_CRYPTO_SHA2_ARM64_CE) += sha2-ce.o
 sha2-ce-y := sha2-ce-glue.o sha2-ce-core.o
+
+obj-$(CONFIG_CRYPTO_AES_ARM64_CE) += aes-ce-cipher.o
+aes-ce-cipher-y := aes-ce-core.o aes-ce-glue.o
+
+obj-$(CONFIG_CRYPTO_AES_ARM64_CE_BLK) += aes-ce-blk.o
+aes-ce-blk-y := aes-glue-ce.o aes-ce.o
+
+obj-$(CONFIG_CRYPTO_GHASH_ARM64_CE) += ghash-ce.o
+ghash-ce-y := ghash-ce-glue.o ghash-ce-core.o
+
+#Keep this at the bottom
+#FIPS_140_2
+obj-$(CONFIG_CRYPTO_FIPS) += fips140_last_file_asm.o
 
 obj-$(CONFIG_CRYPTO_SHA512_ARM64_CE) += sha512-ce.o
 sha512-ce-y := sha512-ce-glue.o sha512-ce-core.o
@@ -26,29 +43,24 @@ sm3-ce-y := sm3-ce-glue.o sm3-ce-core.o
 obj-$(CONFIG_CRYPTO_SM4_ARM64_CE) += sm4-ce.o
 sm4-ce-y := sm4-ce-glue.o sm4-ce-core.o
 
-obj-$(CONFIG_CRYPTO_GHASH_ARM64_CE) += ghash-ce.o
-ghash-ce-y := ghash-ce-glue.o ghash-ce-core.o
-
 obj-$(CONFIG_CRYPTO_CRCT10DIF_ARM64_CE) += crct10dif-ce.o
 crct10dif-ce-y := crct10dif-ce-core.o crct10dif-ce-glue.o
 
 obj-$(CONFIG_CRYPTO_CRC32_ARM64_CE) += crc32-ce.o
 crc32-ce-y:= crc32-ce-core.o crc32-ce-glue.o
 
-obj-$(CONFIG_CRYPTO_AES_ARM64_CE) += aes-ce-cipher.o
-aes-ce-cipher-y := aes-ce-core.o aes-ce-glue.o
-
 obj-$(CONFIG_CRYPTO_AES_ARM64_CE_CCM) += aes-ce-ccm.o
 aes-ce-ccm-y := aes-ce-ccm-glue.o aes-ce-ccm-core.o
-
-obj-$(CONFIG_CRYPTO_AES_ARM64_CE_BLK) += aes-ce-blk.o
-aes-ce-blk-y := aes-glue-ce.o aes-ce.o
 
 obj-$(CONFIG_CRYPTO_AES_ARM64_NEON_BLK) += aes-neon-blk.o
 aes-neon-blk-y := aes-glue-neon.o aes-neon.o
 
 obj-$(CONFIG_CRYPTO_SHA256_ARM64) += sha256-arm64.o
+ifdef CONFIG_CFP_ROPP
+sha256-arm64-y := sha256-glue.o sha256-core-ropp.o
+else
 sha256-arm64-y := sha256-glue.o sha256-core.o
+endif
 
 obj-$(CONFIG_CRYPTO_SHA512_ARM64) += sha512-arm64.o
 sha512-arm64-y := sha512-glue.o sha512-core.o

@@ -27,7 +27,7 @@
 #include <net/cnss.h>
 #endif
 
-#if defined CONFIG_BT_SLIM_QCA6390 || defined CONFIG_BTFM_SLIM_WCN3990
+#if defined CONFIG_BT_SLIM_QCA6390 || defined CONFIG_BT_SLIM_QCA6490|| defined CONFIG_BTFM_SLIM_WCN3990
 #include "btfm_slim.h"
 #include "btfm_slim_slave.h"
 #endif
@@ -46,6 +46,7 @@ static const struct of_device_id bt_power_match_table[] = {
 	{	.compatible = "qca,qca6174" },
 	{	.compatible = "qca,wcn3990" },
 	{	.compatible = "qca,qca6390" },
+	{	.compatible = "qca,qca6490" },
 	{	.compatible = "qca,wcn6750" },
 	{}
 };
@@ -83,7 +84,7 @@ enum power_src_pos {
 };
 
 static int bt_power_src_status[BT_POWER_SRC_SIZE];
-static struct bluetooth_power_platform_data *bt_power_pdata;
+static struct bluetooth_power_platform_data *bt_power_pdata = NULL;
 static struct platform_device *btpdev;
 static bool previous;
 static int pwr_state;
@@ -1048,7 +1049,7 @@ static long bt_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 	case BT_CMD_SLIM_TEST:
-#if defined CONFIG_BT_SLIM_QCA6390 || defined CONFIG_BTFM_SLIM_WCN3990
+#if defined CONFIG_BT_SLIM_QCA6390 || defined CONFIG_BT_SLIM_QCA6490|| defined CONFIG_BTFM_SLIM_WCN3990
 		if (!bt_power_pdata->slim_dev) {
 			BT_PWR_ERR("slim_dev is null\n");
 			return -EINVAL;
@@ -1061,6 +1062,11 @@ static long bt_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case BT_CMD_PWR_CTRL:
 		pwr_cntrl = (int)arg;
 		BT_PWR_ERR("BT_CMD_PWR_CTRL pwr_cntrl:%d", pwr_cntrl);
+		if(bt_power_pdata == NULL){
+			BT_PWR_ERR("Bt_power not probed");
+			ret = -EINVAL;
+			break;
+		}
 		if (pwr_state != pwr_cntrl) {
 			ret = bluetooth_power(pwr_cntrl);
 			if (!ret)

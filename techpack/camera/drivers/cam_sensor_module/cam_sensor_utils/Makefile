@@ -9,5 +9,12 @@ ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_res_mgr
 ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_smmu/
 ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_cpas/include
 ccflags-y += -I$(src)
+ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_core
+ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_sensor
+ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_sensor_utils
+ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_ois
+ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_eeprom
+ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_actuator
+ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_flash
 
-obj-$(CONFIG_SPECTRA_CAMERA) +=  cam_sensor_util.o
+obj-$(CONFIG_SPECTRA_CAMERA) +=  cam_sensor_util.o cam_sysfs_init.o

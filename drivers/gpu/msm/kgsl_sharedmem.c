@@ -305,9 +305,9 @@ void kgsl_process_init_sysfs(struct kgsl_device *device,
 	kgsl_process_private_get(private);
 
 	if (kobject_init_and_add(&private->kobj, &process_ktype,
-		kgsl_driver.prockobj, "%d", private->pid)) {
+		kgsl_driver.prockobj, "%d", pid_nr(private->pid))) {
 		dev_err(device->dev, "Unable to add sysfs for process %d\n",
-			private->pid);
+			pid_nr(private->pid));
 		return;
 	}
 
@@ -322,7 +322,7 @@ void kgsl_process_init_sysfs(struct kgsl_device *device,
 		if (ret)
 			dev_err(device->dev,
 				"Unable to create sysfs files for process %d\n",
-				private->pid);
+				pid_nr(private->pid));
 	}
 
 	for (i = 0; i < ARRAY_SIZE(debug_memstats); i++) {
@@ -511,8 +511,6 @@ static int kgsl_page_alloc_vmfault(struct kgsl_memdesc *memdesc,
 
 	vmf->page = page;
 
-	atomic_long_add(PAGE_SIZE, &memdesc->mapsize);
-
 	return 0;
 }
 
@@ -684,8 +682,6 @@ static int kgsl_contiguous_vmfault(struct kgsl_memdesc *memdesc,
 		return VM_FAULT_OOM;
 	else if (ret == -EFAULT)
 		return VM_FAULT_SIGBUS;
-
-	atomic_long_add(PAGE_SIZE, &memdesc->mapsize);
 
 	return VM_FAULT_NOPAGE;
 }
@@ -928,6 +924,7 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 		ilog2(PAGE_SIZE));
 	kgsl_memdesc_set_align(memdesc, align);
 	spin_lock_init(&memdesc->lock);
+	spin_lock_init(&memdesc->gpuaddr_lock);
 }
 
 static int kgsl_shmem_alloc_page(struct page **pages,
@@ -1055,6 +1052,21 @@ kgsl_sharedmem_page_alloc_user(struct kgsl_memdesc *memdesc,
 
 	align = (memdesc->flags & KGSL_MEMALIGN_MASK) >> KGSL_MEMALIGN_SHIFT;
 
+#ifdef CONFIG_HUGEPAGE_POOL
+	/*
+	 * As 2MB is the max supported page size, use the alignment
+	 * corresponding to 2MB page to make sure higher order pages
+	 * are used if possible for a given memory size. Also, we
+	 * don't need to update alignment in memdesc flags in case
+	 * higher order page is used, as memdesc flags represent the
+	 * virtual alignment specified by the user which is anyways
+	 * getting satisfied.
+	 */
+	if (align < ilog2(SZ_2M))
+		align = ilog2(SZ_2M);
+
+	page_size = kgsl_get_page_size(size, align, memdesc);
+#else
 	/*
 	 * As 1MB is the max supported page size, use the alignment
 	 * corresponding to 1MB page to make sure higher order pages
@@ -1068,6 +1080,7 @@ kgsl_sharedmem_page_alloc_user(struct kgsl_memdesc *memdesc,
 		align = ilog2(SZ_1M);
 
 	page_size = kgsl_get_page_size(size, align, memdesc);
+#endif
 
 	/*
 	 * The alignment cannot be less than the intended page size - it can be

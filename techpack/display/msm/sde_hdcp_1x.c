@@ -17,6 +17,10 @@
 #include "video/msm_hdmi_hdcp_mgr.h"
 #include "dp/dp_reg.h"
 
+#ifdef CONFIG_SEC_DISPLAYPORT_ENG
+#include <linux/secdp_logger.h>
+#endif
+
 #define SDE_HDCP_STATE_NAME (sde_hdcp_state_name(hdcp->hdcp_state))
 
 /* QFPROM Registers for HDMI/HDCP */

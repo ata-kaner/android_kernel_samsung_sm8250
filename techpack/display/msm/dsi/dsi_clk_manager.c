@@ -10,6 +10,8 @@
 #include <linux/pm_runtime.h>
 #include "dsi_clk.h"
 #include "dsi_defs.h"
+#include "sde_dbg.h"
+#include <linux/sde_rsc.h>
 
 struct dsi_core_clks {
 	struct dsi_core_clk_info clks;
@@ -630,6 +632,10 @@ error:
 	return rc;
 }
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+extern void tcon_prepare(void);
+#endif
+
 static int dsi_display_link_clk_enable(struct dsi_link_clks *clks,
 	enum dsi_lclk_type l_type, u32 ctrl_count, u32 master_ndx)
 {
@@ -653,6 +659,10 @@ static int dsi_display_link_clk_enable(struct dsi_link_clks *clks,
 			goto error;
 		}
 	}
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	if ((l_type & DSI_LINK_LP_CLK) && (ctrl_count==1))
+		tcon_prepare();
+#endif
 
 	if (l_type & DSI_LINK_HS_CLK) {
 		rc = dsi_link_hs_clk_start(&m_clks->hs_clks,
@@ -676,6 +686,9 @@ static int dsi_display_link_clk_enable(struct dsi_link_clks *clks,
 						rc);
 				goto error_disable_master;
 			}
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+			tcon_prepare();
+#endif
 		}
 
 		if (l_type & DSI_LINK_HS_CLK) {
@@ -738,6 +751,10 @@ error:
 	return rc;
 }
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+extern void force_sustain_lp11_for_sleep(void);
+#endif
+
 static int dsi_display_link_clk_disable(struct dsi_link_clks *clks,
 	enum dsi_lclk_type l_type, u32 ctrl_count, u32 master_ndx)
 {
@@ -761,6 +778,9 @@ static int dsi_display_link_clk_disable(struct dsi_link_clks *clks,
 			continue;
 
 		if (l_type & DSI_LINK_LP_CLK) {
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+			force_sustain_lp11_for_sleep();
+#endif
 			rc = dsi_link_lp_clk_stop(&clk->lp_clks);
 			if (rc)
 				DSI_ERR("failed to turn off lp link clocks, rc=%d\n",
@@ -871,6 +891,7 @@ static int dsi_update_core_clks(struct dsi_clk_mngr *mngr,
 			goto error;
 		}
 	}
+	reg_log_dump(__func__, __LINE__);
 	rc = dsi_display_core_clk_enable(c_clks, mngr->dsi_ctrl_count,
 			mngr->master_ndx);
 	if (rc) {
@@ -878,6 +899,7 @@ static int dsi_update_core_clks(struct dsi_clk_mngr *mngr,
 		goto error;
 	}
 
+	reg_log_dump(__func__, __LINE__);
 	if (mngr->post_clkon_cb) {
 		rc = mngr->post_clkon_cb(mngr->priv_data,
 					 DSI_CORE_CLK,
@@ -916,16 +938,19 @@ static int dsi_update_clk_state(struct dsi_clk_mngr *mngr,
 
 	if (l_clks) {
 		if (l_state == DSI_CLK_ON) {
+			reg_log_dump(__func__, __LINE__);
 			rc = dsi_clk_update_link_clk_state(mngr, l_clks,
 				DSI_LINK_LP_CLK, l_state, true);
 			if (rc)
 				goto error;
 
+			reg_log_dump(__func__, __LINE__);
 			rc = dsi_clk_update_link_clk_state(mngr, l_clks,
 				DSI_LINK_HS_CLK, l_state, true);
 			if (rc)
 				goto error;
 		} else {
+			reg_log_dump(__func__, __LINE__);
 			/*
 			 * Two conditions that need to be checked for Link
 			 * clocks:
@@ -946,6 +971,7 @@ static int dsi_update_clk_state(struct dsi_clk_mngr *mngr,
 			    DSI_CLK_EARLY_GATE) &&
 			    (mngr->core_clk_state !=
 			    DSI_CLK_ON)) {
+				reg_log_dump(__func__, __LINE__);
 				rc = dsi_display_core_clk_enable(
 					mngr->core_clks, mngr->dsi_ctrl_count,
 					mngr->master_ndx);
@@ -954,6 +980,7 @@ static int dsi_update_clk_state(struct dsi_clk_mngr *mngr,
 					goto error;
 				}
 
+				reg_log_dump(__func__, __LINE__);
 				rc = dsi_display_link_clk_enable(l_clks,
 					(DSI_LINK_LP_CLK & DSI_LINK_HS_CLK),
 					mngr->dsi_ctrl_count, mngr->master_ndx);
@@ -965,11 +992,13 @@ static int dsi_update_clk_state(struct dsi_clk_mngr *mngr,
 				DSI_DEBUG("ECG: core and Link_on\n");
 			}
 
+			reg_log_dump(__func__, __LINE__);
 			rc = dsi_clk_update_link_clk_state(mngr, l_clks,
 				DSI_LINK_HS_CLK, l_state, false);
 			if (rc)
 				goto error;
 
+			reg_log_dump(__func__, __LINE__);
 			rc = dsi_clk_update_link_clk_state(mngr, l_clks,
 				DSI_LINK_LP_CLK, l_state, false);
 			if (rc)
@@ -998,6 +1027,7 @@ static int dsi_update_clk_state(struct dsi_clk_mngr *mngr,
 					goto error;
 				}
 
+				reg_log_dump(__func__, __LINE__);
 				l_c_on = false;
 				DSI_DEBUG("ECG: core off\n");
 			} else
@@ -1020,6 +1050,7 @@ static int dsi_update_clk_state(struct dsi_clk_mngr *mngr,
 		if ((c_state == DSI_CLK_OFF) &&
 		    (mngr->core_clk_state ==
 		    DSI_CLK_EARLY_GATE) && !l_c_on) {
+			reg_log_dump(__func__, __LINE__);
 			rc = dsi_display_core_clk_enable(mngr->core_clks,
 				mngr->dsi_ctrl_count, mngr->master_ndx);
 			if (rc) {
@@ -1039,6 +1070,7 @@ static int dsi_update_clk_state(struct dsi_clk_mngr *mngr,
 				DSI_ERR("pre core clk off cb failed\n");
 		}
 
+		reg_log_dump(__func__, __LINE__);
 		rc = dsi_display_core_clk_disable(c_clks, mngr->dsi_ctrl_count,
 			mngr->master_ndx);
 		if (rc) {
@@ -1059,6 +1091,7 @@ static int dsi_update_clk_state(struct dsi_clk_mngr *mngr,
 		}
 		mngr->core_clk_state = c_state;
 	}
+	reg_log_dump(__func__, __LINE__);
 
 error:
 	return rc;
@@ -1120,6 +1153,7 @@ static int dsi_recheck_clk_state(struct dsi_clk_mngr *mngr)
 			new_link_clk_state);
 
 	if (c_clks || l_clks) {
+		reg_log_dump(__func__, __LINE__);
 		rc = dsi_update_clk_state(mngr, c_clks, new_core_clk_state,
 					  l_clks, new_link_clk_state);
 		if (rc) {
@@ -1153,6 +1187,7 @@ int dsi_clk_req_state(void *client, enum dsi_clk_type clk,
 	DSI_DEBUG("[%s]%s: CLK=%d, new_state=%d, core=%d, linkl=%d\n",
 	       mngr->name, c->name, clk, state, c->core_clk_state,
 	       c->link_clk_state);
+	SDE_EVT32(clk, state, c->core_refcount, c->core_clk_state, c->link_refcount, c->link_clk_state); // case 04627046
 
 	/*
 	 * Clock refcount handling as below:
@@ -1221,8 +1256,10 @@ int dsi_clk_req_state(void *client, enum dsi_clk_type clk,
 	DSI_DEBUG("[%s]%s: change=%d, Core (ref=%d, state=%d), Link (ref=%d, state=%d)\n",
 		 mngr->name, c->name, changed, c->core_refcount,
 		 c->core_clk_state, c->link_refcount, c->link_clk_state);
+	SDE_EVT32(changed, c->core_refcount, c->core_clk_state, c->link_refcount, c->link_clk_state); // case 04627046
 
 	if (changed) {
+		reg_log_dump(__func__, __LINE__);
 		rc = dsi_recheck_clk_state(mngr);
 		if (rc)
 			DSI_ERR("Failed to adjust clock state rc = %d\n", rc);

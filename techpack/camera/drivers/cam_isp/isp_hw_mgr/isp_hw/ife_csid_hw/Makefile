@@ -9,6 +9,9 @@ ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_isp/isp_hw_mgr/hw_utils/ir
 ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_isp/isp_hw_mgr/isp_hw/include
 ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_smmu/
 ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_req_mgr/
+ifdef CONFIG_USE_CAMERA_HW_BIG_DATA
+ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_sensor_utils/
+endif
 
 obj-$(CONFIG_SPECTRA_CAMERA) += cam_ife_csid_dev.o cam_ife_csid_soc.o cam_ife_csid_core.o
 obj-$(CONFIG_SPECTRA_CAMERA) += cam_ife_csid17x.o cam_ife_csid_lite17x.o

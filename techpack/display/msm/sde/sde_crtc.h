@@ -527,6 +527,8 @@ static inline void sde_crtc_set_needs_hw_reset(struct drm_crtc *crtc)
 int sde_crtc_reset_hw(struct drm_crtc *crtc, struct drm_crtc_state *old_state,
 	bool recovery_events);
 
+void sde_crtc_reset_hw_immediate(struct drm_crtc *crtc, u32 xin_mask);
+
 /**
  * sde_crtc_request_frame_reset - requests for next frame reset
  * @crtc: Pointer to drm crtc object

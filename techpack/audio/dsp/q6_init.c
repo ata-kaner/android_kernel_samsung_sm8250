@@ -25,11 +25,18 @@ static int __init audio_q6_init(void)
 	msm_mdf_init();
 	voice_mhi_init();
 	digital_cdc_rsc_mgr_init();
+#ifdef CONFIG_SEC_SND_ADAPTATION
+	sec_soc_platform_init();
+#endif /* CONFIG_SEC_SND_ADAPTATION */
+
 	return 0;
 }
 
 static void __exit audio_q6_exit(void)
 {
+#ifdef CONFIG_SEC_SND_ADAPTATION
+	sec_soc_platform_exit();
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 	digital_cdc_rsc_mgr_exit();
 	msm_mdf_exit();
 	avtimer_exit();

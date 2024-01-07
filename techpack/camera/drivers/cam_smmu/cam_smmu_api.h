@@ -60,16 +60,12 @@ typedef void (*cam_smmu_client_page_fault_handler)(struct iommu_domain *domain,
 /**
  * @brief            : Structure to store region information
  *
- * @param iova_start         : Start address of region
- * @param iova_len           : length of region
- * @param discard_iova_start : iova addr start from where should not be used
- * @param discard_iova_len   : length of discard iova region
+ * @param iova_start : Start address of region
+ * @param iova_len   : length of region
  */
 struct cam_smmu_region_info {
 	dma_addr_t iova_start;
 	size_t iova_len;
-	dma_addr_t discard_iova_start;
-	size_t discard_iova_len;
 };
 
 /**
@@ -103,7 +99,7 @@ int cam_smmu_ops(int handle, enum cam_smmu_ops_param op);
  * @param handle: Handle to identify the CAM SMMU client (VFE, CPP, FD etc.)
  * @param ion_fd: ION handle identifying the memory buffer.
  * @param dis_delayed_unmap: Whether to disable Delayed Unmap feature
- *                           for this mapping
+                             for this mapping
  * @dir         : Mapping direction: which will traslate toDMA_BIDIRECTIONAL,
  *                DMA_TO_DEVICE or DMA_FROM_DEVICE
  * @dma_addr    : Pointer to physical address where mapped address will be
@@ -114,8 +110,8 @@ int cam_smmu_ops(int handle, enum cam_smmu_ops_param op);
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_smmu_map_user_iova(int handle, int ion_fd, bool dis_delayed_unmap,
-	enum cam_smmu_map_dir dir, dma_addr_t *dma_addr, size_t *len_ptr,
-	enum cam_smmu_region_id region_id);
+    enum cam_smmu_map_dir dir, dma_addr_t *dma_addr, size_t *len_ptr,
+    enum cam_smmu_region_id region_id);
 
 /**
  * @brief        : Maps kernel space IOVA for calling driver
@@ -391,13 +387,12 @@ int cam_smmu_dealloc_qdss(int32_t smmu_hdl);
  * @param smmu_hdl: SMMU handle identifying the context bank
  * @param iova: IOVA address of allocated I/O region
  * @param len: Length of allocated I/O memory
- * @param discard_iova_start: Start address of io space to discard
- * @param discard_iova_len: Length of io space to discard
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_smmu_get_io_region_info(int32_t smmu_hdl,
-	dma_addr_t *iova, size_t *len,
-	dma_addr_t *discard_iova_start, size_t *discard_iova_len);
+	dma_addr_t *iova, size_t *len);
+
+void cam_smmu_check_user_mappings(void);
 
 #endif /* _CAM_SMMU_API_H_ */

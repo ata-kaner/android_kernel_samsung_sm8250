@@ -7,6 +7,7 @@
 #include <soc/qcom/rmnet_qmi.h>
 #include <soc/qcom/qmi_rmnet.h>
 #include "dfc_defs.h"
+#include <linux/netlog.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/dfc.h>
@@ -916,12 +917,19 @@ int dfc_bearer_flow_ctl(struct net_device *dev,
 	enable = bearer->grant_size ? true : false;
 
 	qmi_rmnet_flow_control(dev, bearer->mq_idx, enable);
+	net_log("m=%d b=%u gr=%u mq %s",
+		qos->mux_id, bearer->bearer_id, bearer->grant_size,
+		enable ? "en" : "dis");
 
 	/* Do not flow disable tcp ack q in tcp bidir */
 	if (bearer->ack_mq_idx != INVALID_MQ &&
-	    (enable || !bearer->tcp_bidir))
+	    (enable || !bearer->tcp_bidir)) {
 		qmi_rmnet_flow_control(dev, bearer->ack_mq_idx, enable);
-
+		net_log("m=%d b=%u gr=%u ack_mq_idx %s",
+			qos->mux_id, bearer->bearer_id, bearer->grant_size,
+			enable ? "en" : "dis");
+	}
+	
 	if (!enable && bearer->ack_req)
 		dfc_send_ack(dev, bearer->bearer_id,
 			     bearer->seq, qos->mux_id,
@@ -992,6 +1000,7 @@ static int dfc_update_fc_map(struct net_device *dev, struct qos_info *qos,
 	if (!itm)
 		itm = qmi_rmnet_get_bearer_noref(qos, fc_info->bearer_id);
 
+
 	if (itm) {
 		/* The RAT switch flag indicates the start and end of
 		 * the switch. Ignore indications in between.
@@ -1046,8 +1055,13 @@ static int dfc_update_fc_map(struct net_device *dev, struct qos_info *qos,
 		itm->last_seq = fc_info->seq_num;
 		itm->last_adjusted_grant = adjusted_grant;
 
-		if (action)
+		if (action) {
+			net_log("I> m=%d b=%d gr=%d s=%d a=%d\n",
+				fc_info->mux_id, fc_info->bearer_id,
+				fc_info->num_bytes, fc_info->seq_num,
+				ancillary);
 			rc = dfc_bearer_flow_ctl(dev, itm, qos);
+		}
 	}
 
 	return rc;
@@ -1106,10 +1120,14 @@ void dfc_do_burst_flow_control(struct dfc_qmi_data *dfc,
 			continue;
 		}
 
-		if (unlikely(flow_status->bearer_id == 0xFF))
+		if (unlikely(flow_status->bearer_id == 0xFF)) {
+			net_log("I> m=%d b=%d gr=%d s=%d a=%d\n",
+				flow_status->mux_id, flow_status->bearer_id,
+				flow_status->num_bytes, flow_status->seq_num,
+				ancillary);			
 			dfc_all_bearer_flow_ctl(
 				dev, qos, ack_req, ancillary, flow_status);
-		else
+		} else
 			dfc_update_fc_map(
 				dev, qos, ack_req, ancillary, flow_status,
 				is_query);
@@ -1131,6 +1149,9 @@ static void dfc_update_tx_link_status(struct net_device *dev,
 	if (!itm)
 		return;
 
+	net_log("Link> %s, b=%d, gr=%d, rs=%d, status %d\n", dev->name,
+		binfo->bearer_id, itm->grant_size, itm->rat_switch, tx_status);
+	
 	/* If no change in tx status, ignore */
 	if (itm->tx_off == !tx_status)
 		return;

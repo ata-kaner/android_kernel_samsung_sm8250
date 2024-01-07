@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -8,6 +8,10 @@
 #include "kgsl_device.h"
 #include "kgsl_mmu.h"
 #include "kgsl_sharedmem.h"
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+#include <linux/delay.h>
+#endif
 
 static void pagetable_remove_sysfs_objects(struct kgsl_pagetable *pagetable);
 
@@ -379,6 +383,9 @@ kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 				struct kgsl_memdesc *memdesc)
 {
 	int size;
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	int retry_cnt;
+#endif
 
 	if (!memdesc->gpuaddr)
 		return -EINVAL;
@@ -396,6 +403,22 @@ kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 		int ret;
 
 		ret = pagetable->pt_ops->mmu_map(pagetable, memdesc);
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+		if (ret != 0 && !in_interrupt()) {
+			for (retry_cnt = 0; retry_cnt < 62 ; retry_cnt++) {
+				/* To wait free page by memory reclaim*/
+				usleep_range(16000, 16000);
+
+				pr_err("kgsl_mmu_map failed : retry (%d) ret : %d\n", retry_cnt, ret);
+				
+				ret = pagetable->pt_ops->mmu_map(pagetable, memdesc);
+				if (ret == 0)
+					break;
+			}
+		}
+#endif
+
 		if (ret)
 			return ret;
 
@@ -425,7 +448,8 @@ void kgsl_mmu_put_gpuaddr(struct kgsl_memdesc *memdesc)
 		return;
 
 	if (!kgsl_memdesc_is_global(memdesc) &&
-			!kgsl_memdesc_is_reclaimed(memdesc))
+			!kgsl_memdesc_is_reclaimed(memdesc) &&
+			(KGSL_MEMDESC_MAPPED & memdesc->priv))
 		unmap_fail = kgsl_mmu_unmap(pagetable, memdesc);
 
 	/*
@@ -436,10 +460,17 @@ void kgsl_mmu_put_gpuaddr(struct kgsl_memdesc *memdesc)
 	if (PT_OP_VALID(pagetable, put_gpuaddr) && (unmap_fail == 0))
 		pagetable->pt_ops->put_gpuaddr(memdesc);
 
+	memdesc->pagetable = NULL;
+
+	/*
+	 * If SVM tries to take a GPU address it will lose the race until the
+	 * gpuaddr returns to zero so we shouldn't need to worry about taking a
+	 * lock here
+	 */
+
 	if (!kgsl_memdesc_is_global(memdesc))
 		memdesc->gpuaddr = 0;
 
-	memdesc->pagetable = NULL;
 }
 EXPORT_SYMBOL(kgsl_mmu_put_gpuaddr);
 

@@ -175,6 +175,10 @@ source "drivers/usb/roles/Kconfig"
 
 source "drivers/usb/pd/Kconfig"
 
+source "drivers/usb/notify/Kconfig"
+
+source "drivers/usb/manager/Kconfig"
+
 config USB_LED_TRIG
 	bool "USB LED Triggers"
 	depends on LEDS_CLASS && LEDS_TRIGGERS

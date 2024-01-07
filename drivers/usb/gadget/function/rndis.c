@@ -865,8 +865,10 @@ int rndis_msg_parser(struct rndis_params *params, u8 *buf)
 		/* Garbled message can be huge, so limit what we display */
 		if (MsgLength > 16)
 			MsgLength = 16;
+		/*
 		print_hex_dump_bytes(__func__, DUMP_PREFIX_OFFSET,
 				     buf, MsgLength);
+		 */
 		break;
 	}
 

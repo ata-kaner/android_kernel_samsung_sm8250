@@ -498,37 +498,38 @@ struct cvp_hfi_cmd_sys_test_ssr_packet {
 };
 
 struct cvp_buf_type {
-	s32 fd;
-	u32 size;
-	u32 offset;
-	u32 flags;
-	union {
-		struct dma_buf *dbuf;
-		struct {
-			u32 reserved1;
-			u32 reserved2;
-		};
-	} __packed;
+    s32 fd;
+    u32 size;
+    u32 offset;
+    u32 flags;
+    union {
+        struct dma_buf *dbuf;
+        struct {
+            u32 reserved1;
+            u32 reserved2;
+        };
+    } __packed;
 } __packed;
 
 struct cvp_hfi_msg_dme_pkt {
-	u32 size;
-	u32 packet_type;
-	u32 session_id;
-	u32 error_type;
-	struct cvp_hfi_client client_data;
-	u32 stream_idx;
-	u32 skipmv;
-	struct cvp_buf_type srcbuffer;
-	struct cvp_buf_type srcctxbuffer;
-	struct cvp_buf_type refbuffer;
-	struct cvp_buf_type refctxbuffer;
-	struct cvp_buf_type statsbuffer;
-	u32 fullreswidth;
-	u32 fullresheight;
-	u32 processwidth;
-	u32 processheight;
-	u32 confidence;
+    u32 size;
+    u32 packet_type;
+    u32 session_id;
+    u32 error_type;
+    struct cvp_hfi_client client_data;
+    u32 stream_idx;
+    u32 skipmv;
+    struct cvp_buf_type srcbuffer;
+    struct cvp_buf_type srcctxbuffer;
+    struct cvp_buf_type refbuffer;
+    struct cvp_buf_type refctxbuffer;
+    struct cvp_buf_type statsbuffer;
+    u32 fullreswidth;
+    u32 fullresheight;
+    u32 processwidth;
+    u32 processheight;
+    u32 confidence;
 } __packed;
+
 
 #endif

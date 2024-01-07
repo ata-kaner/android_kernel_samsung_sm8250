@@ -10,6 +10,9 @@ obj-$(CONFIG_HWMON_VID)		+= hwmon-vid.o
 obj-$(CONFIG_SENSORS_ACPI_POWER) += acpi_power_meter.o
 obj-$(CONFIG_SENSORS_ATK0110)	+= asus_atk0110.o
 
+# SEC Thermistor Driver
+obj-$(CONFIG_SENSORS_SEC_THERMISTOR)	+= sec_thermistor.o
+
 # Native drivers
 # asb100, then w83781d go first, as they can override other drivers' addresses.
 obj-$(CONFIG_SENSORS_ASB100)	+= asb100.o

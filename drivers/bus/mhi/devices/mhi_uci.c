@@ -624,7 +624,7 @@ static int mhi_uci_probe(struct mhi_device *mhi_dev,
 	}
 
 	uci_dev->mtu = min_t(size_t, id->driver_data, mhi_dev->mtu);
-	uci_dev->actual_mtu = uci_dev->mtu -  sizeof(struct uci_buf);
+	uci_dev->actual_mtu = uci_dev->mtu - sizeof(struct uci_buf);
 	mhi_device_set_devdata(mhi_dev, uci_dev);
 	uci_dev->enabled = true;
 

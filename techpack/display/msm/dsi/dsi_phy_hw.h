@@ -334,6 +334,11 @@ struct dsi_phy_hw_ops {
 	void *timing_ops;
 	struct phy_ulps_config_ops ulps_ops;
 	struct phy_dyn_refresh_ops dyn_refresh_ops;
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	void (*store_str)(struct dsi_phy_hw *phy, u32 *val);
+	void (*store_emphasis)(struct dsi_phy_hw *phy, u32 *val);
+#endif
 };
 
 /**
@@ -360,6 +365,10 @@ struct dsi_phy_hw {
 
 	DECLARE_BITMAP(feature_map, DSI_PHY_MAX_FEATURES);
 	struct dsi_phy_hw_ops ops;
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	int display_index; //primary display or secondary dispaly.
+#endif
 };
 
 /**

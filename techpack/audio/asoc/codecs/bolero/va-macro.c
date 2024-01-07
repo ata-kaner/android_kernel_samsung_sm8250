@@ -407,7 +407,7 @@ static int va_macro_swr_pwr_event_v2(struct snd_soc_dapm_widget *w,
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		msm_cdc_pinctrl_set_wakeup_capable(
-				va_priv->va_swr_gpio_p, true);
+				va_priv->va_swr_gpio_p, false);
 		if (va_priv->swr_ctrl_data) {
 			clk_src = CLK_SRC_TX_RCG;
 			ret = swrm_wcd_notify(

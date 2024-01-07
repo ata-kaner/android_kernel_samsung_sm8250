@@ -13,6 +13,9 @@
 #include "dp_gpio_hpd.h"
 #include "dp_lphw_hpd.h"
 #include "dp_debug.h"
+#ifdef CONFIG_SEC_DISPLAYPORT
+#include "secdp.h"
+#endif
 
 static void dp_hpd_host_init(struct dp_hpd *dp_hpd,
 		struct dp_catalog_hpd *catalog)
@@ -43,6 +46,8 @@ struct dp_hpd *dp_hpd_get(struct device *dev, struct dp_parser *parser,
 {
 	struct dp_hpd *dp_hpd;
 
+	DP_DEBUG("+++, no_aux_switch<%d>\n", parser->no_aux_switch);
+
 	if (parser->no_aux_switch && parser->lphw_hpd) {
 		dp_hpd = dp_lphw_hpd_get(dev, parser, catalog, cb);
 		if (IS_ERR(dp_hpd)) {
@@ -66,6 +71,8 @@ struct dp_hpd *dp_hpd_get(struct device *dev, struct dp_parser *parser,
 		dp_hpd->type = DP_HPD_USBPD;
 	}
 
+	DP_DEBUG("type<%d>\n", dp_hpd->type);
+
 	if (!dp_hpd->host_init)
 		dp_hpd->host_init	= dp_hpd_host_init;
 	if (!dp_hpd->host_deinit)
@@ -80,6 +87,8 @@ void dp_hpd_put(struct dp_hpd *dp_hpd)
 {
 	if (!dp_hpd)
 		return;
+
+	DP_DEBUG("+++\n");
 
 	switch (dp_hpd->type) {
 	case DP_HPD_USBPD:

@@ -1025,6 +1025,10 @@ static int msm_vidc_setup_context_bank(struct msm_vidc_platform_resources *res,
 	 * iommu mapping returns one mapping (which is required for partial
 	 * cache operations)
 	 */
+	if(!strcmp(cb->name,"venus_ns")) {
+		d_vpr_e("%s: call dma best fit for venus_ns\n", __func__);
+		iommu_dma_enable_best_fit_algo(cb->dev);
+	}
 	if (!dev->dma_parms)
 		dev->dma_parms =
 			devm_kzalloc(dev, sizeof(*dev->dma_parms), GFP_KERNEL);

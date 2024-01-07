@@ -15,6 +15,9 @@
 #include <linux/iio/consumer.h>
 #include "adc-tm.h"
 #include "../thermal_core.h"
+#ifdef CONFIG_SEC_EXT_THERMAL_MONITOR
+#include <linux/wakelock.h>
+#endif /* CONFIG_SEC_EXT_THERMAL_MONITOR */
 
 #define ADC_TM_STATUS2				0x09
 #define ADC_TM_STATUS_LOW			0x0a
@@ -78,6 +81,12 @@ static struct adc_tm_reverse_scale_fn adc_tm_rscale_fn[] = {
 	[SCALE_R_ABSOLUTE] = {adc_tm_absolute_rthr},
 };
 
+#ifdef CONFIG_SEC_EXT_THERMAL_MONITOR
+#define VDD_REF_MV	1875
+static struct wake_lock adctm_wakelock;
+static int wlock_init = 0;
+#endif /* CONFIG_SEC_EXT_THERMAL_MONITOR */
+
 static int adc_tm5_get_temp(struct adc_tm_sensor *sensor, int *temp)
 {
 	int ret, milli_celsius;
@@ -89,6 +98,11 @@ static int adc_tm5_get_temp(struct adc_tm_sensor *sensor, int *temp)
 	if (ret < 0)
 		return ret;
 
+#ifdef CONFIG_SEC_EXT_THERMAL_MONITOR
+	if (sensor->adc_ch == 0x4d || sensor->adc_ch == 0x52)
+		*temp = sec_bat_convert_adc_to_temp(sensor->adc_ch, milli_celsius);
+	else
+#endif /* CONFIG_SEC_EXT_THERMAL_MONITOR */
 	*temp = milli_celsius;
 
 	return 0;
@@ -762,6 +776,9 @@ static int adc_tm5_set_trip_temp(struct adc_tm_sensor *sensor,
 	int ret;
 	uint32_t btm_chan = 0, btm_chan_idx = 0, mask = 0;
 	unsigned long flags;
+#ifdef CONFIG_SEC_EXT_THERMAL_MONITOR
+	int64_t remap_high_thr_voltage = 0, remap_low_thr_voltage = 0;
+#endif /* CONFIG_SEC_EXT_THERMAL_MONITOR */
 
 	if (!sensor)
 		return -EINVAL;
@@ -785,6 +802,44 @@ static int adc_tm5_set_trip_temp(struct adc_tm_sensor *sensor,
 	pr_debug("requested a low temp- %d and high temp- %d\n",
 			tm_config.low_thr_temp, tm_config.high_thr_temp);
 	adc_tm_scale_therm_voltage_100k(&tm_config, chip->data);
+
+#ifdef CONFIG_SEC_EXT_THERMAL_MONITOR
+	if (tm_config.channel == 0x4d || tm_config.channel == 0x52) {
+		pr_debug("%s: adc_ch(0x%x) low_temp %d, high_temp %d\n",
+			__func__, sensor->adc_ch, low_temp, high_temp);
+
+		/* NOTE: Remap trip threshold voltage for adc-tm interrupt
+		 * if remap_voltage is nonzero, then reset threshold voltage.
+		 * Otherwise, it means sec_adc driver is not ready, so skip it.
+		 */
+		if (high_temp != INT_MAX) {
+			remap_low_thr_voltage =
+				sec_bat_get_thr_voltage(sensor->adc_ch, (high_temp/100));
+
+			if (remap_low_thr_voltage) {
+				pr_info("%s: adc_ch(0x%x) high_temp %d - voltage %lld\n",
+					__func__, sensor->adc_ch, high_temp, remap_low_thr_voltage);
+				tm_config.low_thr_voltage =
+					remap_low_thr_voltage * chip->data->full_scale_code_volt;
+				tm_config.low_thr_voltage =
+					div64_s64(tm_config.low_thr_voltage, VDD_REF_MV);
+			}
+		}
+		if (low_temp != INT_MIN) {
+			remap_high_thr_voltage =
+				sec_bat_get_thr_voltage(sensor->adc_ch, (low_temp/100)) + 1;
+
+			if (remap_high_thr_voltage) {
+				pr_info("%s: adc_ch(0x%x) low_temp %d - voltage %lld\n",
+					__func__, sensor->adc_ch, low_temp, remap_high_thr_voltage);
+				tm_config.high_thr_voltage =
+					remap_high_thr_voltage * chip->data->full_scale_code_volt;
+				tm_config.high_thr_voltage =
+					div64_s64(tm_config.high_thr_voltage, VDD_REF_MV);
+			}
+		}
+	}
+#endif /* CONFIG_SEC_EXT_THERMAL_MONITOR */
 
 	/* Cool temperature corresponds to high voltage threshold */
 	mask = lower_32_bits(tm_config.high_thr_voltage);
@@ -958,6 +1013,16 @@ fail:
 			 * with new thresholds and activate/disable
 			 * the appropriate trips.
 			 */
+#ifdef CONFIG_SEC_EXT_THERMAL_MONITOR
+			pr_info("%s: adc_ch(0x%x) - temp: %d, ctl: 0x%x, Lower: %d, Upper: %d\n",
+				__func__, chip->sensor[i].adc_ch, temp, ctl, lower_set, upper_set);
+
+			/* Acquire wakelock for 5 secs to prevent entering sleep
+			 * before handling thermal notification in user-space
+			 */
+			 if (!wake_lock_active(&adctm_wakelock))
+				wake_lock_timeout(&adctm_wakelock, msecs_to_jiffies(5000));
+#endif /* CONFIG_SEC_EXT_THERMAL_MONITOR */
 			pr_debug("notifying of_thermal\n");
 			temp = therm_fwd_scale((int64_t)code,
 						ADC_HC_VDD_REF, chip->data);
@@ -1119,7 +1184,10 @@ static int adc_tm5_init(struct adc_tm_chip *chip, uint32_t dt_chans)
 		chip->sensor[i].btm_ch =
 				adc_tm_ch_data[i + offset_btm_idx].btm_amux_ch;
 	}
-
+#ifdef CONFIG_SEC_EXT_THERMAL_MONITOR
+	if(!wlock_init++)
+		wake_lock_init(&adctm_wakelock, WAKE_LOCK_SUSPEND, "adctm_lock");
+#endif /* CONFIG_SEC_EXT_THERMAL_MONITOR */
 	return ret;
 }
 

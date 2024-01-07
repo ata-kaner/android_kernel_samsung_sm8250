@@ -115,8 +115,17 @@ void log_wakeup_reason(int irq)
 	unsigned long flags;
 	desc = irq_to_desc(irq);
 	if (desc && desc->action && desc->action->name)
+#ifdef CONFIG_SEC_PM
+	{
+		struct irq_chip *chip;
+		chip = irq_desc_get_chip(desc);
+		printk(KERN_INFO "Resume caused by IRQ %d, %s -> %s\n", irq,
+				chip->name, desc->action->name);
+	}
+#else
 		printk(KERN_INFO "Resume caused by IRQ %d, %s\n", irq,
 				desc->action->name);
+#endif
 	else
 		printk(KERN_INFO "Resume caused by IRQ %d\n", irq);
 

@@ -1450,6 +1450,9 @@ new_packet:
 		size = port->egress_agg_params.agg_size - skb->len;
 
 		if (diff.tv_sec > 0 || diff.tv_nsec > rmnet_agg_bypass_time ||
+#if defined(CONFIG_RMNET_ARGOS)
+			!rmnet_data_tx_aggr_enabled ||
+#endif
 		    size <= 0) {
 			spin_unlock_irqrestore(&port->agg_lock, flags);
 			skb->protocol = htons(ETH_P_MAP);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -38,7 +38,7 @@ static void cam_sync_print_fence_table(void)
 			sync_dev->sync_table[idx].name,
 			sync_dev->sync_table[idx].type,
 			sync_dev->sync_table[idx].state,
-			atomic_read(&sync_dev->sync_table[idx].ref_cnt));
+			sync_dev->sync_table[idx].ref_cnt);
 		spin_unlock_bh(&sync_dev->row_spinlocks[idx]);
 	}
 }
@@ -286,7 +286,6 @@ int cam_sync_merge(int32_t *sync_obj, uint32_t num_objs, int32_t *merged_obj)
 	int rc;
 	long idx = 0;
 	bool bit;
-	int i = 0;
 
 	if (!sync_obj || !merged_obj) {
 		CAM_ERR(CAM_SYNC, "Invalid pointer(s)");
@@ -304,14 +303,6 @@ int cam_sync_merge(int32_t *sync_obj, uint32_t num_objs, int32_t *merged_obj)
 		return -EINVAL;
 	}
 
-	for (i = 0; i < num_objs; i++) {
-		rc = cam_sync_check_valid(sync_obj[i]);
-		if (rc) {
-			CAM_ERR(CAM_SYNC, "Sync_obj[%d] %d valid check fail",
-				i, sync_obj[i]);
-			return rc;
-		}
-	}
 	do {
 		idx = find_first_zero_bit(sync_dev->bitmap, CAM_SYNC_MAX_OBJS);
 		if (idx >= CAM_SYNC_MAX_OBJS)
@@ -383,30 +374,6 @@ int cam_sync_destroy(int32_t sync_obj)
 	return cam_sync_deinit_object(sync_dev->sync_table, sync_obj);
 }
 
-int cam_sync_check_valid(int32_t sync_obj)
-{
-	struct sync_table_row *row = NULL;
-
-	if (sync_obj >= CAM_SYNC_MAX_OBJS || sync_obj <= 0)
-		return -EINVAL;
-
-	row = sync_dev->sync_table + sync_obj;
-
-	if (!test_bit(sync_obj, sync_dev->bitmap)) {
-		CAM_ERR(CAM_SYNC, "Error: Released sync obj received %d",
-			sync_obj);
-		return -EINVAL;
-	}
-
-	if (row->state == CAM_SYNC_STATE_INVALID) {
-		CAM_ERR(CAM_SYNC,
-			"Error: accessing an uninitialized sync obj = %d",
-			sync_obj);
-		return -EINVAL;
-	}
-	return 0;
-}
-
 int cam_sync_wait(int32_t sync_obj, uint64_t timeout_ms)
 {
 	unsigned long timeleft;
@@ -459,26 +426,38 @@ static int cam_sync_handle_create(struct cam_private_ioctl_arg *k_ioctl)
 	struct cam_sync_info sync_create;
 	int result;
 
-	if (k_ioctl->size != sizeof(struct cam_sync_info))
+	if (k_ioctl->size != sizeof(struct cam_sync_info)) {
+		CAM_ERR(CAM_SYNC, "size mismatch ioctl size:%d sync size:%d",
+			k_ioctl->size, sizeof(struct cam_sync_info));
 		return -EINVAL;
+	}
 
-	if (!k_ioctl->ioctl_ptr)
+	if (!k_ioctl->ioctl_ptr) {
+		CAM_ERR(CAM_SYNC, "in valid ioctl param");
 		return -EINVAL;
+	}
 
 	if (copy_from_user(&sync_create,
 		u64_to_user_ptr(k_ioctl->ioctl_ptr),
-		k_ioctl->size))
+		k_ioctl->size)) {
+		CAM_ERR(CAM_SYNC, "copy from user failed size:%d",
+			k_ioctl->size);
 		return -EFAULT;
+	}
 
 	result = cam_sync_create(&sync_create.sync_obj,
 		sync_create.name);
 
-	if (!result)
+	if (!result) {
 		if (copy_to_user(
 			u64_to_user_ptr(k_ioctl->ioctl_ptr),
 			&sync_create,
-			k_ioctl->size))
+			k_ioctl->size)) {
+			CAM_ERR(CAM_SYNC, "copy to user failed size:%d",
+				k_ioctl->size);
 			return -EFAULT;
+		}
+	}
 
 	return result;
 }
@@ -750,11 +729,15 @@ static long cam_sync_dev_ioctl(struct file *filep, void *fh,
 		return -EINVAL;
 	}
 
-	if (!arg)
+	if (!arg) {
+		CAM_ERR(CAM_SYNC, "arg is NULL");
 		return -EINVAL;
+	}
 
-	if (cmd != CAM_PRIVATE_IOCTL_CMD)
+	if (cmd != CAM_PRIVATE_IOCTL_CMD) {
+		CAM_ERR(CAM_SYNC, "Not a CAM_PRIVATE_IOCTL_CMD cmd:%d ", cmd);
 		return -ENOIOCTLCMD;
+	}
 
 	k_ioctl = *(struct cam_private_ioctl_arg *)arg;
 
@@ -899,7 +882,7 @@ static int cam_sync_close(struct file *filep)
 	sync_dev->cam_sync_eventq = NULL;
 	spin_unlock_bh(&sync_dev->cam_sync_eventq_lock);
 	v4l2_fh_release(filep);
-
+	CAM_INFO(CAM_SYNC, " Cam Sync Close End");
 	return rc;
 }
 

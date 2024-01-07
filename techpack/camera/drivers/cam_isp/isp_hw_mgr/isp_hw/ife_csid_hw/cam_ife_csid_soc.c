@@ -38,8 +38,14 @@ static int cam_ife_csid_request_platform_resource(
 	return rc;
 }
 
+#if defined(CONFIG_SAMSUNG_SBI)
 int cam_ife_csid_init_soc_resources(struct cam_hw_soc_info *soc_info,
-	irq_handler_t csid_irq_handler, void *irq_data, bool is_custom)
+				    irq_handler_t csid_irq_handler,
+				    void *irq_data, bool is_custom)
+#else /*CONFIG_SAMSUNG_SBI*/
+int cam_ife_csid_init_soc_resources(struct cam_hw_soc_info *soc_info,
+	irq_handler_t csid_irq_handler, void *irq_data)
+#endif /*CONFIG_SAMSUNG_SBI*/
 {
 	int rc = 0;
 	struct cam_cpas_register_params   cpas_register_param;
@@ -66,12 +72,14 @@ int cam_ife_csid_init_soc_resources(struct cam_hw_soc_info *soc_info,
 	}
 
 	memset(&cpas_register_param, 0, sizeof(cpas_register_param));
+#if defined(CONFIG_SAMSUNG_SBI)
 	if (is_custom)
 		strlcpy(cpas_register_param.identifier, "csid-custom",
 			CAM_HW_IDENTIFIER_LENGTH);
 	else
-		strlcpy(cpas_register_param.identifier, "csid",
-			CAM_HW_IDENTIFIER_LENGTH);
+#endif /*CONFIG_SAMSUNG_SBI*/
+	strlcpy(cpas_register_param.identifier, "csid",
+		CAM_HW_IDENTIFIER_LENGTH);
 
 	cpas_register_param.cell_index = soc_info->index;
 	cpas_register_param.dev = soc_info->dev;

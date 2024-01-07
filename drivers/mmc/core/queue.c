@@ -14,6 +14,7 @@
 #include <linux/kthread.h>
 #include <linux/scatterlist.h>
 #include <linux/dma-mapping.h>
+#include <linux/backing-dev.h>
 
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
@@ -398,6 +399,27 @@ static void mmc_setup_queue(struct mmc_queue *mq, struct mmc_card *card)
 	INIT_WORK(&mq->recovery_work, mmc_mq_recovery_handler);
 	INIT_WORK(&mq->complete_work, mmc_blk_mq_complete_work);
 
+	if (mmc_card_sd(card)) {
+		/* decrease max # of requests to 32. The goal of this tunning is
+		 * reducing the time for draining elevator when elevator_switch
+		 * function is called. It is effective for slow external sdcard.
+		 */
+		mq->queue->nr_requests = BLKDEV_MAX_RQ / 8;
+		if (mq->queue->nr_requests < 32) mq->queue->nr_requests = 32;
+#ifdef CONFIG_LARGE_DIRTY_BUFFER
+		/* apply more throttle on external sdcard */
+		mq->queue->backing_dev_info->capabilities |= BDI_CAP_STRICTLIMIT;
+		bdi_set_min_ratio(mq->queue->backing_dev_info, 30);
+		bdi_set_max_ratio(mq->queue->backing_dev_info, 60);
+#endif
+		pr_info("Parameters for external-sdcard: min/max_ratio: %u/%u "
+				"strictlimit: on nr_requests: %lu read_ahead_kb: %lu\n",
+				mq->queue->backing_dev_info->min_ratio,
+				mq->queue->backing_dev_info->max_ratio,
+				mq->queue->nr_requests,
+				mq->queue->backing_dev_info->ra_pages * 4);
+	}
+
 	mutex_init(&mq->complete_lock);
 
 	init_waitqueue_head(&mq->wait);
@@ -513,6 +535,13 @@ void mmc_queue_resume(struct mmc_queue *mq)
 void mmc_cleanup_queue(struct mmc_queue *mq)
 {
 	struct request_queue *q = mq->queue;
+
+#ifdef CONFIG_LARGE_DIRTY_BUFFER
+	/* Restore bdi min/max ratio before device removal */
+	/* Should proceed before blk_cleanup_queue */
+	bdi_set_min_ratio(q->backing_dev_info, 0);
+	bdi_set_max_ratio(q->backing_dev_info, 100);
+#endif
 
 	/*
 	 * The legacy code handled the possibility of being suspended,

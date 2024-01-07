@@ -1622,7 +1622,7 @@ static int msm_lsm_ioctl_shared(struct snd_pcm_substream *substream,
 		dev_dbg(rtd->dev, "%s: leave (%d)\n",
 			__func__, rc);
 	else
-		dev_err(rtd->dev, "%s: cmd 0x%x failed %d\n",
+		dev_info(rtd->dev, "%s: cmd 0x%x failed %d\n",
 			__func__, cmd, rc);
 
 	__pm_relax(prtd->ws);
@@ -1914,7 +1914,7 @@ static int msm_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 		kfree(user);
 		kfree(user32);
 		if (err)
-			dev_err(rtd->dev, "%s: lsmevent failed %d",
+			dev_info(rtd->dev, "%s: lsmevent failed %d",
 				__func__, err);
 		break;
 	}

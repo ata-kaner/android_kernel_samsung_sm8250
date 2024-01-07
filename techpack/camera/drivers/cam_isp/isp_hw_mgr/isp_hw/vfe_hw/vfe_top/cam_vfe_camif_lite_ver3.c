@@ -40,6 +40,9 @@ struct cam_vfe_mux_camif_lite_data {
 	uint32_t                                     camif_debug;
 	struct cam_vfe_top_irq_evt_payload
 		evt_payload[CAM_VFE_CAMIF_LITE_EVT_MAX];
+#if defined(CONFIG_SAMSUNG_SBI)
+	uint32_t                                     cust_node;
+#endif
 	struct timeval                               sof_ts;
 	struct timeval                               epoch_ts;
 	struct timeval                               eof_ts;
@@ -220,6 +223,7 @@ int cam_vfe_camif_lite_ver3_acquire_resource(
 	struct cam_isp_resource_node          *camif_lite_res,
 	void                                  *acquire_param)
 {
+	uint32_t                               cust_node = 0;
 	struct cam_vfe_mux_camif_lite_data    *camif_lite_data;
 	struct cam_vfe_acquire_args           *acquire_data;
 
@@ -236,10 +240,16 @@ int cam_vfe_camif_lite_ver3_acquire_resource(
 	camif_lite_data->event_cb    = acquire_data->event_cb;
 	camif_lite_data->priv        = acquire_data->priv;
 	camif_lite_res->rdi_only_ctx = 0;
-	CAM_DBG(CAM_ISP, "Acquired VFE:%d CAMIF LITE:%d sync_mode=%d",
+#if defined(CONFIG_SAMSUNG_SBI)
+    camif_lite_data->cust_node   = acquire_data->vfe_in.in_port->cust_node;
+    cust_node                    = camif_lite_data->cust_node;
+#endif
+
+	CAM_DBG(CAM_ISP, "Acquired VFE:%d CAMIF LITE:%d sync_mode=%d cust_node: %u",
 		camif_lite_res->hw_intf->hw_idx,
 		camif_lite_res->res_id,
-		camif_lite_data->sync_mode);
+		camif_lite_data->sync_mode,
+		cust_node);
 	return 0;
 }
 
@@ -282,20 +292,33 @@ static int cam_vfe_camif_lite_resource_start(
 	val = cam_io_r_mb(rsrc_data->mem_base +
 		rsrc_data->common_reg->core_cfg_0);
 
+	CAM_INFO(CAM_ISP, "operating_mode_shift %d input_mux_sel_pdaf %d val: 0x%x",
+	   rsrc_data->reg_data->operating_mode_shift,
+	   rsrc_data->cam_common_cfg.input_mux_sel_pdaf, val);
+
 	if (camif_lite_res->res_id == CAM_ISP_HW_VFE_IN_LCR &&
 		rsrc_data->sync_mode == CAM_ISP_HW_SYNC_SLAVE)
 		val |= (1 << rsrc_data->reg_data->extern_reg_update_shift);
 
 	if (camif_lite_res->res_id == CAM_ISP_HW_VFE_IN_PDLIB) {
-		val |= (1 << rsrc_data->reg_data->operating_mode_shift);
-		val |= (rsrc_data->cam_common_cfg.input_mux_sel_pdaf & 0x1) <<
-			CAM_SHIFT_TOP_CORE_CFG_MUXSEL_PDAF;
+#if defined(CONFIG_SAMSUNG_SBI)
+		if (rsrc_data->cust_node == 1) {
+			val |= (1 << rsrc_data->reg_data->operating_mode_shift);
+			val |= (0x1 << CAM_SHIFT_TOP_CORE_CFG_MUXSEL_PDAF);
+			CAM_INFO(CAM_ISP, "Mux selected for SBI");
+		} else
+#endif
+		{
+			val |= (1 << rsrc_data->reg_data->operating_mode_shift);
+			val |= (rsrc_data->cam_common_cfg.input_mux_sel_pdaf & 0x1) <<
+				CAM_SHIFT_TOP_CORE_CFG_MUXSEL_PDAF;
+		}
 	}
 
 	cam_io_w_mb(val, rsrc_data->mem_base +
 		rsrc_data->common_reg->core_cfg_0);
 
-	CAM_DBG(CAM_ISP, "VFE:%d core_cfg val:%d",
+	CAM_DBG(CAM_ISP, "VFE:%d core_cfg val:0x%x",
 		camif_lite_res->hw_intf->hw_idx, val);
 
 	/* epoch config */
@@ -637,19 +660,53 @@ dump_lcr:
 	}
 
 wr_dump:
-	if (!soc_private->is_ife_lite)
-		goto end_dump;
+	if (!soc_private->is_ife_lite) {
+		CAM_INFO(CAM_ISP, "IFE:%d CSID", camif_lite_priv->hw_intf->hw_idx);
+		for (offset = 0x1400; offset <= 0x19DC; offset += 0x4) {
+			val = cam_soc_util_r(camif_lite_priv->soc_info, 0, offset);
+			CAM_INFO(CAM_ISP, "offset 0x%X value 0x%X", offset, val);
+		}
 
-	CAM_INFO(CAM_ISP, "IFE:%d LITE BUS WR",
-		camif_lite_priv->hw_intf->hw_idx);
+		CAM_INFO(CAM_ISP, "IFE:%d PP Stats CLC Modules", camif_lite_priv->hw_intf->hw_idx);
+			for (offset = 0x7E00; offset <= 0x8FFC; offset += 0x4) {
+				val = cam_soc_util_r(camif_lite_priv->soc_info, 0, offset);
+				CAM_INFO(CAM_ISP, "offset 0x%X value 0x%X", offset, val);
+			}
+
+		CAM_INFO(CAM_ISP, "IFE:%d BUS WR", camif_lite_priv->hw_intf->hw_idx);
+		for (offset = 0xAA00; offset <= 0xAADC; offset += 0x4) {
+			val = cam_soc_util_r(camif_lite_priv->soc_info, 0, offset);
+			CAM_DBG(CAM_ISP, "offset 0x%X value 0x%X", offset, val);
+		}
+
+		for (wm_idx = 0; wm_idx <= 25; wm_idx++) {
+			for (offset = 0xAC00 + 0x100 * wm_idx;
+				offset < 0xAC84 + 0x100 * wm_idx; offset += 0x4) {
+				val = cam_soc_util_r(camif_lite_priv->soc_info, 0, offset);
+				CAM_INFO(CAM_ISP, "offset 0x%X value 0x%X",
+					offset, val);
+			}
+		}
+		goto end_dump;
+	}
+
+	CAM_INFO(CAM_ISP, "IFE:%d CSID", camif_lite_priv->hw_intf->hw_idx);
+	for (offset = 0x400; offset <= 0x7E4; offset += 0x4) {
+		val = cam_soc_util_r(camif_lite_priv->soc_info, 0, offset);
+		CAM_INFO(CAM_ISP, "offset 0x%X value 0x%X", offset, val);
+	}
+
+	CAM_INFO(CAM_ISP, "IFE:%d BUS WR", camif_lite_priv->hw_intf->hw_idx);
 	for (offset = 0x1A00; offset <= 0x1AE0; offset += 0x4) {
 		val = cam_soc_util_r(camif_lite_priv->soc_info, 0, offset);
 		CAM_DBG(CAM_ISP, "offset 0x%X value 0x%X", offset, val);
 	}
 
+	CAM_INFO(CAM_ISP, "IFE:%d LITE BUS WR image_addr",
+		camif_lite_priv->hw_intf->hw_idx);
 	for (wm_idx = 0; wm_idx <= 3; wm_idx++) {
-		for (offset = 0x1C00 + 0x100 * wm_idx; offset < (0x1C00 +
-			0x100 * wm_idx + 0x84); offset += 0x4) {
+		for (offset = 0x1C04 + 0x100 * wm_idx; offset < (0x1C04 +
+			0x100 * wm_idx + 0x84); offset += 0x1000) {
 			val = cam_soc_util_r(camif_lite_priv->soc_info,
 				0, offset);
 			CAM_INFO(CAM_ISP, "offset 0x%X value 0x%X",
@@ -744,6 +801,8 @@ static int cam_vfe_camif_lite_ver3_core_config(
 	camif_lite_priv->cam_common_cfg.input_mux_sel_pp =
 		vfe_core_cfg->core_config.input_mux_sel_pp;
 
+	CAM_INFO(CAM_ISP, "pp mux sel: %u",
+		camif_lite_priv->cam_common_cfg.input_mux_sel_pp);
 	return 0;
 }
 
@@ -1082,7 +1141,6 @@ static int cam_vfe_camif_lite_handle_irq_bottom_half(
 	struct cam_vfe_soc_private *soc_private = NULL;
 	uint32_t irq_status[CAM_IFE_IRQ_REGISTERS_MAX] = {0};
 	int i = 0;
-	uint32_t status_0 = 0;
 	struct timespec64 ts;
 
 	if (!handler_priv || !evt_payload_priv) {
@@ -1159,51 +1217,37 @@ static int cam_vfe_camif_lite_handle_irq_bottom_half(
 				CAM_ISP_HW_EVENT_EOF, (void *)&evt_info);
 	}
 
-	status_0 = irq_status[CAM_IFE_IRQ_CAMIF_REG_STATUS0]
-		& camif_lite_priv->reg_data->error_irq_mask0;
-	if (status_0) {
+	if (irq_status[CAM_IFE_IRQ_CAMIF_REG_STATUS0]
+		& camif_lite_priv->reg_data->error_irq_mask0) {
 		CAM_ERR(CAM_ISP, "VFE:%d Overflow",
 			camif_lite_node->hw_intf->hw_idx);
 
 		evt_info.err_type = CAM_VFE_IRQ_STATUS_OVERFLOW;
-		ktime_get_boottime_ts64(&ts);
-		CAM_INFO(CAM_ISP,
-			"current monotonic time stamp seconds %lld:%lld",
-			ts.tv_sec, ts.tv_nsec/1000);
-		CAM_INFO(CAM_ISP,
-			"ERROR time %lld:%lld",
-			camif_lite_priv->error_ts.tv_sec,
-			camif_lite_priv->error_ts.tv_usec);
-
-		if (camif_lite_node->rdi_only_ctx)
-			CAM_INFO(CAM_ISP,
-				"SOF %lld:%lld EPOCH %lld:%lld EOF %lld:%lld",
-				camif_lite_priv->sof_ts.tv_sec,
-				camif_lite_priv->sof_ts.tv_usec,
-				camif_lite_priv->epoch_ts.tv_sec,
-				camif_lite_priv->epoch_ts.tv_usec,
-				camif_lite_priv->eof_ts.tv_sec,
-				camif_lite_priv->eof_ts.tv_usec);
-
-		if (status_0 & 0x8000000)
-			evt_info.res_id = CAM_ISP_IFE_OUT_RES_RDI_2;
-
-		if (status_0 & 0x10000000)
-			evt_info.res_id = CAM_ISP_IFE_OUT_RES_RDI_1;
-
-		if (status_0 & 0x20000000)
-			evt_info.res_id = CAM_ISP_IFE_OUT_RES_RDI_0;
 
 		if (camif_lite_priv->event_cb)
 			camif_lite_priv->event_cb(camif_lite_priv->priv,
 				CAM_ISP_HW_EVENT_ERROR, (void *)&evt_info);
 
 		ret = CAM_VFE_IRQ_STATUS_OVERFLOW;
+		ktime_get_boottime_ts64(&ts);
+		CAM_INFO(CAM_ISP,
+			"current monotonic time stamp seconds %lld:%lld",
+			ts.tv_sec, ts.tv_nsec/1000);
+		CAM_INFO(CAM_ISP,
+			"ERROR time %lld:%lld SOF %lld:%lld EPOCH %lld:%lld EOF %lld:%lld",
+			camif_lite_priv->error_ts.tv_sec,
+			camif_lite_priv->error_ts.tv_usec,
+			camif_lite_priv->sof_ts.tv_sec,
+			camif_lite_priv->sof_ts.tv_usec,
+			camif_lite_priv->epoch_ts.tv_sec,
+			camif_lite_priv->epoch_ts.tv_usec,
+			camif_lite_priv->eof_ts.tv_sec,
+			camif_lite_priv->eof_ts.tv_usec);
 
 		cam_vfe_camif_lite_print_status(irq_status, ret,
 			camif_lite_priv);
 
-		if (camif_lite_priv->camif_debug & CAMIF_DEBUG_ENABLE_REG_DUMP)
+//		if (camif_lite_priv->camif_debug & CAMIF_DEBUG_ENABLE_REG_DUMP)
 			cam_vfe_camif_lite_reg_dump(camif_lite_node);
 	}
 

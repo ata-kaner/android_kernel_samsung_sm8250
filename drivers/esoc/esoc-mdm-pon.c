@@ -243,6 +243,9 @@ static int mdm4x_pon_dt_init(struct mdm_ctrl *mdm)
 	int val;
 	struct device_node *node = mdm->dev->of_node;
 	enum of_gpio_flags flags = OF_GPIO_ACTIVE_LOW;
+	
+	if (of_property_read_bool(node, "qcom,esoc-spmi-soft-reset")) 
+		return 0;
 
 	val = of_get_named_gpio_flags(node, "qcom,ap2mdm-soft-reset-gpio",
 						0, &flags);
@@ -258,7 +261,11 @@ static int mdm4x_pon_dt_init(struct mdm_ctrl *mdm)
 static int mdm4x_pon_setup(struct mdm_ctrl *mdm)
 {
 	struct device *dev = mdm->dev;
-
+	struct device_node *node = mdm->dev->of_node;
+	
+	if (of_property_read_bool(node, "qcom,esoc-spmi-soft-reset")) 
+		return 0;
+	
 	if (gpio_is_valid(MDM_GPIO(mdm, AP2MDM_SOFT_RESET))) {
 		if (gpio_request(MDM_GPIO(mdm, AP2MDM_SOFT_RESET),
 					 "AP2MDM_SOFT_RESET")) {

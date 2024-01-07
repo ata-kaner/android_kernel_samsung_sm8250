@@ -22,7 +22,7 @@
 #include "clk-regmap-divider.h"
 #include "common.h"
 #include "reset.h"
-#include "vdd-level-lagoon.h"
+#include "vdd-level-lito.h"
 
 static DEFINE_VDD_REGULATORS(vdd_cx, VDD_NUM, 1, vdd_corner);
 
@@ -120,7 +120,7 @@ static struct pll_vco fabia_vco[] = {
 
 static const struct alpha_pll_config disp_cc_pll0_config = {
 	.l = 0x3A,
-	.cal_l = 0x31,
+	.cal_l = 0x3F,
 	.alpha = 0x5555,
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00002067,
@@ -273,8 +273,8 @@ static struct clk_rcg2 disp_cc_mdss_dp_crypto_clk_src = {
 		.name = "disp_cc_mdss_dp_crypto_clk_src",
 		.parent_names = disp_cc_parent_names_0,
 		.num_parents = 4,
-		.flags = CLK_GET_RATE_NOCACHE,
-		.ops = &clk_rcg2_ops,
+		.flags = CLK_SET_RATE_PARENT,
+		.ops = &clk_byte2_ops,
 		.vdd_class = &vdd_cx,
 		.num_rate_max = VDD_NUM,
 		.rate_max = (unsigned long[VDD_NUM]) {
@@ -303,8 +303,8 @@ static struct clk_rcg2 disp_cc_mdss_dp_link_clk_src = {
 		.name = "disp_cc_mdss_dp_link_clk_src",
 		.parent_names = disp_cc_parent_names_0,
 		.num_parents = 4,
-		.flags = CLK_SET_RATE_PARENT | CLK_GET_RATE_NOCACHE,
-		.ops = &clk_rcg2_ops,
+		.flags = CLK_SET_RATE_PARENT,
+		.ops = &clk_byte2_ops,
 		.vdd_class = &vdd_cx,
 		.num_rate_max = VDD_NUM,
 		.rate_max = (unsigned long[VDD_NUM]) {
@@ -633,7 +633,7 @@ static struct clk_branch disp_cc_mdss_mdp_clk = {
 
 static struct clk_branch disp_cc_mdss_mdp_lut_clk = {
 	.halt_reg = 0x1020,
-	.halt_check = BRANCH_HALT_VOTED,
+	.halt_check = BRANCH_HALT,
 	.clkr = {
 		.enable_reg = 0x1020,
 		.enable_mask = BIT(0),

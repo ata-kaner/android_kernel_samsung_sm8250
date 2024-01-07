@@ -31,6 +31,8 @@ static void dsi_catalog_cmn_init(struct dsi_ctrl_hw *ctrl,
 	ctrl->ops.trigger_command_dma    = dsi_ctrl_hw_cmn_trigger_command_dma;
 	ctrl->ops.get_interrupt_status   = dsi_ctrl_hw_cmn_get_interrupt_status;
 	ctrl->ops.get_error_status       = dsi_ctrl_hw_cmn_get_error_status;
+	ctrl->ops.dma_read_before_trigger   = dsi_ctrl_hw_cmn_dma_read_before_trigger;
+	ctrl->ops.read_mdp_line_count    = dsi_ctrl_hw_cmn_read_mdp_line_count;
 	ctrl->ops.clear_error_status     = dsi_ctrl_hw_cmn_clear_error_status;
 	ctrl->ops.clear_interrupt_status =
 		dsi_ctrl_hw_cmn_clear_interrupt_status;
@@ -271,6 +273,11 @@ static void dsi_catalog_phy_4_0_init(struct dsi_phy_hw *phy)
 		dsi_phy_hw_v4_0_cache_phy_timings;
 	phy->ops.set_continuous_clk = dsi_phy_hw_v4_0_set_continuous_clk;
 	phy->ops.commit_phy_timing = dsi_phy_hw_v4_0_commit_phy_timing;
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	phy->ops.store_str = dsi_phy_hw_v4_0_store_str;
+	phy->ops.store_emphasis= dsi_phy_hw_v4_0_store_emphasis;
+#endif
 }
 
 /**

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _CAM_HW_MGR_INTF_H_
@@ -99,11 +99,9 @@ struct cam_hw_done_event_data {
  * @context_data:          Context data pointer for the callback function
  * @event_cb:              Callback function array
  * @num_acq:               Total number of acquire in the payload
- * @session_hdl:           Session Handle
  * @acquire_info:          Acquired resource array pointer
  * @ctxt_to_hw_map:        HW context (returned)
  * @custom_enabled:        ctx has custom enabled
- * @use_frame_header_ts:   Use frame header for qtimer ts
  * @acquired_hw_id:        Acquired hardware mask
  * @acquired_hw_path:      Acquired path mask for an input
  *                         if input splits into multiple paths,
@@ -115,12 +113,10 @@ struct cam_hw_acquire_args {
 	void                        *context_data;
 	cam_hw_event_cb_func         event_cb;
 	uint32_t                     num_acq;
-	uint32_t                     session_hdl;
 	uint32_t                     acquire_info_size;
 	uintptr_t                    acquire_info;
 	void                        *ctxt_to_hw_map;
 	bool                         custom_enabled;
-	bool                         use_frame_header_ts;
 
 	uint32_t    acquired_hw_id[CAM_MAX_ACQ_RES];
 	uint32_t    acquired_hw_path[CAM_MAX_ACQ_RES][CAM_MAX_HW_SPLIT];
@@ -165,6 +161,27 @@ struct cam_hw_stop_args {
 	void              *args;
 };
 
+struct cam_buf_done_plane_io_cfg {
+	uint32_t mem_hdl;
+	dma_addr_t io_addr;
+	uint32_t width;
+	uint32_t height;
+	uint32_t stride;
+	uint32_t offset;
+	size_t size;
+};
+
+struct cam_buf_done_port_io_cfg {
+	uint32_t portID;
+	uint32_t plane;
+	struct cam_buf_done_plane_io_cfg plane_cfg[CAM_PACKET_MAX_PLANES];
+};
+
+struct cam_buf_done_info {
+	uint32_t num_ports;
+	struct timespec64 ts;
+	struct cam_buf_done_port_io_cfg port_cfg[30];
+};
 
 /**
  * struct cam_hw_mgr_dump_pf_data - page fault debug data
@@ -173,6 +190,7 @@ struct cam_hw_stop_args {
  */
 struct cam_hw_mgr_dump_pf_data {
 	void    *packet;
+	struct cam_buf_done_info info;
 };
 
 /**
@@ -290,10 +308,10 @@ struct cam_hw_flush_args {
  *
  */
 struct cam_hw_dump_pf_args {
-	struct cam_hw_mgr_dump_pf_data  pf_data;
-	unsigned long                   iova;
-	uint32_t                        buf_info;
-	bool                           *mem_found;
+	void                            *packet;
+	unsigned long                    iova;
+	uint32_t                         buf_info;
+	bool                            *mem_found;
 };
 
 /**
@@ -304,23 +322,6 @@ struct cam_hw_dump_pf_args {
  */
 struct cam_hw_reset_args {
 	void                           *ctxt_to_hw_map;
-};
-
-/**
- * struct cam_hw_dump_args - Dump arguments
- *
- * @request_id:            request_id
- * @offset:                Buffer offset. This is updated by the drivers.
- * @buf_handle:            Buffer handle
- * @error_type:            Error type, to be used to extend dump information
- * @ctxt_to_hw_map:        HW context from the acquire
- */
-struct cam_hw_dump_args {
-	uint64_t          request_id;
-	size_t            offset;
-	uint32_t          buf_handle;
-	uint32_t          error_type;
-	void             *ctxt_to_hw_map;
 };
 
 /* enum cam_hw_mgr_command - Hardware manager command type */
@@ -378,7 +379,6 @@ struct cam_hw_cmd_args {
  * @hw_close:                  Function pointer for HW deinit
  * @hw_flush:                  Function pointer for HW flush
  * @hw_reset:                  Function pointer for HW reset
- * @hw_dump:                   Function pointer for HW dump
  *
  */
 struct cam_hw_mgr_intf {
@@ -400,7 +400,6 @@ struct cam_hw_mgr_intf {
 	int (*hw_close)(void *hw_priv, void *hw_close_args);
 	int (*hw_flush)(void *hw_priv, void *hw_flush_args);
 	int (*hw_reset)(void *hw_priv, void *hw_reset_args);
-	int (*hw_dump)(void *hw_priv, void *hw_dump_args);
 };
 
 #endif /* _CAM_HW_MGR_INTF_H_ */

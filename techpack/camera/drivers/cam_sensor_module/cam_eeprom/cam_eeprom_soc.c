@@ -119,6 +119,7 @@ int cam_eeprom_parse_dt_memory_map(struct device_node *node,
 	char      property[PROPERTY_MAXSIZE];
 	uint32_t  count = MSM_EEPROM_MEM_MAP_PROPERTIES_CNT;
 	struct    cam_eeprom_memory_map_t *map;
+	uint32_t  total_size = 0;
 
 	snprintf(property, PROPERTY_MAXSIZE, "num-blocks");
 	rc = of_property_read_u32(node, property, &data->num_map);
@@ -174,7 +175,20 @@ int cam_eeprom_parse_dt_memory_map(struct device_node *node,
 				rc);
 			goto ERROR;
 		}
-		data->num_data += map[i].mem.valid_size;
+		if (map[i].mem.data_type == 1)
+			data->num_data += map[i].mem.valid_size;
+	}
+
+	// if total-size is defined at dtsi file.
+	// set num_data as total-size
+	snprintf(property, PROPERTY_MAXSIZE, "total-size");
+	rc = of_property_read_u32(node, property, &total_size);
+	CAM_ERR(CAM_EEPROM, "%s %d\n", property, total_size);
+	// if "total-size" propoerty exists.
+	if (rc >= 0) {
+		CAM_ERR(CAM_EEPROM, "set num_data as total-size (num_map : %d, total : %d, valid : %d)",
+			data->num_map, total_size, data->num_data);
+		data->num_data = total_size;
 	}
 
 	data->mapdata = vzalloc(data->num_data);

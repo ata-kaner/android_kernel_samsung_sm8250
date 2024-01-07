@@ -146,7 +146,8 @@ static int sched_effective_boost(void)
 static void sched_boost_disable(int type)
 {
 	struct sched_boost_data *sb = &sched_boosts[type];
-	int next_boost;
+	int next_boost, prev_boost = sched_boost_type;
+
 
 	if (sb->refcount <= 0)
 		return;
@@ -164,6 +165,9 @@ static void sched_boost_disable(int type)
 	sb->exit();
 
 	next_boost = sched_effective_boost();
+	if(next_boost == prev_boost)
+		return;
+
 	sched_boosts[next_boost].enter();
 }
 

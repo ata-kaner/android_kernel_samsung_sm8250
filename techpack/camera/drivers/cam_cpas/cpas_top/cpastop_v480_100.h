@@ -393,19 +393,31 @@ static struct cam_camnoc_specific
 			.access_type = CAM_REG_TYPE_READ_WRITE,
 			.masked_value = 0,
 			.offset = 0x1438, /* IFE_RDI_WR_URGENCY_LOW */
+#if defined(CONFIG_SAMSUNG_SBI)
+			.value = 0x1070,// temp fix : pixel pipeline overflow 
+#else
 			.value = 0x1030,
+#endif
 		},
 		.danger_lut = {
 			.enable = true,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
 			.offset = 0x1440, /* IFE_RDI_WR_DANGERLUT_LOW */
+#if defined(CONFIG_SAMSUNG_SBI)
+			.value = 0xFFFFFFF0,
+#else
 			.value = 0xFFFFFF00,
+#endif
 		},
 		.safe_lut = {
 			.enable = true,
 			.access_type = CAM_REG_TYPE_READ_WRITE,
 			.offset = 0x1448, /* IFE_RDI_WR_SAFELUT_LOW */
+#if defined(CONFIG_SAMSUNG_SBI)
+			.value = 0x1,
+#else
 			.value = 0x000F,
+#endif
 		},
 		.ubwc_ctl = {
 			/*

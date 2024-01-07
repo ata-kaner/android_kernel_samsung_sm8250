@@ -162,4 +162,9 @@ int32_t cam_req_mgr_util_deinit(void);
  */
 int32_t cam_req_mgr_util_free_hdls(void);
 
+#if defined(CONFIG_SAMSUNG_SBI)
+bool cam_req_mgr_get_is_crm_in_ssm_mode(void);
+void cam_req_mgr_set_is_crm_in_ssm_mode(bool val);
+#endif
+
 #endif /* _CAM_REQ_MGR_UTIL_API_H_ */

@@ -40,6 +40,14 @@
 #define CAM_PERF       (1 << 25)
 #define CAM_CUSTOM     (1 << 26)
 
+#if defined(CONFIG_SAMSUNG_SBI)
+#define CAM_SBI        (1 << 27)
+#endif
+
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+#define CAM_HWB        (1 << 28)
+#endif
+
 #define STR_BUFFER_MAX_LENGTH  1024
 
 /*

@@ -1270,6 +1270,19 @@ void dsi_phy_set_continuous_clk(struct msm_dsi_phy *phy, bool enable)
 
 }
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+void dsi_phy_store_str(struct msm_dsi_phy *phy, u32 *val)
+{
+	if (phy->hw.ops.store_str)
+		phy->hw.ops.store_str(&phy->hw, val);
+}
+void dsi_phy_store_emphasis(struct msm_dsi_phy *phy, u32 *val)
+{
+	if (phy->hw.ops.store_emphasis)
+		phy->hw.ops.store_emphasis(&phy->hw, val);
+}
+#endif
+
 void dsi_phy_drv_register(void)
 {
 	platform_driver_register(&dsi_phy_platform_driver);
