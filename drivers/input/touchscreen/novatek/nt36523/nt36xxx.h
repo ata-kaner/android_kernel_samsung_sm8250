@@ -196,6 +196,9 @@ struct nvt_ts_data {
 
 	int debug_flag;
 	bool flip_enable;
+
+	int grip_edgehandler_restore_data[SEC_CMD_PARAM_NUM];
+	int setgrip_restore_data[SEC_CMD_PARAM_NUM];
 };
 
 typedef enum {

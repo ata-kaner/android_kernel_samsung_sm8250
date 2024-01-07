@@ -650,8 +650,6 @@ struct sec_battery_info {
 	struct delayed_work wpc_txpower_calc_work;
 #endif
 	struct delayed_work slowcharging_work;
-	int slow_charging;
-	struct delayed_work slow_chg_work;
 #if defined(CONFIG_BATTERY_AGE_FORECAST)
 	int batt_cycle;
 #endif
@@ -719,6 +717,7 @@ struct sec_battery_info {
 	bool support_unknown_wpcthm;
 	unsigned int slate_mode;
 	int batt_full_capacity;
+	bool usb_slow_chg;
 };
 
 /* event check */

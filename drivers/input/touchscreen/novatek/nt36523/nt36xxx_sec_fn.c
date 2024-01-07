@@ -142,6 +142,9 @@ int32_t nvt_ts_set_page(struct nvt_ts_data *ts, uint16_t i2c_addr, uint32_t addr
 int nvt_ts_nt36523_ics_i2c_read(struct nvt_ts_data *ts, u32 address, u8 *data, u16 len);
 int nvt_ts_nt36523_ics_i2c_write(struct nvt_ts_data *ts, u32 address, u8 *data, u16 len);
 
+static void nvt_ts_set_grip_exception_zone(struct nvt_ts_data *ts, int *cmd_param);
+static void nvt_ts_set_grip_portrait_mode(struct nvt_ts_data *ts, int *cmd_param);
+static void nvt_ts_set_grip_landscape_mode(struct nvt_ts_data *ts, int *cmd_param);
 
 static int nvt_ts_set_touchable_area(struct nvt_ts_data *ts)
 {
@@ -1451,6 +1454,26 @@ int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 		}
 	}
 	input_info(true, &ts->client->dev, "%s: 0x%X\n", __func__, func_need_switch);
+
+	if (ts->setgrip_restore_data[0] == 1) {
+		input_info(true, &ts->client->dev, "%s restore set grip portrait_mode, %d, %d, %d, %d\n",
+				__func__, ts->setgrip_restore_data[1], ts->setgrip_restore_data[2],
+				ts->setgrip_restore_data[3], ts->setgrip_restore_data[4]);
+		nvt_ts_set_grip_portrait_mode(ts, ts->setgrip_restore_data);
+	} else if (ts->setgrip_restore_data[0] == 2) {
+		input_info(true, &ts->client->dev, "%s restore set grip landscape_mode, %d, %d, %d, %d\n",
+				__func__, ts->setgrip_restore_data[1], ts->setgrip_restore_data[2],
+				ts->setgrip_restore_data[3], ts->setgrip_restore_data[4]);
+		nvt_ts_set_grip_landscape_mode(ts, ts->setgrip_restore_data);
+	}
+
+	if ((ts->grip_edgehandler_restore_data[0] == 0) && (ts->grip_edgehandler_restore_data[1] != 0) && (ts->grip_edgehandler_restore_data[1] < 3)) {
+		input_info(true, &ts->client->dev, "%s restore set grip exeiption zone, %d, %d, %d\n",
+				__func__, ts->grip_edgehandler_restore_data[1], ts->grip_edgehandler_restore_data[2],
+				ts->grip_edgehandler_restore_data[3]);
+		nvt_ts_set_grip_exception_zone(ts, ts->grip_edgehandler_restore_data);
+	}
+
 out:
 	return ret;
 }
@@ -2253,18 +2276,17 @@ out_for_touchable:
  *
  *		[3], lower Y coordinate 
  */
-static void nvt_ts_set_grip_exception_zone(struct sec_cmd_data *sec)
+static void nvt_ts_set_grip_exception_zone(struct nvt_ts_data *ts, int *cmd_param)
 {
-	struct nvt_ts_data *ts = container_of(sec, struct nvt_ts_data, sec);
 	u8 buf[8];
 
-	switch (sec->cmd_param[1]) {
+	switch (cmd_param[1]) {
 		case 0:	//disable
 			input_info(true, &ts->client->dev, "%s: disable\n", __func__);
 			buf[0] = EVENT_MAP_HOST_CMD;
 			buf[1] = EXTENDED_CUSTOMIZED_CMD;
 			buf[2] = SET_GRIP_EXECPTION_ZONE;
-			buf[3] = (u8)sec->cmd_param[1];
+			buf[3] = (u8)cmd_param[1];
 			buf[4] = 0;
 			buf[5] = 0;
 			buf[6] = 0;
@@ -2279,7 +2301,7 @@ static void nvt_ts_set_grip_exception_zone(struct sec_cmd_data *sec)
 			break;
 		default:
 			input_err(true, &ts->client->dev, "%s: not support parameter 0x%02X\n",
-					__func__, sec->cmd_param[1]);
+					__func__, cmd_param[1]);
 			goto err;
 	}
 
@@ -2287,11 +2309,11 @@ static void nvt_ts_set_grip_exception_zone(struct sec_cmd_data *sec)
 	buf[0] = EVENT_MAP_HOST_CMD;
 	buf[1] = EXTENDED_CUSTOMIZED_CMD;
 	buf[2] = SET_GRIP_EXECPTION_ZONE;
-	buf[3] = (u8)sec->cmd_param[1];
-	buf[4] = (u8)(sec->cmd_param[2] & 0xFF);
-	buf[5] = (u8)((sec->cmd_param[2] >> 8) & 0xFF);
-	buf[6] = (u8)(sec->cmd_param[3] & 0xFF);
-	buf[7] = (u8)((sec->cmd_param[3] >> 8) & 0xFF);
+	buf[3] = (u8)cmd_param[1];
+	buf[4] = (u8)(cmd_param[2] & 0xFF);
+	buf[5] = (u8)((cmd_param[2] >> 8) & 0xFF);
+	buf[6] = (u8)(cmd_param[3] & 0xFF);
+	buf[7] = (u8)((cmd_param[3] >> 8) & 0xFF);
 	nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 8);
 
 out:
@@ -2310,9 +2332,8 @@ err:
  *
  *		[4], reject zone boundary of Y (divide upper and lower)
  */
-static void nvt_ts_set_grip_portrait_mode(struct sec_cmd_data *sec)
+static void nvt_ts_set_grip_portrait_mode(struct nvt_ts_data *ts, int *cmd_param)
 {
-	struct nvt_ts_data *ts = container_of(sec, struct nvt_ts_data, sec);
 	u8 buf[8];
 
 	input_info(true, &ts->client->dev, "%s: set portrait mode parameters\n", __func__);
@@ -2320,11 +2341,11 @@ static void nvt_ts_set_grip_portrait_mode(struct sec_cmd_data *sec)
 	buf[0] = EVENT_MAP_HOST_CMD;
 	buf[1] = EXTENDED_CUSTOMIZED_CMD;
 	buf[2] = SET_GRIP_PORTRAIT_MODE;
-	buf[3] = (u8)sec->cmd_param[1];
-	buf[4] = (u8)sec->cmd_param[2];
-	buf[5] = (u8)sec->cmd_param[3];
-	buf[6] = (u8)(sec->cmd_param[4] & 0xFF);
-	buf[7] = (u8)((sec->cmd_param[4] >> 8) & 0xFF);
+	buf[3] = (u8)cmd_param[1];
+	buf[4] = (u8)cmd_param[2];
+	buf[5] = (u8)cmd_param[3];
+	buf[6] = (u8)(cmd_param[4] & 0xFF);
+	buf[7] = (u8)((cmd_param[4] >> 8) & 0xFF);
 	nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 8);
 
 	msleep(20);
@@ -2347,18 +2368,17 @@ static void nvt_ts_set_grip_portrait_mode(struct sec_cmd_data *sec)
  *
  *		[7], grip zone (bottom short side)
  */
-static void nvt_ts_set_grip_landscape_mode(struct sec_cmd_data *sec)
+static void nvt_ts_set_grip_landscape_mode(struct nvt_ts_data *ts, int *cmd_param)
 {
-	struct nvt_ts_data *ts = container_of(sec, struct nvt_ts_data, sec);
 	u8 buf[12];
 
-	switch (sec->cmd_param[1]) {
+	switch (cmd_param[1]) {
 		case 0: //use previous portrait setting
 			input_info(true, &ts->client->dev, "%s: use previous portrait settings\n", __func__);
 			buf[0] = EVENT_MAP_HOST_CMD;
 			buf[1] = EXTENDED_CUSTOMIZED_CMD;
 			buf[2] = SET_GRIP_LANDSCAPE_MODE;
-			buf[3] = (u8)sec->cmd_param[1];
+			buf[3] = (u8)cmd_param[1];
 			nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 4);
 			goto out;
 		case 1: //enable landscape mode
@@ -2366,17 +2386,17 @@ static void nvt_ts_set_grip_landscape_mode(struct sec_cmd_data *sec)
 			buf[0] = EVENT_MAP_HOST_CMD;
 			buf[1] = EXTENDED_CUSTOMIZED_CMD;
 			buf[2] = SET_GRIP_LANDSCAPE_MODE;
-			buf[3] = (u8)sec->cmd_param[1];
-			buf[4] = (u8)sec->cmd_param[2];
-			buf[5] = (u8)sec->cmd_param[3];
-			buf[6] = (u8)sec->cmd_param[4];
-			buf[7] = (u8)sec->cmd_param[5];
-			buf[8] = (u8)sec->cmd_param[6];
-			buf[9] = (u8)sec->cmd_param[7];
+			buf[3] = (u8)cmd_param[1];
+			buf[4] = (u8)cmd_param[2];
+			buf[5] = (u8)cmd_param[3];
+			buf[6] = (u8)cmd_param[4];
+			buf[7] = (u8)cmd_param[5];
+			buf[8] = (u8)cmd_param[6];
+			buf[9] = (u8)cmd_param[7];
 			nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 10);
 			goto out;
 		default:
-			input_err(true, &ts->client->dev, "%s: not support parameter 0x%02X\n", __func__, sec->cmd_param[1]);
+			input_err(true, &ts->client->dev, "%s: not support parameter 0x%02X\n", __func__, cmd_param[1]);
 			goto err;
 	}
 
@@ -2400,6 +2420,15 @@ static void set_grip_data(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
+	if (sec->cmd_param[0] == 0) {
+		memcpy(ts->grip_edgehandler_restore_data, sec->cmd_param, sizeof(int) * SEC_CMD_PARAM_NUM);
+	} else if ((sec->cmd_param[0] > 0) && (sec->cmd_param[0] < 3)) {
+		memcpy(ts->setgrip_restore_data, sec->cmd_param, sizeof(int) * SEC_CMD_PARAM_NUM);
+	} else {
+		input_err(true, &ts->client->dev, "%s: cmd0 is abnormal, %d\n",
+					__func__, sec->cmd_param[0]);
+	}
+
 	if (ts->power_status == POWER_OFF_STATUS) {
 		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
 		goto out;
@@ -2418,13 +2447,13 @@ static void set_grip_data(void *device_data)
 
 	switch (sec->cmd_param[0]) {
 		case 0:
-			nvt_ts_set_grip_exception_zone(sec);
+			nvt_ts_set_grip_exception_zone(ts, sec->cmd_param);
 			break;
 		case 1:
-			nvt_ts_set_grip_portrait_mode(sec);
+			nvt_ts_set_grip_portrait_mode(ts, sec->cmd_param);
 			break;
 		case 2:
-			nvt_ts_set_grip_landscape_mode(sec);
+			nvt_ts_set_grip_landscape_mode(ts, sec->cmd_param);
 			break;
 		default:
 			input_err(true, &ts->client->dev, "%s: not support mode 0x%02X\n", __func__, sec->cmd_param[0]);
@@ -3541,12 +3570,13 @@ static void clear_cover_mode(void *device_data)
 	/* disable tsp scan when cover is closed (for Tablet) */
 	if (ts->platdata->scanoff_cover_close) {
 		if (ts->flip_enable) {
-			input_info(true, &ts->client->dev, "%s: enter deep standby mode\n", __func__);
-			wbuf[0] = EVENT_MAP_HOST_CMD;
-			wbuf[1] = NVT_CMD_DEEP_SLEEP_MODE;
-			ret = nvt_ts_i2c_write(ts, I2C_FW_Address, wbuf, 2);
-
-			nvt_ts_release_all_finger(ts);
+			input_info(true, &ts->client->dev, "%s: keep record for cover on, and enter deep standby mode when screen off\n", __func__);
+//			input_info(true, &ts->client->dev, "%s: enter deep standby mode\n", __func__);
+//			wbuf[0] = EVENT_MAP_HOST_CMD;
+//			wbuf[1] = NVT_CMD_DEEP_SLEEP_MODE;
+//			ret = nvt_ts_i2c_write(ts, I2C_FW_Address, wbuf, 2);
+//
+//			nvt_ts_release_all_finger(ts);
 		} else {
 			input_info(true, &ts->client->dev, "%s: reset to normal mode\n", __func__);
 			nvt_ts_sw_reset_idle(ts);
