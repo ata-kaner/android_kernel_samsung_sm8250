@@ -778,7 +778,8 @@ void sec_bat_set_aging_info_step_charging(struct sec_battery_info *battery)
 			if (battery->pdata->dc_step_chg_val_vfloat[battery->pdata->age_step][i] > battery->pdata->chg_float_voltage)
 				battery->pdata->dc_step_chg_val_vfloat[battery->pdata->age_step][i] = battery->pdata->chg_float_voltage;
 		if (battery->dc_step_chg_type & STEP_CHARGING_CONDITION_VOLTAGE)
-			battery->pdata->dc_step_chg_cond_vol[i] = battery->pdata->dc_step_chg_val_vfloat[battery->pdata->age_step][i];
+			if (battery->pdata->dc_step_chg_cond_vol[i] > battery->pdata->chg_float_voltage)
+				battery->pdata->dc_step_chg_cond_vol[i] = battery->pdata->chg_float_voltage;
 		if ((battery->dc_step_chg_type & STEP_CHARGING_CONDITION_INPUT_CURRENT) && (i < battery->dc_step_chg_step - 1))
 			battery->pdata->dc_step_chg_cond_iin[i] = battery->pdata->dc_step_chg_val_iout[battery->pdata->age_step][i+1] / 2;
 	}

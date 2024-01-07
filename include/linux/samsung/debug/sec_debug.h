@@ -78,7 +78,9 @@ enum sec_debug_upload_cause_t {
 	UPLOAD_CAUSE_QUEST_DDR_TEST_SMD,
 	UPLOAD_CAUSE_SOD_RESULT,
 	UPLOAD_CAUSE_QUEST_ZIP_UNZIP,
-	UPLOAD_CAUSE_QUEST_END = UPLOAD_CAUSE_QUEST_ZIP_UNZIP,
+	UPLOAD_CAUSE_DRAM_SCAN,
+	UPLOAD_CAUSE_QUEST_AOSSTHERMALDIFF,
+	UPLOAD_CAUSE_QUEST_END = UPLOAD_CAUSE_QUEST_AOSSTHERMALDIFF,
 /* --Quest : 0xC8_5153_xx -- */
 /* -- KP : 0xC8xx_xxxx -- */
 /* ++ TP ++ */
@@ -385,4 +387,7 @@ extern void sec_debug_check_pwdt(void);
 static inline void sec_debug_check_pwdt(void) {}
 #endif
 
+#ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
+extern unsigned long sec_delay_check;
+#endif
 #endif	/* __INDIRECT__SEC_DEBUG_H__ */

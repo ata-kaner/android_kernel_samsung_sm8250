@@ -4441,6 +4441,9 @@ static void mfc_wpc_isr_work(struct work_struct *work)
 					POWER_SUPPLY_PROP_ONLINE, value);
 				charger->pad_vout = PAD_VOUT_10V;
 			}
+			value.intval = charger->is_abnormal_pad;
+			psy_do_property("wireless", set,
+				POWER_SUPPLY_PROP_WIRELESS_ABNORMAL_PAD, value);
 #endif
 			mfc_fod_set(charger, (charger->pdata->capacity > 85) ? FOD_STATE_CV : FOD_STATE_CC);
 
@@ -4705,8 +4708,11 @@ static void mfc_wpc_tx_id_work(struct work_struct *work)
 		container_of(work, struct mfc_charger_data, wpc_tx_id_work.work);
 
 	pr_info("%s\n", __func__);
-
+#if defined(CONFIG_CHECK_UNAUTH_PAD)
+	if (!charger->tx_id && (!charger->is_abnormal_pad || charger->tx_id_cnt < TX_ID_CHECK_CNT)) {
+#else
 	if (!charger->tx_id && !charger->is_abnormal_pad) {
+#endif
 		if (charger->tx_id_cnt < 10) {
 			mfc_send_command(charger, MFC_REQUEST_TX_ID);
 			charger->req_tx_id = true;
@@ -4734,8 +4740,15 @@ static void mfc_wpc_tx_id_work(struct work_struct *work)
 	} else {
 		pr_info("%s: TX ID (0x%x)\n", __func__, charger->tx_id);
 #if defined(CONFIG_CHECK_UNAUTH_PAD)
-		if (charger->is_abnormal_pad)
+		if (charger->is_abnormal_pad) {
+			union power_supply_propval value = {0, };
+
 			mfc_send_command(charger, MFC_AFC_CONF_5V_TX);
+
+			value.intval = charger->is_abnormal_pad;
+			psy_do_property("wireless", set,
+				POWER_SUPPLY_PROP_WIRELESS_ABNORMAL_PAD, value);
+		}
 #endif
 	}
 

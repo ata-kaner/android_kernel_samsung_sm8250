@@ -1598,10 +1598,7 @@ int sec_bat_set_charging_current(struct sec_battery_info *battery)
 
 #if defined(CONFIG_DUAL_BATTERY)
 		sec_bat_divide_charging_current(battery, charging_current);
-#endif
-
-#if defined(CONFIG_DUAL_BATTERY)
-		if (battery->charging_current < charging_current)
+		if (battery->charging_current <= charging_current)
 			sec_bat_set_divide_charging_current(battery);
 #endif
 
@@ -7351,29 +7348,24 @@ static int sec_wireless_get_property(struct power_supply *psy,
 	return 0;
 }
 
-void sec_wireless_set_tx_enable(struct sec_battery_info *battery, bool wc_tx_enable)
+static void sec_bat_wpc_tx_en_work(struct work_struct *work)
 {
+	struct sec_battery_info *battery = container_of(work,
+				struct sec_battery_info, wpc_tx_en_work.work);
+
 	union power_supply_propval value = {0, };
 	char wpc_en_status[2];
 
-	pr_info("@Tx_Mode %s: TX Power enable ? (%d)\n", __func__, wc_tx_enable);
+	pr_info("@Tx_Mode %s: tx %s\n", __func__,
+		battery->wc_tx_enable ? "on" : "off");
 
-#if defined(CONFIG_TX_5V_DISABLE)
-	if (wc_tx_enable && is_5v_charger(battery)) {
-		pr_info("@Tx_Mode %s : 5V charger(%d) connected, do not turn on TX\n", __func__, battery->cable_type);
-		sec_bat_set_tx_event(battery, BATT_TX_EVENT_WIRELESS_TX_5V_TA, BATT_TX_EVENT_WIRELESS_TX_5V_TA);
-		return;
-	}
-#endif
-
-	battery->wc_tx_enable = wc_tx_enable;
 	battery->tx_minduty = battery->pdata->tx_minduty_default;
 	battery->tx_switch_mode = TX_SWITCH_MODE_OFF;
 	battery->tx_switch_start_soc = 0;
 	battery->tx_switch_mode_change = false;
 	wpc_en_status[0] = WPC_EN_TX;
 
-	if (wc_tx_enable) {
+	if (battery->wc_tx_enable) {
 		/* set tx event */
 		sec_bat_set_tx_event(battery, BATT_TX_EVENT_WIRELESS_TX_STATUS,
 			(BATT_TX_EVENT_WIRELESS_TX_STATUS | BATT_TX_EVENT_WIRELESS_TX_RETRY));
@@ -7445,7 +7437,30 @@ void sec_wireless_set_tx_enable(struct sec_battery_info *battery, bool wc_tx_ena
 		cancel_delayed_work(&battery->wpc_txpower_calc_work);
 #endif
 		__pm_relax(battery->wpc_tx_wake_lock);
-	}	
+	}
+
+	pr_info("@Tx_Mode %s Done\n", __func__);
+	__pm_relax(battery->wpc_tx_en_wake_lock);
+}
+
+void sec_wireless_set_tx_enable(struct sec_battery_info *battery, bool wc_tx_enable)
+{
+	pr_info("@Tx_Mode %s: TX Power enable ? (%d)\n", __func__, wc_tx_enable);
+
+#if defined(CONFIG_TX_5V_DISABLE)
+	if (wc_tx_enable && is_5v_charger(battery)) {
+		pr_info("@Tx_Mode %s : 5V charger(%d) connected, do not turn on TX\n", __func__, battery->cable_type);
+		sec_bat_set_tx_event(battery, BATT_TX_EVENT_WIRELESS_TX_5V_TA, BATT_TX_EVENT_WIRELESS_TX_5V_TA);
+		return;
+	}
+#endif
+
+	battery->wc_tx_enable = wc_tx_enable;
+
+	cancel_delayed_work(&battery->wpc_tx_en_work);
+	__pm_stay_awake(battery->wpc_tx_en_wake_lock);
+	queue_delayed_work(battery->monitor_wqueue,
+		&battery->wpc_tx_en_work, 0);
 }
 
 static void sec_wireless_otg_control(struct sec_battery_info *battery, int enable)
@@ -9234,6 +9249,7 @@ static int sec_battery_probe(struct platform_device *pdev)
 	battery->ext_event_wake_lock = wakeup_source_register(battery->dev, "sec-battery-ext_event");
 	battery->wc_headroom_wake_lock = wakeup_source_register(battery->dev, "sec-battery-wc_headroom");
 	battery->wpc_tx_wake_lock = wakeup_source_register(battery->dev, "sec-battery-wcp-tx");
+	battery->wpc_tx_en_wake_lock = wakeup_source_register(&pdev->dev, "sec-battery-wpc_tx_en");
 #if defined(CONFIG_UPDATE_BATTERY_DATA)
 	battery->batt_data_wake_lock = wakeup_source_register(battery->dev, "sec-battery-update-data");
 #endif
@@ -9498,6 +9514,7 @@ static int sec_battery_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&battery->monitor_work, sec_bat_monitor_work);
 	INIT_DELAYED_WORK(&battery->cable_work, sec_bat_cable_work);
 	INIT_DELAYED_WORK(&battery->wpc_tx_work, sec_bat_wpc_tx_work);
+	INIT_DELAYED_WORK(&battery->wpc_tx_en_work, sec_bat_wpc_tx_en_work);
 #if defined(CONFIG_CALC_TIME_TO_FULL)
 	INIT_DELAYED_WORK(&battery->timetofull_work, sec_bat_time_to_full_work);
 #endif
@@ -9718,6 +9735,7 @@ err_irq:
 	wakeup_source_remove(battery->ext_event_wake_lock);
 	wakeup_source_remove(battery->wc_headroom_wake_lock);
 	wakeup_source_remove(battery->wpc_tx_wake_lock);
+	wakeup_source_remove(battery->wpc_tx_en_wake_lock);
 #if defined(CONFIG_UPDATE_BATTERY_DATA)
 	wakeup_source_remove(battery->batt_data_wake_lock);
 #endif
@@ -9775,6 +9793,8 @@ static int sec_battery_remove(struct platform_device *pdev)
 	wakeup_source_remove(battery->misc_event_wake_lock);
 	wakeup_source_remove(battery->tx_event_wake_lock);
 	wakeup_source_remove(battery->wc_headroom_wake_lock);
+	wakeup_source_remove(battery->wpc_tx_wake_lock);
+	wakeup_source_remove(battery->wpc_tx_en_wake_lock);
 #if defined(CONFIG_UPDATE_BATTERY_DATA)
 	wakeup_source_remove(battery->batt_data_wake_lock);
 #endif

@@ -34,7 +34,8 @@ SEC_R8Q_EUR_DTBO := \
 		kona-sec-r8q-eur-overlay-r04.dtbo \
 		kona-sec-r8q-eur-overlay-r05.dtbo \
 		kona-sec-r8q-eur-overlay-r06.dtbo \
-		kona-sec-r8q-eur-overlay-r07.dtbo
+		kona-sec-r8q-eur-overlay-r07.dtbo \
+		kona-sec-r8q-eur-overlay-r08.dtbo
 
 # R8Q KOR
 SEC_R8Q_KOR_DTBO := \

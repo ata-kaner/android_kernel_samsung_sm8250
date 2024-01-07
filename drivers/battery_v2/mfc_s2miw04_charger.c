@@ -2086,10 +2086,6 @@ static void mfc_wpc_fw_update_work(struct work_struct *work)
 		charger->pdata->otp_firmware_result = MFC_FWUP_ERR_RUNNING;
 		is_changed = true;
 
-		disable_irq(charger->pdata->irq_wpc_int);
-		disable_irq(charger->pdata->irq_wpc_det);
-		if (charger->pdata->irq_wpc_pdrc)
-			disable_irq(charger->pdata->irq_wpc_pdrc);
 		dev_err(&charger->client->dev, "%s, request_firmware\n", __func__);
 
 		ret = request_firmware(&charger->firm_data_bin, MFC_FLASH_FW_HEX_LSI_PATH,
@@ -2099,6 +2095,11 @@ static void mfc_wpc_fw_update_work(struct work_struct *work)
 			charger->pdata->otp_firmware_result = MFC_FWUP_ERR_REQUEST_FW_BIN;
 			goto fw_err;
 		}
+		disable_irq(charger->pdata->irq_wpc_int);
+		disable_irq(charger->pdata->irq_wpc_det);
+		if (charger->pdata->irq_wpc_pdrc)
+			disable_irq(charger->pdata->irq_wpc_pdrc);
+
 		__pm_stay_awake(charger->wpc_update_lock);
 #if defined(CONFIG_WIRELESS_IC_PARAM)
 		mfc_set_wireless_param(MFC_CHIP_ID_S2MIW04, 0);

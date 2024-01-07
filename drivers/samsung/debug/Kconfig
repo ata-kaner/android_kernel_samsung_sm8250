@@ -61,6 +61,13 @@ config SEC_LOG_STORE_LPM_KMSG
 	help
 	  store sec log when LPM Mode boot
 
+config SEC_STORE_POWER_ONOFF_HISTORY
+	bool "store power onoff history"
+	default n
+	depends on SEC_LOG_LAST_KMSG
+	help
+	  store power onoff history
+
 config SEC_DEBUG_SCHED_LOG
 	bool "Samsung Scheduler Logging Feature"
 	default n
@@ -69,6 +76,13 @@ config SEC_DEBUG_SCHED_LOG
 	  Enables task scheduling history.
 	  Enables IRQ scheduling history.
 	  This feature is enabled in defconfig.
+
+config SEC_DEBUG_SCHED_LOG_PER_CPU
+	bool "Samsung Scheduler Logging using per_cpu"
+	default n
+	depends on SEC_DEBUG_SCHED_LOG
+	help
+	  Samsung Scheduler Logging using per_cpu Feature for Debug use.
 
 config SEC_DEBUG_MSG_LOG
 	bool "Message Log for ram dump debug (DEPRECATED)"

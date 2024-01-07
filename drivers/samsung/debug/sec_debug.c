@@ -58,6 +58,11 @@
 static inline void outer_flush_all(void) { }
 #endif
 
+#ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
+unsigned long sec_delay_check __read_mostly = 1;
+EXPORT_SYMBOL(sec_delay_check);
+#endif
+
 /* enable sec_debug feature */
 static unsigned int sec_dbg_level;
 static int force_upload;
@@ -387,6 +392,9 @@ void sec_debug_update_restart_reason(const char *cmd, const int in_panic,
 		{ "from_fastboot",
 			PON_RESTART_REASON_NORMALBOOT,
 			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "disallow,fastboot",
+			PON_RESTART_REASON_NORMALBOOT,
+			RESTART_REASON_NOT_HANDLE, NULL},
 #ifdef CONFIG_MUIC_SUPPORT_RUSTPROOF
 		{ "swsel",
 			PON_RESTART_REASON_UNKNOWN,
@@ -618,6 +626,7 @@ struct __upload_cause upload_cause_st[] = {
 	{ "qdaf_fail", UPLOAD_CAUSE_QUEST_QDAF_FAIL, SEC_STRNCMP },
 	{ "zip_unzip_test", UPLOAD_CAUSE_QUEST_ZIP_UNZIP, SEC_STRNCMP },
 	{ "quest_fail", UPLOAD_CAUSE_QUEST_FAIL, SEC_STRNCMP },
+	{ "aoss_thermal_diff", UPLOAD_CAUSE_QUEST_AOSSTHERMALDIFF, SEC_STRNCMP },		
 #endif
 };
 
@@ -835,7 +844,7 @@ static int __init sec_debug_init(void)
 	case ANDROID_DEBUG_LEVEL_MID:
 #endif
 
-#if 0	/* FIXME: */
+#if defined(CONFIG_SEC_A52Q_PROJECT) || defined(CONFIG_SEC_A72Q_PROJECT)
 		if (!force_upload)
 			qcom_scm_disable_sdi();
 #endif

@@ -1457,6 +1457,10 @@ ssize_t sec_bat_show_attrs(struct device *dev,
 				size = sizeof(temp_buf) - strlen(temp_buf);
 			}
 			mutex_unlock(&pcisd->powerlock);
+
+			/* clear daily power data */
+			init_cisd_power_data(&battery->cisd);
+
 			i += scnprintf(buf + i, PAGE_SIZE - i, "%s\n", temp_buf);
 		}
 		break;

@@ -3149,13 +3149,6 @@ wl_android_ncho_private_command(struct net_device *net, char *command, int total
 		bytes_written = wl_android_get_full_roam_scan_period(net, command, total_len);
 	} else if (strnicmp(command, CMD_COUNTRYREV_SET, strlen(CMD_COUNTRYREV_SET)) == 0) {
 		bytes_written = wl_android_set_country_rev(net, command);
-#ifdef FCC_PWR_LIMIT_2G
-		if (wldev_iovar_setint(net, "fccpwrlimit2g", FALSE)) {
-			WL_ERR(("fccpwrlimit2g deactivation is failed\n"));
-		} else {
-			WL_ERR(("fccpwrlimit2g is deactivated\n"));
-		}
-#endif /* FCC_PWR_LIMIT_2G */
 	} else if (strnicmp(command, CMD_COUNTRYREV_GET, strlen(CMD_COUNTRYREV_GET)) == 0) {
 		bytes_written = wl_android_get_country_rev(net, command, total_len);
 	} else
@@ -4070,10 +4063,9 @@ wl_android_wtc_config(struct net_device *dev, char *command, int total_len)
 	wlc_wtcconfig_info_v1_t *wtc_config;
 	u32 i, wtc_paramslen, maxbands = WL_DUALBAND;
 	u8 buf[WLC_IOCTL_SMLEN] = {0};
-#ifdef WL_6G_BAND
 	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
-#endif	/* WL_6G_BAND */
 
+	BCM_REFERENCE(cfg);
 	WL_DBG_MEM(("Enter. cmd:%s\n", command));
 #ifdef WL_6G_BAND
 	if (cfg->band_6g_supported) {
@@ -10455,6 +10447,7 @@ _wl_android_bcnrecv_start(struct bcm_cfg80211 *cfg, struct net_device *ndev, boo
 {
 	s32 err = BCME_OK;
 	struct net_device *pdev = bcmcfg_to_prmry_ndev(cfg);
+	dhd_pub_t *dhd = cfg->pub;
 
 	/* check any scan is in progress before beacon recv scan trigger IOVAR */
 	if (wl_get_drv_status_all(cfg, SCANNING)) {
@@ -10495,6 +10488,17 @@ _wl_android_bcnrecv_start(struct bcm_cfg80211 *cfg, struct net_device *ndev, boo
 		goto exit;
 	}
 #endif /* WL_NAN */
+
+	if (dhd->early_suspended) {
+		/* Set BEACON_RECV in suspend mode */
+		WL_INFORM_MEM(("Already suspend mode, Aborting beacon recv start\n"));
+		cfg->bcnrecv_info.bcnrecv_state = BEACON_RECV_SUSPENDED;
+		if ((err = wl_android_bcnrecv_event(pdev, BCNRECV_ATTR_STATUS,
+			WL_BCNRECV_SUSPENDED, WL_BCNRECV_SUSPEND, NULL, 0)) != BCME_OK) {
+			WL_ERR(("failed to send bcnrecv event, error:%d\n", err));
+		}
+		goto exit;
+	}
 
 	/* Triggering an sendup_bcn iovar */
 	err = wldev_iovar_setint(pdev, "sendup_bcn", 1);
@@ -12028,16 +12032,7 @@ wl_handle_private_cmd(struct net_device *net, char *command, u32 cmd_len)
 #endif /* DHD_BLOB_EXISTENCE_CHECK */
 
 		bytes_written = wl_cfg80211_set_country_code(net, country_code,
-				true, true, revinfo);
-#ifdef CUSTOMER_HW4_PRIVATE_CMD
-#ifdef FCC_PWR_LIMIT_2G
-		if (wldev_iovar_setint(net, "fccpwrlimit2g", FALSE)) {
-			DHD_ERROR(("%s: fccpwrlimit2g deactivation is failed\n", __FUNCTION__));
-		} else {
-			DHD_ERROR(("%s: fccpwrlimit2g is deactivated\n", __FUNCTION__));
-		}
-#endif /* FCC_PWR_LIMIT_2G */
-#endif /* CUSTOMER_HW4_PRIVATE_CMD */
+			true, true, revinfo);
 	}
 #endif /* CUSTOMER_SET_COUNTRY */
 #endif /* WL_CFG80211 */
