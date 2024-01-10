@@ -66,10 +66,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/vmscan.h>
 
-#include <linux/sched/cputime.h>
-#include <linux/debugfs.h>
-#include <linux/jiffies.h>
-
 struct scan_control {
 	/* How many pages shrink_list() should reclaim */
 	unsigned long nr_to_reclaim;
@@ -491,8 +487,6 @@ static unsigned long do_shrink_slab(struct shrink_control *shrinkctl,
 					  : SHRINK_BATCH;
 	long scanned = 0, next_deferred;
 	long min_cache_size = batch_size;
-	unsigned long shrinker_time;
-	u64 utime, stime_s, stime_e;
 
 	if (current_is_kswapd())
 		min_cache_size = 0;
@@ -503,10 +497,6 @@ static unsigned long do_shrink_slab(struct shrink_control *shrinkctl,
 	freeable = shrinker->count_objects(shrinker, shrinkctl);
 	if (freeable == 0 || freeable == SHRINK_EMPTY)
 		return freeable;
-
-	atomic_long_inc(&shrinker->nr_total_scan);
-	shrinker_time = jiffies;
-	task_cputime(current, &utime, &stime_s);
 
 	/*
 	 * copy the current shrinker scan count into a local variable
@@ -614,14 +604,6 @@ static unsigned long do_shrink_slab(struct shrink_control *shrinkctl,
 		new_nr = atomic_long_read(&shrinker->nr_deferred[nid]);
 
 	trace_mm_shrink_slab_end(shrinker, nid, freed, nr, new_nr, total_scan);
-
-	atomic64_add((jiffies - shrinker_time), &shrinker->jiffies_time);
-	task_cputime(current, &utime, &stime_e);
-
-	if (stime_e - stime_s > 0) {
-		atomic64_add((stime_e - stime_s), &shrinker->cpu_time);
-		atomic_long_inc(&shrinker->nr_delay_scan);
-	}
 
 	return freed;
 }
@@ -2567,48 +2549,6 @@ inline bool need_memory_boosting(struct pglist_data *pgdat)
 	}
 	return ret;
 }
-
-static struct dentry *vmscan_debug_root;
-
-static int shrinker_debug_show(struct seq_file *s, void *unused)
-{
-	int retry = 10;
-	struct shrinker *shrinker;
-
-readlock_retry:
-	if (!down_read_trylock(&shrinker_rwsem)) {
-		if (retry-- > 0) {
-			msleep(10);
-			goto readlock_retry;
-		}
-
-		return 0;
-	}
-
-	list_for_each_entry(shrinker, &shrinker_list, list)
-		seq_printf(s, "%pF nr_total:%lu nr_delay:%lu jiffies:%u ms cpu:%lu ms\n",
-			shrinker->scan_objects,
-			shrinker->nr_total_scan.counter, 
-			shrinker->nr_delay_scan.counter,
-			jiffies_to_msecs(shrinker->jiffies_time.counter),
-			shrinker->cpu_time.counter / NSEC_PER_MSEC);
-		
-	up_read(&shrinker_rwsem);
-
-	return 0;
-}
-
-static int shrinker_debug_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, shrinker_debug_show, inode->i_private);
-}
-
-static const struct file_operations debug_shrinker_fops = {
-	.open = shrinker_debug_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
 
 /*
  * Determine how aggressively the anon and file LRU lists should be
@@ -7310,14 +7250,6 @@ static int __init kswapd_init(void)
 	if (sysfs_create_group(mm_kobj, &vmscan_attr_group))
 		pr_err("vmscan: register sysfs failed\n");
 #endif
-
-	vmscan_debug_root = debugfs_create_dir("vmscan", NULL);
-	if (vmscan_debug_root) {
-		if (!debugfs_create_file("shrinker", 0444, vmscan_debug_root,
-				NULL, &debug_shrinker_fops))
-			pr_err("shrinker: failed to debugfs_create_file\n");
-	} else 
-		pr_err("vmscan: failed to debugfs_create_dir\n");
 
 	return 0;
 }
