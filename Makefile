@@ -375,7 +375,7 @@ KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 # Make variables (CC, etc...)
 CPP		= $(CC) -E
 ifneq ($(LLVM),)
-CC		= ccache $(CLANG_DIR)clang
+CC		= $(which ccache) $(CLANG_DIR)clang
 LD		= $(CLANG_DIR)ld.lld
 AR		= $(CLANG_DIR)llvm-ar
 NM		= $(CLANG_DIR)llvm-nm
@@ -385,7 +385,7 @@ READELF		= $(CLANG_DIR)llvm-readelf
 OBJSIZE		= $(CLANG_DIR)llvm-size
 STRIP		= $(CLANG_DIR)llvm-strip
 else
-CC		= ccache $(CROSS_COMPILE)gcc
+CC		= $(which ccache) $(CROSS_COMPILE)gcc
 LD		= $(CROSS_COMPILE)ld
 AR             ?= $(CROSS_COMPILE)ar
 NM             ?= $(CROSS_COMPILE)nm
