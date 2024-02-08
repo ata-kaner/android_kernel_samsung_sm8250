@@ -302,6 +302,9 @@ static int stat_show(struct seq_file *s, void *v)
 			   si->ssa_area_segs, si->main_area_segs);
 		seq_printf(s, "(OverProv:%d Resv:%d)]\n\n",
 			   si->overp_segs, si->rsvd_segs);
+		seq_printf(s, "Current Time Sec: %llu / Mounted Time Sec: %llu\n\n",
+					ktime_get_boottime_seconds(),
+					SIT_I(si->sbi)->mounted_time);
 		if (test_opt(si->sbi, DISCARD))
 			seq_printf(s, "Utilization: %u%% (%u valid blocks, %u discard blocks)\n",
 				si->utilization, si->valid_count, si->discard_blks);
@@ -515,15 +518,6 @@ int f2fs_build_stats(struct f2fs_sb_info *sbi)
 
 	return 0;
 }
-
-#ifdef CONFIG_F2FS_SEC_DEBUG_NODE
-void f2fs_update_sec_stats(struct f2fs_sb_info *sbi)
-{
-	update_general_status(sbi);
-	f2fs_update_sit_info(sbi);
-	update_mem_info(sbi);
-}
-#endif
 
 void f2fs_destroy_stats(struct f2fs_sb_info *sbi)
 {

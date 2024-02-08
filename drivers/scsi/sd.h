@@ -130,6 +130,9 @@ struct scsi_disk {
 	int		async_end;
 	int		prv_media_present;
 #endif
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 };
 #define to_scsi_disk(obj) container_of(obj,struct scsi_disk,dev)
 

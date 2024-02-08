@@ -402,6 +402,7 @@ static int set_sync_ep_implicit_fb_quirk(struct snd_usb_substream *subs,
 	switch (subs->stream->chip->usb_id) {
 	case USB_ID(0x0763, 0x2030): /* M-Audio Fast Track C400 */
 	case USB_ID(0x0763, 0x2031): /* M-Audio Fast Track C600 */
+	case USB_ID(0x22f0, 0x0006): /* Allen&Heath Qu-16 */
 		ep = 0x81;
 		ifnum = 3;
 		goto add_sync_ep_from_ifnum;
@@ -411,11 +412,16 @@ static int set_sync_ep_implicit_fb_quirk(struct snd_usb_substream *subs,
 		ifnum = 2;
 		goto add_sync_ep_from_ifnum;
 	case USB_ID(0x2466, 0x8003): /* Fractal Audio Axe-Fx II */
+	case USB_ID(0x0499, 0x172a): /* Yamaha MODX */
 		ep = 0x86;
 		ifnum = 2;
 		goto add_sync_ep_from_ifnum;
 	case USB_ID(0x2466, 0x8010): /* Fractal Audio Axe-Fx III */
 		ep = 0x81;
+		ifnum = 2;
+		goto add_sync_ep_from_ifnum;
+	case USB_ID(0x1686, 0xf029): /* Zoom UAC-2 */
+		ep = 0x82;
 		ifnum = 2;
 		goto add_sync_ep_from_ifnum;
 	case USB_ID(0x1397, 0x0001): /* Behringer UFX1604 */
@@ -652,6 +658,12 @@ static int set_format(struct snd_usb_substream *subs, struct audioformat *fmt)
 
 static int snd_usb_pcm_change_state(struct snd_usb_substream *subs, int state);
 
+/**
+ * snd_usb_enable_audio_stream - Enable/disable the specified usb substream.
+ * @subs: pointer to the usb substream.
+ * @datainterval: data packet interval.
+ * @enable: if true, enable the usb substream. Else disable.
+ */
 int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 	int datainterval, bool enable)
 {
@@ -662,6 +674,9 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 #ifdef CONFIG_USB_NOTIFY_PROC_LOG
 	int on, type;
 #endif
+
+	if (!subs || !subs->stream)
+		return -EINVAL;
 
 	if (!enable) {
 		if (subs->interface >= 0) {
@@ -703,12 +718,19 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 
 	subs->altset_idx = 0;
 	subs->interface = -1;
+
+	if (!subs->stream->chip)
+		return -EINVAL;
+
 	if (atomic_read(&subs->stream->chip->shutdown)) {
 		ret = -ENODEV;
 	} else {
 		ret = set_format(subs, fmt);
 		if (ret < 0)
 			return ret;
+
+		if (!subs->cur_audiofmt)
+			return -EINVAL;
 
 		iface = usb_ifnum_to_if(subs->dev, subs->cur_audiofmt->iface);
 		if (!iface) {
@@ -744,6 +766,7 @@ int snd_usb_enable_audio_stream(struct snd_usb_substream *subs,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(snd_usb_enable_audio_stream);
 
 /*
  * Return the score of matching two audioformats.
@@ -2006,7 +2029,7 @@ void snd_usb_preallocate_buffer(struct snd_usb_substream *subs)
 {
 	struct snd_pcm *pcm = subs->stream->pcm;
 	struct snd_pcm_substream *s = pcm->streams[subs->direction].substream;
-	struct device *dev = subs->dev->bus->controller;
+	struct device *dev = subs->dev->bus->sysdev;
 
 	if (!snd_usb_use_vmalloc)
 		snd_pcm_lib_preallocate_pages(s, SNDRV_DMA_TYPE_DEV_SG,
