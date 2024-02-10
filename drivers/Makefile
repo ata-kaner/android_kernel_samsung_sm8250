@@ -229,6 +229,10 @@ ifeq ($(CONFIG_GATOR), y)
 	obj-$(CONFIG_GATOR)				+= gator/
 endif
 
+ifeq ($(CONFIG_PERF_MGR), y)
+	obj-$(CONFIG_PERF_MGR)	+= perf_mgr/
+endif
+
 #TZIC
 obj-$(CONFIG_TZIC)  += security/samsung/tzic/
 
