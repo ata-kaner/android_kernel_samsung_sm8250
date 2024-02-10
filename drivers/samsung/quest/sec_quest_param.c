@@ -106,7 +106,7 @@ void print_result_with_item_string(uint64_t item_result, char** str_array)
 }
 
 
-void quest_print_param_quest_data()
+void quest_print_param_quest_data(void)
 {
 	QUEST_PRINT("======================\n");
 
@@ -184,7 +184,7 @@ void quest_print_param_quest_data()
 	QUEST_PRINT("======================\n");
 }
 
-void quest_load_param_quest_data()
+void quest_load_param_quest_data(void)
 {
 	if (!sec_get_param(param_index_quest, &param_quest_data))
 		QUEST_PRINT("%s : failed\n", __func__);
@@ -192,7 +192,7 @@ void quest_load_param_quest_data()
 		QUEST_PRINT("%s : succeeded\n", __func__);	
 }
 
-void quest_sync_param_quest_data()
+void quest_sync_param_quest_data(void)
 {
 	if (!sec_set_param(param_index_quest, &param_quest_data))
 		QUEST_PRINT("%s : failed\n", __func__);
@@ -226,7 +226,7 @@ void quest_sync_param_quest_ddr_result_data(void)
 #define DDR_SCAN_CNT     0
 #endif
 
-void quest_clear_param_quest_data()
+void quest_clear_param_quest_data(void)
 {
 	param_quest_data.smd_item_result = 0;
 	param_quest_data.smd_subitem_result = 0;
@@ -291,7 +291,7 @@ void quest_clear_param_quest_data()
 	quest_sync_param_quest_ddr_result_data();
 }
 
-void quest_initialize_curr_step()
+void quest_initialize_curr_step(void)
 {
 	param_quest_data.curr_step = STEP_NONE;
 	param_quest_data.hlos_remained_count = 0;
@@ -305,7 +305,7 @@ void quest_initialize_curr_step()
 }
 
 
-void quest_load_param_api_gpio_test()
+void quest_load_param_api_gpio_test(void)
 {
 	if (!sec_get_param(param_index_api_gpio_test, &param_api_gpio_test))
 		QUEST_PRINT("%s : failed\n", __func__);
@@ -313,7 +313,7 @@ void quest_load_param_api_gpio_test()
 		QUEST_PRINT("%s : succeeded\n", __func__);
 }
 
-void quest_sync_param_api_gpio_test()
+void quest_sync_param_api_gpio_test(void)
 {
 	if (!sec_set_param(param_index_api_gpio_test, &param_api_gpio_test))
 		QUEST_PRINT("%s : failed\n", __func__);
@@ -321,7 +321,7 @@ void quest_sync_param_api_gpio_test()
 		QUEST_PRINT("%s : succeeded\n", __func__);		
 }
 
-void quest_load_param_api_gpio_test_result()
+void quest_load_param_api_gpio_test_result(void)
 {
 	if (!sec_get_param(param_index_api_gpio_test_result, param_api_gpio_test_result))
 		QUEST_PRINT("%s : failed\n", __func__);
@@ -329,7 +329,7 @@ void quest_load_param_api_gpio_test_result()
 		QUEST_PRINT("%s : succeeded\n", __func__);
 }
 
-void quest_sync_param_api_gpio_test_result()
+void quest_sync_param_api_gpio_test_result(void)
 {
 	if (!sec_set_param(param_index_api_gpio_test_result, param_api_gpio_test_result))
 		QUEST_PRINT("%s : failed\n", __func__);
@@ -338,7 +338,7 @@ void quest_sync_param_api_gpio_test_result()
 }
 
 #ifdef CONFIG_SEC_QUEST_BPS_CLASSIFIER
-void quest_load_param_quest_bps_data()
+void quest_load_param_quest_bps_data(void)
 {
 	if (!sec_get_param(param_index_quest_bps_data, &bps_envs))
 		QUEST_PRINT("%s : failed\n", __func__);
@@ -346,7 +346,7 @@ void quest_load_param_quest_bps_data()
 		QUEST_PRINT("%s : succeeded\n", __func__);
 }
 
-void quest_sync_param_quest_bps_data()
+void quest_sync_param_quest_bps_data(void)
 {
 	if (!sec_set_param(param_index_quest_bps_data, &bps_envs))
 		QUEST_PRINT("%s : failed\n", __func__);
