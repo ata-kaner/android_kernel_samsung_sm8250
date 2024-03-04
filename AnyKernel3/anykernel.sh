@@ -55,16 +55,10 @@ esac
 oneui=$(file_getprop /system/build.prop ro.build.version.oneui);
 unica=$(file_getprop /system/build.prop ro.unica.version);
 
-if [ $oneui == "60000" ]; then
+if [ -z "$unica" ] && [ "$oneui" == "60000" ]; then
    ui_print ""
    ui_print "OneUI 6.0 detected! Patching selinux"
    patch_cmdline "androidboot.selinux" "androidboot.selinux=permissive";
-fi
-
-if [[ $unica ]]; then
-   ui_print ""
-   ui_print "UN1CA ROM detected! Restoring selinux"
-   patch_cmdline "androidboot.selinux" "";
 fi
 
 write_boot;
