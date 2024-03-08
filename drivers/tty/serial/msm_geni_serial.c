@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/bitmap.h>
@@ -125,7 +125,9 @@
 #define DATA_BYTES_PER_LINE	(64)
 
 #define M_IRQ_BITS		(M_RX_FIFO_WATERMARK_EN | M_RX_FIFO_LAST_EN |\
-				M_CMD_CANCEL_EN | M_CMD_ABORT_EN)
+				M_CMD_CANCEL_EN | M_CMD_ABORT_EN |\
+				M_IO_DATA_ASSERT_EN | M_IO_DATA_DEASSERT_EN)
+
 #define S_IRQ_BITS		(S_RX_FIFO_WATERMARK_EN | S_RX_FIFO_LAST_EN |\
 				S_CMD_CANCEL_EN | S_CMD_ABORT_EN)
 #define DMA_TX_IRQ_BITS		(TX_RESET_DONE | TX_DMA_DONE |\
@@ -1479,8 +1481,8 @@ static void start_rx_sequencer(struct uart_port *uport)
 
 #if defined(CONFIG_MSM_BT_POWER)
 	/* Start RX with the RFR_OPEN to keep RFR in always ready state */
-	msm_geni_serial_enable_interrupts(uport);
 	geni_setup_s_cmd(uport->membase, UART_START_READ, geni_se_param);
+	msm_geni_serial_enable_interrupts(uport);
 #endif
 
 	/* Ensure that the above writes go through */
@@ -1686,9 +1688,13 @@ static void stop_rx_sequencer(struct uart_port *uport)
 			geni_status = geni_read_reg_nolog(uport->membase,
 							SE_GENI_STATUS);
 			IPC_LOG_MSG(port->ipc_log_misc,
-				"%s abort fail 0x%x\n", __func__, geni_status);
+				"%s abort fail timeout:%d is_rx_active:%d 0x%x\n",
+				__func__, timeout, is_rx_active, geni_status);
 			IPC_LOG_MSG(port->console_log,
-				"%s abort fail 0x%x\n",  __func__, geni_status);
+				"%s abort fail timeout:%d is_rx_active:%d 0x%x\n",
+				 __func__, timeout, is_rx_active, geni_status);
+			geni_se_dump_dbg_regs(&port->serial_rsc,
+				uport->membase, port->ipc_log_misc);
 		}
 #else
 		geni_status = geni_read_reg_nolog(uport->membase,
@@ -2143,7 +2149,6 @@ static void msm_geni_serial_handle_isr(struct uart_port *uport,
 	unsigned int dma_rx_status;
 	unsigned int m_irq_en;
 	unsigned int geni_status;
-	u32 rx_dma_len;
 	struct msm_geni_serial_port *msm_port = GET_DEV_PORT(uport);
 	struct tty_port *tport = &uport->state->port;
 	bool drop_rx = false;
@@ -2180,6 +2185,13 @@ static void msm_geni_serial_handle_isr(struct uart_port *uport,
 		else
 			WARN_ON(1);
 		goto exit_geni_serial_isr;
+	}
+
+	if (m_irq_status & (M_IO_DATA_ASSERT_EN | M_IO_DATA_DEASSERT_EN)) {
+		uport->icount.cts++;
+		IPC_LOG_MSG(msm_port->ipc_log_misc,
+			"%s. cts counter:%d\n", __func__,
+				uport->icount.cts);
 	}
 
 	if (s_irq_status & S_RX_FIFO_WR_ERR_EN) {
@@ -2248,7 +2260,7 @@ static void msm_geni_serial_handle_isr(struct uart_port *uport,
 		if (m_irq_status || s_irq_status ||
 				dma_tx_status || dma_rx_status) {
 			IPC_LOG_MSG(msm_port->ipc_log_irqstatus,
-				    "%s: sirq:0x%x mirq:0x%x dma_txirq:0x%x dma_rxirq:0x%x\n",
+					"%s: sirq:0x%x mirq:0x%x dma_txirq:0x%x dma_rxirq:0x%x\n",
 				    __func__, s_irq_status, m_irq_status,
 				    dma_tx_status, dma_rx_status);
 			if (m_irq_status & (M_CMD_CANCEL_EN | M_CMD_ABORT_EN))
@@ -2277,19 +2289,19 @@ static void msm_geni_serial_handle_isr(struct uart_port *uport,
 				msm_geni_serial_handle_dma_tx(uport);
 		}
 
-		if (dma_rx_status) {
+		if (m_irq_status & (M_CMD_CANCEL_EN | M_CMD_ABORT_EN))
+			m_cmd_done = true;
+
 #if defined(CONFIG_MSM_BT_POWER)
+		if (dma_rx_status)
 			s_cmd_done = handle_rx_dma_xfer(s_irq_status, uport);
 #else
+		if (dma_rx_status){
 			geni_write_reg_nolog(dma_rx_status, uport->membase,
 						SE_DMA_RX_IRQ_CLR);
 
-			if (dma_rx_status & RX_RESET_DONE) {
-				IPC_LOG_MSG(msm_port->ipc_log_misc,
-					"%s.Reset done.  0x%x.\n",
-						__func__, dma_rx_status);
-				goto exit_geni_serial_isr;
-			}
+		if (dma_rx_status)
+			s_cmd_done = handle_rx_dma_xfer(s_irq_status, uport);
 
 			if (dma_rx_status & UART_DMA_RX_ERRS) {
 				if (dma_rx_status & UART_DMA_RX_PARITY_ERR)
@@ -2334,11 +2346,10 @@ static void msm_geni_serial_handle_isr(struct uart_port *uport,
 			if (dma_rx_status & (RX_EOT | RX_GENI_CANCEL_IRQ |
 								RX_DMA_DONE))
 				s_cmd_done = true;
-
-			if (s_irq_status & (S_CMD_CANCEL_EN | S_CMD_ABORT_EN))
-				s_cmd_done = true;
-#endif
 		}
+		if (s_irq_status & (S_CMD_CANCEL_EN | S_CMD_ABORT_EN))
+			s_cmd_done = true;
+#endif
 	}
 
 exit_geni_serial_isr:

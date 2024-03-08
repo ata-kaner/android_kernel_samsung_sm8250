@@ -3120,7 +3120,8 @@ int diag_copy_to_user_msg_mask(char __user *buf, size_t count,
 		return -EINVAL;
 	}
 
-	if ((count - (sizeof(int))) >= mask_info->update_buf_client_len) {
+	if ((count - (sizeof(int))) >=
+			mask_info->update_buf_client_len) {
 		err = copy_to_user(buf, mask_info->update_buf_client,
 				mask_info->update_buf_client_len);
 	} else {
@@ -3151,7 +3152,8 @@ int diag_copy_to_user_log_mask(char __user *buf, size_t count,
 		return -EINVAL;
 	}
 
-	if ((count - (sizeof(int))) >= mask_info->update_buf_client_len) {
+	if ((count - (sizeof(int))) >=
+			mask_info->update_buf_client_len) {
 		err = copy_to_user(buf, mask_info->update_buf_client,
 				mask_info->update_buf_client_len);
 	} else {
