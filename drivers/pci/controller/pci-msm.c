@@ -728,6 +728,7 @@ struct msm_pcie_dev_t {
 	uint32_t smmu_sid_base;
 	uint32_t link_check_max_count;
 	uint32_t target_link_speed;
+	uint32_t dt_target_link_speed;
 	uint32_t n_fts;
 	uint32_t ep_latency;
 	uint32_t switch_latency;
@@ -5971,7 +5972,6 @@ static void msm_pcie_handle_linkdown(struct msm_pcie_dev_t *dev)
 	} else {
 		msm_pcie_notify_client(dev, MSM_PCIE_EVENT_LINKDOWN);
 	}
-
 }
 
 static irqreturn_t handle_linkdown_irq(int irq, void *data)
@@ -5984,17 +5984,16 @@ static irqreturn_t handle_linkdown_irq(int irq, void *data)
 		"PCIe: No. %ld linkdown IRQ for RC%d.\n",
 		dev->linkdown_counter, dev->rc_idx);
 
-	if (!dev->enumerated || dev->link_status != MSM_PCIE_LINK_ENABLED) {
+	if (!dev->enumerated || dev->link_status != MSM_PCIE_LINK_ENABLED)
 		PCIE_DBG(dev,
 			"PCIe:Linkdown IRQ for RC%d when the link is not enabled\n",
 			dev->rc_idx);
-	} else if (dev->suspending) {
+	else if (dev->suspending)
 		PCIE_DBG(dev,
 			"PCIe:the link of RC%d is suspending.\n",
 			dev->rc_idx);
-	} else {
+	else
 		msm_pcie_handle_linkdown(dev);
-	}
 
 	return IRQ_HANDLED;
 }
@@ -6909,9 +6908,11 @@ static int msm_pcie_probe(struct platform_device *pdev)
 		pcie_dev->rc_idx, pcie_dev->link_check_max_count);
 
 	of_property_read_u32(of_node, "qcom,target-link-speed",
-				&pcie_dev->target_link_speed);
+				&pcie_dev->dt_target_link_speed);
 	PCIE_DBG(pcie_dev, "PCIe: RC%d: target-link-speed: 0x%x.\n",
-		pcie_dev->rc_idx, pcie_dev->target_link_speed);
+		pcie_dev->rc_idx, pcie_dev->dt_target_link_speed);
+
+	pcie_dev->target_link_speed = pcie_dev->dt_target_link_speed;
 
 	of_property_read_u32(of_node, "qcom,n-fts", &pcie_dev->n_fts);
 	PCIE_DBG(pcie_dev, "n-fts: 0x%x.\n", pcie_dev->n_fts);
@@ -7347,6 +7348,48 @@ err:
 	return ret;
 }
 EXPORT_SYMBOL(msm_pcie_prevent_l1);
+
+int msm_pcie_set_target_link_speed(u32 rc_idx, u32 target_link_speed)
+{
+	struct msm_pcie_dev_t *pcie_dev = &msm_pcie_dev[rc_idx];
+
+	if (!pcie_dev->drv_ready) {
+		PCIE_DBG(pcie_dev,
+			"PCIe: RC%d: has not been successfully probed yet\n",
+			pcie_dev->rc_idx);
+		return -EPROBE_DEFER;
+	}
+
+	/*
+	 * Reject the request if it exceeds what PCIe RC is capable or if
+	 * it's greater than what was specified in DT (if present)
+	 */
+	if (target_link_speed > pcie_dev->bw_gen_max ||
+		(pcie_dev->dt_target_link_speed &&
+		target_link_speed > pcie_dev->dt_target_link_speed)) {
+		PCIE_DBG(pcie_dev,
+			"PCIe: RC%d: invalid target link speed: %d\n",
+			pcie_dev->rc_idx, target_link_speed);
+		return -EINVAL;
+	}
+
+	pcie_dev->target_link_speed = target_link_speed;
+
+	/*
+	 * The request 0 will reset maximum GEN speed to default. Default will
+	 * be devicetree specified GEN speed if present else it will be whatever
+	 * the PCIe root complex is capable of.
+	 */
+	if (!target_link_speed)
+		pcie_dev->target_link_speed = pcie_dev->dt_target_link_speed ?
+			pcie_dev->dt_target_link_speed : pcie_dev->bw_gen_max;
+
+	PCIE_DBG(pcie_dev, "PCIe: RC%d: target_link_speed is now: 0x%x.\n",
+		pcie_dev->rc_idx, pcie_dev->target_link_speed);
+
+	return 0;
+}
+EXPORT_SYMBOL(msm_pcie_set_target_link_speed);
 
 int msm_pcie_set_link_bandwidth(struct pci_dev *pci_dev, u16 target_link_speed,
 				u16 target_link_width)
@@ -8849,7 +8892,7 @@ int msm_pcie_pm_control(enum msm_pcie_pm_opt pm_opt, u32 busnr, void *user,
 		break;
 	case MSM_PCIE_HANDLE_LINKDOWN:
 		PCIE_DBG(&msm_pcie_dev[rc_idx],
-			 "User of RC%d requests handling link down.\n", rc_idx);
+			"User of RC%d requests handling link down.\n", rc_idx);
 		spin_lock_irqsave(&msm_pcie_dev[rc_idx].irq_lock, flags);
 		msm_pcie_handle_linkdown(pcie_dev);
 		spin_unlock_irqrestore(&msm_pcie_dev[rc_idx].irq_lock, flags);

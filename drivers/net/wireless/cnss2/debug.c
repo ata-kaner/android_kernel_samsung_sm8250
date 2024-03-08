@@ -169,7 +169,7 @@ static ssize_t cnss_dev_boot_debug_write(struct file *fp,
 	struct cnss_plat_data *plat_priv =
 		((struct seq_file *)fp->private_data)->private;
 	struct cnss_pci_data *pci_priv;
-	char buf[64] = "";
+	char buf[64];
 	char *cmd;
 	unsigned int len = 0;
 	int ret = 0;
@@ -291,7 +291,7 @@ static ssize_t cnss_reg_read_debug_write(struct file *fp,
 {
 	struct cnss_plat_data *plat_priv =
 		((struct seq_file *)fp->private_data)->private;
-	char buf[64] = "";
+	char buf[64];
 	char *sptr, *token;
 	unsigned int len = 0;
 	u32 reg_offset, mem_type;
@@ -404,7 +404,7 @@ static ssize_t cnss_reg_write_debug_write(struct file *fp,
 {
 	struct cnss_plat_data *plat_priv =
 		((struct seq_file *)fp->private_data)->private;
-	char buf[64] = "";
+	char buf[64];
 	char *sptr, *token;
 	unsigned int len = 0;
 	u32 reg_offset, mem_type, reg_val;
@@ -488,7 +488,7 @@ static ssize_t cnss_runtime_pm_debug_write(struct file *fp,
 	struct cnss_plat_data *plat_priv =
 		((struct seq_file *)fp->private_data)->private;
 	struct cnss_pci_data *pci_priv;
-	char buf[64] = "";
+	char buf[64];
 	char *cmd;
 	unsigned int len = 0;
 	int ret = 0;
@@ -575,7 +575,7 @@ static ssize_t cnss_control_params_debug_write(struct file *fp,
 {
 	struct cnss_plat_data *plat_priv =
 		((struct seq_file *)fp->private_data)->private;
-	char buf[64] = "";
+	char buf[64];
 	char *sptr, *token;
 	char *cmd;
 	u32 val;
@@ -783,7 +783,7 @@ static ssize_t cnss_wfc_call_status_debug_write(struct file *fp,
 {
 	struct cnss_plat_data *plat_priv =
 		((struct seq_file *)fp->private_data)->private;
-	char buf[(QMI_WLFW_MAX_WFC_CALL_STATUS_DATA_SIZE_V01 + 1) * 5] = "";
+	char buf[(QMI_WLFW_MAX_WFC_CALL_STATUS_DATA_SIZE_V01 + 1) * 5];
 	char *sptr, *token;
 	unsigned int len = 0;
 	const char *delim = " ";

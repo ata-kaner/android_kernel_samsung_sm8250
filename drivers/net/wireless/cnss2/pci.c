@@ -1356,6 +1356,7 @@ static int cnss_pci_update_timestamp(struct cnss_pci_data *pci_priv)
 		goto force_wake_put;
 
 	if (host_time_us < device_time_us) {
+		cnss_pr_err("Host time (%llu us) is smaller than device time (%llu us), stop\n");
 		ret = -EINVAL;
 		goto force_wake_put;
 	}
@@ -2984,7 +2985,7 @@ int cnss_pci_force_wake_request_sync(struct device *dev, int timeout_us)
 	if (test_bit(CNSS_DEV_ERR_NOTIFY, &plat_priv->driver_state))
 		return -EAGAIN;
 
-	return mhi_device_get_sync_atomic(mhi_ctrl->mhi_dev, timeout_us);
+	return mhi_device_get_sync_atomic(mhi_ctrl->mhi_dev, timeout_us, false);
 }
 EXPORT_SYMBOL(cnss_pci_force_wake_request_sync);
 
@@ -3497,7 +3498,7 @@ int cnss_smmu_map(struct device *dev,
 
 	pci_priv->smmu_iova_ipa_current = iova + len;
 	*iova_addr = (uint32_t)(iova + paddr - rounddown(paddr, PAGE_SIZE));
-	cnss_pr_dbg("IOMMU map: iova_addr %x\n", *iova_addr);
+	cnss_pr_dbg("IOMMU map: iova_addr %lx\n", *iova_addr);
 
 	return 0;
 }
@@ -4274,7 +4275,7 @@ static int cnss_pci_update_fw_name(struct cnss_pci_data *pci_priv)
 	switch (pci_priv->device_id) {
 	case QCA6390_DEVICE_ID:
 		if (plat_priv->device_version.major_version < FW_V2_NUMBER) {
-			cnss_pr_dbg("Device ID:version (0x%x:%d) is not supported\n",
+			cnss_pr_dbg("Device ID:version (0x%lx:%d) is not supported\n",
 				    pci_priv->device_id,
 				    plat_priv->device_version.major_version);
 			return -EINVAL;
@@ -4372,7 +4373,7 @@ static void cnss_mhi_notify_status(struct mhi_controller *mhi_ctrl, void *priv,
 {
 	struct cnss_pci_data *pci_priv = priv;
 	struct cnss_plat_data *plat_priv;
-	enum cnss_recovery_reason cnss_reason = 0;
+	enum cnss_recovery_reason cnss_reason;
 
 	if (!pci_priv) {
 		cnss_pr_err("pci_priv is NULL");
@@ -4645,11 +4646,9 @@ static int cnss_pci_probe(struct pci_dev *pci_dev,
 	if (ret)
 		goto reset_ctx;
 
-#ifdef CONFIG_QCOM_MEMORY_DUMP_V2
 	ret = cnss_register_ramdump(plat_priv);
 	if (ret)
 		goto unregister_subsys;
-#endif
 
 	ret = cnss_pci_init_smmu(pci_priv);
 	if (ret)

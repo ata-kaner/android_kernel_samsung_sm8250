@@ -544,7 +544,7 @@ static int mmc_devfreq_set_target(struct device *dev,
 		*freq, current->comm);
 
 	spin_lock_irqsave(&clk_scaling->lock, flags);
-	if (clk_scaling->target_freq == *freq ||
+	if (clk_scaling->curr_freq == *freq ||
 		clk_scaling->skip_clk_scale_freq_update) {
 		spin_unlock_irqrestore(&clk_scaling->lock, flags);
 		goto out;
@@ -699,6 +699,12 @@ static int mmc_devfreq_create_freq_table(struct mmc_host *host)
 		pr_debug("%s: frequency table overshot possible freq (%d)\n",
 				mmc_hostname(host), clk_scaling->freq_table[i]);
 		break;
+	}
+
+	if (mmc_card_sd(host->card) && (clk_scaling->freq_table_sz < 2)) {
+		clk_scaling->freq_table[clk_scaling->freq_table_sz] =
+				host->card->clk_scaling_highest;
+		clk_scaling->freq_table_sz++;
 	}
 
 out:
