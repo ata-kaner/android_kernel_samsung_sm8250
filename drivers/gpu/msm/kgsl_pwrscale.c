@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright (c) 2010-2019, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
@@ -680,6 +681,17 @@ static int opp_notify(struct notifier_block *nb,
 
 	mutex_unlock(&device->mutex);
  
+	if (kgsl_pwr_limits_set_freq(pwr->cooling_pwr_limit,
+			pwr->pwrlevels[max_level].gpu_freq)) {
+		dev_err(device->dev,
+				"Failed to set cooling thermal limit via limits fw\n");
+		mutex_lock(&device->mutex);
+		pwr->thermal_pwrlevel = max_level;
+		/* Update the current level using the new limit */
+		kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
+		mutex_unlock(&device->mutex);
+	}
+
 	if (kgsl_pwr_limits_set_freq(pwr->cooling_pwr_limit,
 			pwr->pwrlevels[max_level].gpu_freq)) {
 		dev_err(device->dev,

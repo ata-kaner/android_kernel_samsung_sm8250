@@ -568,7 +568,7 @@ struct adreno_device {
 	 * @perfcounter: Flag to clear perfcounters across contexts and
 	 * controls perfcounter ioctl read
 	 */
-	bool perfcounter;	
+	bool perfcounter;
 };
 
 /**

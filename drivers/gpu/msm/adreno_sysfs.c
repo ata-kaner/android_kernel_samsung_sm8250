@@ -492,7 +492,7 @@ int adreno_sysfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
- 
+
 	ret = sysfs_create_files(&device->dev->kobj, _attr_list);
 
 	/* Notify userspace */
