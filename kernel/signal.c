@@ -45,6 +45,7 @@
 #include <linux/livepatch.h>
 #include <linux/oom.h>
 #include <linux/capability.h>
+#include <linux/cgroup.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/signal.h>
