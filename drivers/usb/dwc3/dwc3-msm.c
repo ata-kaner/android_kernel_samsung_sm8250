@@ -53,6 +53,10 @@
 #include <linux/ccic/max77705_alternate.h>
 #endif
 
+static bool bc12_compliance;
+module_param(bc12_compliance, bool, 0644);
+MODULE_PARM_DESC(bc12_compliance, "Disable sending dp pulse for CDP");
+
 #define SDP_CONNETION_CHECK_TIME 10000 /* in ms */
 #define EXTCON_SYNC_EVENT_TIMEOUT_MS 1500 /* in ms */
 
@@ -2064,6 +2068,24 @@ static void dwc3_gsi_event_buf_alloc(struct dwc3 *dwc)
 	}
 }
 
+static void dwc3_msm_modify_pipectl(struct dwc3 *dwc, bool set)
+{
+	struct dwc3_msm *mdwc = dev_get_drvdata(dwc->dev->parent);
+	u32 reg;
+
+	reg = dwc3_msm_read_reg(mdwc->base, DWC3_GUSB3PIPECTL(0));
+
+	if (set) {
+		if ((dwc->speed != DWC3_DSTS_SUPERSPEED) &&
+			(dwc->speed != DWC3_DSTS_SUPERSPEED_PLUS))
+			reg |= DWC3_GUSB3PIPECTL_SUSPHY;
+	} else {
+		reg &= ~(DWC3_GUSB3PIPECTL_SUSPHY);
+	}
+
+	dwc3_msm_write_reg(mdwc->base, DWC3_GUSB3PIPECTL(0), reg);
+}
+
 static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned int event,
 							unsigned int value)
 {
@@ -2131,6 +2153,9 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned int event,
 		break;
 	case DWC3_CONTROLLER_CONNDONE_EVENT:
 		dev_info(mdwc->dev, "DWC3_CONTROLLER_CONNDONE_EVENT received\n");
+
+		dwc3_msm_modify_pipectl(dwc, true);
+
 		/*
 		 * Add power event if the dbm indicates coming out of L1 by
 		 * interrupt
@@ -2257,6 +2282,13 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned int event,
 		break;
 	case DWC3_CONTROLLER_NOTIFY_CLEAR_DB:
 		dev_info(mdwc->dev, "DWC3_CONTROLLER_NOTIFY_CLEAR_DB\n");
+
+		/*
+		 * Clear the susphy bit here to ensure it is not set during
+		 * the course of controller initialisation process.
+		 */
+		dwc3_msm_modify_pipectl(dwc, false);
+
 		if (!mdwc->gsi_ev_buff)
 			break;
 
@@ -2329,15 +2361,6 @@ static void dwc3_msm_power_collapse_por(struct dwc3_msm *mdwc)
 		dev_err(mdwc->dev, "%s: dwc3_core init failed (%d)\n",
 							__func__, ret);
 
-	/* Get initial P3 status and enable IN_P3 event */
-	if (dwc3_is_usb31(dwc))
-		val = dwc3_msm_read_reg_field(mdwc->base,
-			DWC31_LINK_GDBGLTSSM,
-			DWC3_GDBGLTSSM_LINKSTATE_MASK);
-	else
-		val = dwc3_msm_read_reg_field(mdwc->base,
-			DWC3_GDBGLTSSM, DWC3_GDBGLTSSM_LINKSTATE_MASK);
-	atomic_set(&mdwc->in_p3, val == DWC3_LINK_STATE_U3);
 	dwc3_msm_write_reg_field(mdwc->base, PWR_EVNT_IRQ_MASK_REG,
 				PWR_EVNT_POWERDOWN_IN_P3_MASK, 1);
 
@@ -3647,7 +3670,8 @@ static int dwc3_msm_vbus_notifier(struct notifier_block *nb,
 	 * and only when the vbus connect event is a valid one.
 	 */
 	if (get_psy_type(mdwc) == POWER_SUPPLY_TYPE_USB_CDP &&
-			mdwc->vbus_active && !mdwc->check_eud_state) {
+			mdwc->vbus_active &&
+				!mdwc->check_eud_state && !bc12_compliance) {
 		dev_dbg(mdwc->dev, "Connected to CDP, pull DP up\n");
 		usb_phy_drive_dp_pulse(mdwc->hs_phy, DP_PULSE_WIDTH_MSEC);
 	}
