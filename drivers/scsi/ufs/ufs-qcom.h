@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -317,6 +317,10 @@ struct ufs_qcom_host {
 	unsigned long hw_reset_outstanding_tasks;
 	unsigned long hw_reset_outstanding_reqs;
 	struct ufs_stats hw_reset_ufs_stats;
+	bool err_occurred;
+	/* FlashPVL entries */
+	atomic_t scale_up;
+	atomic_t clks_on;
 };
 
 static inline u32

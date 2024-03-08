@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2016-2021, The Linux Foundation. All rights reserved. */
 
 #include <linux/delay.h>
 #include <linux/jiffies.h>
@@ -45,6 +45,7 @@
 #define CNSS_QMI_TIMEOUT_DEFAULT	10000
 #define CNSS_BDF_TYPE_DEFAULT		CNSS_BDF_ELF
 #define CNSS_TIME_SYNC_PERIOD_DEFAULT	900000
+#define CNSS_MIN_TIME_SYNC_PERIOD	2000
 
 static struct cnss_plat_data *plat_env;
 
@@ -757,6 +758,7 @@ EXPORT_SYMBOL(cnss_idle_restart);
 int cnss_idle_shutdown(struct device *dev)
 {
 	struct cnss_plat_data *plat_priv = cnss_bus_dev_to_plat_priv(dev);
+	unsigned int timeout;
 	int ret;
 
 	if (!plat_priv) {

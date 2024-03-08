@@ -370,6 +370,31 @@ static struct cnss_misc_reg wlaon_reg_access_seq[] = {
 #define PCIE_REG_SIZE ARRAY_SIZE(pcie_reg_access_seq)
 #define WLAON_REG_SIZE ARRAY_SIZE(wlaon_reg_access_seq)
 
+#if IS_ENABLED(CONFIG_PCI_MSM)
+/**
+ * _cnss_pci_get_reg_dump() - Dump PCIe RC registers for debug
+ * @pci_priv: driver PCI bus context pointer
+ * @buf: destination buffer pointer
+ * @len: length of the buffer
+ *
+ * This function shall call corresponding PCIe root complex driver API
+ * to dump PCIe RC registers for debug purpose.
+ *
+ * Return: 0 for success, negative value for error
+ */
+static int _cnss_pci_get_reg_dump(struct cnss_pci_data *pci_priv,
+				  u8 *buf, u32 len)
+{
+	return msm_pcie_reg_dump(pci_priv->pci_dev, buf, len);
+}
+#else
+static int _cnss_pci_get_reg_dump(struct cnss_pci_data *pci_priv,
+				  u8 *buf, u32 len)
+{
+	return 0;
+}
+#endif /* CONFIG_PCI_MSM */
+
 int cnss_pci_check_link_status(struct cnss_pci_data *pci_priv)
 {
 	u16 device_id;
@@ -869,6 +894,17 @@ void cnss_pci_allow_l1(struct device *dev)
 }
 EXPORT_SYMBOL(cnss_pci_allow_l1);
 
+static void cnss_pci_update_link_event(struct cnss_pci_data *pci_priv,
+				       enum cnss_bus_event_type type,
+				       void *data)
+{
+	struct cnss_bus_event bus_event;
+
+	bus_event.etype = type;
+	bus_event.event_data = data;
+	cnss_pci_call_driver_uevent(pci_priv, CNSS_BUS_EVENT, &bus_event);
+}
+
 static void cnss_pci_handle_linkdown(struct cnss_pci_data *pci_priv)
 {
 	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
@@ -895,6 +931,12 @@ static void cnss_pci_handle_linkdown(struct cnss_pci_data *pci_priv)
 
 	if (pci_dev->device == QCA6174_DEVICE_ID)
 		disable_irq(pci_dev->irq);
+
+	/* Notify bus related event. Now for all supported chips.
+	 * Here PCIe LINK_DOWN notification taken care.
+	 * uevent buffer can be extended later, to cover more bus info.
+	 */
+	cnss_pci_update_link_event(pci_priv, BUS_EVENT_PCI_LINK_DOWN, NULL);
 
 	cnss_fatal_err("PCI link down, schedule recovery\n");
 	cnss_schedule_recovery(&pci_dev->dev, CNSS_REASON_LINK_DOWN);
@@ -938,15 +980,21 @@ EXPORT_SYMBOL(cnss_pci_link_down);
 int cnss_pci_get_reg_dump(struct device *dev, uint8_t *buffer, uint32_t len)
 {
 	struct pci_dev *pci_dev = to_pci_dev(dev);
+	struct cnss_pci_data *pci_priv = cnss_get_pci_priv(pci_dev);
 
-	if (!pci_dev) {
-		cnss_pr_err("pci_dev is NULL\n");
-		return -EINVAL;
+	if (!pci_priv) {
+		cnss_pr_err("pci_priv is NULL\n");
+		return -ENODEV;
 	}
 
-	cnss_pr_dbg("Get pci reg dump for hang data\n");
+	if (pci_priv->pci_link_state == PCI_LINK_DOWN) {
+		cnss_pr_dbg("No PCIe reg dump since PCIe device is suspended(D3)\n");
+		return -EACCES;
+	}
 
-	return msm_pcie_reg_dump(pci_dev, buffer, len);
+	cnss_pr_dbg("Start to get PCIe reg dump\n");
+
+	return _cnss_pci_get_reg_dump(pci_priv, buffer, len);
 }
 EXPORT_SYMBOL(cnss_pci_get_reg_dump);
 
@@ -1479,6 +1527,24 @@ static void cnss_pci_stop_time_sync_update(struct cnss_pci_data *pci_priv)
 	cancel_delayed_work_sync(&pci_priv->time_sync_work);
 }
 
+int cnss_pci_update_qtime_sync_period(struct device *dev,
+				      unsigned int qtime_sync_period)
+{
+	struct cnss_plat_data *plat_priv = dev_get_drvdata(dev);
+	struct cnss_pci_data *pci_priv = plat_priv->bus_priv;
+
+	if (!plat_priv || !pci_priv)
+		return -ENODEV;
+
+	cnss_pci_stop_time_sync_update(pci_priv);
+	plat_priv->ctrl_params.time_sync_period = qtime_sync_period;
+	cnss_pci_start_time_sync_update(pci_priv);
+	cnss_pr_dbg("WLAN qtime sync period %u\n",
+		    plat_priv->ctrl_params.time_sync_period);
+
+	return 0;
+}
+
 int cnss_pci_call_driver_probe(struct cnss_pci_data *pci_priv)
 {
 	int ret = 0;
@@ -1848,8 +1914,7 @@ static int cnss_qca6290_powerup(struct cnss_pci_data *pci_priv)
 	int ret = 0;
 	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
 	unsigned int timeout;
-	int retry = 0;
-	int bt_en_gpio = plat_priv->pinctrl_info.bt_en_gpio;
+	int retry = 0, sw_ctrl_gpio = plat_priv->pinctrl_info.sw_ctrl_gpio;
 
 	if (plat_priv->ramdump_info_v2.dump_data_valid) {
 		cnss_pci_clear_dump_info(pci_priv);
@@ -1866,6 +1931,8 @@ retry:
 
 	ret = cnss_resume_pci_link(pci_priv);
 	if (ret) {
+		cnss_pr_dbg("Value of SW_CNTRL GPIO: %d\n",
+			    cnss_get_gpio_value(plat_priv, sw_ctrl_gpio));
 		cnss_pr_err("Failed to resume PCI link, err = %d\n", ret);
 		if (test_bit(IGNORE_PCI_LINK_FAILURE,
 			     &plat_priv->ctrl_params.quirks)) {
@@ -1876,10 +1943,9 @@ retry:
 		if (ret == -EAGAIN && retry++ < POWER_ON_RETRY_MAX_TIMES) {
 			cnss_power_off_device(plat_priv);
 			cnss_pr_dbg("Retry to resume PCI link #%d\n", retry);
-
-			/* Force toggle BT_EN GPIO low */
-			cnss_pr_err("Set bt_en_gpio(%u) low \n",bt_en_gpio);
-			gpio_set_value(bt_en_gpio, false);
+			cnss_pr_dbg("Value of SW_CNTRL GPIO: %d\n",
+				    cnss_get_gpio_value(plat_priv,
+							sw_ctrl_gpio));
 			msleep(POWER_ON_RETRY_DELAY_MS * retry);
 			goto retry;
 		}
@@ -3622,6 +3688,8 @@ int cnss_get_soc_info(struct device *dev, struct cnss_soc_info *info)
 		sizeof(info->fw_build_timestamp));
 	memcpy(&info->device_version, &plat_priv->device_version,
 	       sizeof(info->device_version));
+	memcpy(&info->dev_mem_info, &plat_priv->dev_mem_info,
+	       sizeof(info->dev_mem_info));
 
 	return 0;
 }
@@ -4065,8 +4133,8 @@ static void cnss_pci_remove_dump_seg(struct cnss_pci_data *pci_priv,
 	cnss_minidump_remove_region(plat_priv, type, seg_no, va, pa, size);
 }
 
-int cnss_call_driver_uevent(struct cnss_pci_data *pci_priv,
-			    enum cnss_driver_status status, void *data)
+int cnss_pci_call_driver_uevent(struct cnss_pci_data *pci_priv,
+				enum cnss_driver_status status, void *data)
 {
 	struct cnss_uevent_data uevent_data;
 	struct cnss_wlan_driver *driver_ops;
@@ -4126,7 +4194,7 @@ static void cnss_pci_send_hang_event(struct cnss_pci_data *pci_priv)
 		}
 	}
 
-	cnss_call_driver_uevent(pci_priv, CNSS_HANG_EVENT, &hang_event);
+	cnss_pci_call_driver_uevent(pci_priv, CNSS_HANG_EVENT, &hang_event);
 
 	kfree(hang_event.hang_event_data);
 	hang_event.hang_event_data = NULL;
