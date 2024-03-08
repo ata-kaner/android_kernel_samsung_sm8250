@@ -395,7 +395,7 @@ static int setup_v1_file_key_derived(struct fscrypt_info *ci,
 		for (i = 0; i < ARRAY_SIZE(key_new.words); i++)
 			__cpu_to_be32s(&key_new.words[i]);
 
-        err = setup_v1_file_key_direct(ci, key_new.bytes);
+		err = setup_v1_file_key_direct(ci, key_new.bytes);
 
 		if (derived_key)
 			kzfree(derived_key);
