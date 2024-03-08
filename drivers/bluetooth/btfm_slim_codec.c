@@ -212,7 +212,7 @@ static int btfm_slim_dai_prepare(struct snd_pcm_substream *substream,
 		bt_soc_enable_status = 1;
 
 	if (ret == -EISCONN) {
-		BTFMSLIM_ERR("channel opened without closing, returning success");
+		BTFMSLIM_ERR("channel opened without closing, return success");
 		ret = 0;
 	}
 	return ret;

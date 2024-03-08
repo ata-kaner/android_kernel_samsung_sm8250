@@ -45,6 +45,7 @@
 #define DEFAULT_FW_FILE_NAME		"amss.bin"
 #define FW_V2_FILE_NAME			"amss20.bin"
 #define FW_V2_NUMBER			2
+#define DEVICE_MAJOR_VERSION_MASK	0xF
 
 #define WAKE_MSI_NAME			"WAKE"
 
@@ -132,6 +133,13 @@ static struct cnss_pci_reg qdss_csr[] = {
 	{ "QDSSCSR_PRESERVEETF", QDSS_APB_DEC_CSR_PRESERVEETF_OFFSET },
 	{ "QDSSCSR_PRESERVEETR0", QDSS_APB_DEC_CSR_PRESERVEETR0_OFFSET },
 	{ "QDSSCSR_PRESERVEETR1", QDSS_APB_DEC_CSR_PRESERVEETR1_OFFSET },
+	{ NULL },
+};
+
+static struct cnss_pci_reg pci_scratch[] = {
+	{ "PCIE_SCRATCH_0", PCIE_SCRATCH_0_SOC_PCIE_REG },
+	{ "PCIE_SCRATCH_1", PCIE_SCRATCH_1_SOC_PCIE_REG },
+	{ "PCIE_SCRATCH_2", PCIE_SCRATCH_2_SOC_PCIE_REG },
 	{ NULL },
 };
 
@@ -726,6 +734,35 @@ retry:
 	return ret;
 }
 
+static void cnss_pci_soc_scratch_reg_dump(struct cnss_pci_data *pci_priv)
+{
+	u32 reg_offset, val;
+	int i;
+
+	switch (pci_priv->device_id) {
+	case QCA6490_DEVICE_ID:
+		break;
+	default:
+		return;
+	}
+
+	if (in_interrupt() || irqs_disabled())
+		return;
+
+	if (cnss_pci_check_link_status(pci_priv))
+		return;
+
+	cnss_pr_dbg("Start to dump SOC Scratch registers\n");
+
+	for (i = 0; pci_scratch[i].name; i++) {
+		reg_offset = pci_scratch[i].offset;
+		if (cnss_pci_reg_read(pci_priv, reg_offset, &val))
+			return;
+		cnss_pr_dbg("PCIE_SOC_REG_%s = 0x%x\n",
+			    pci_scratch[i].name, val);
+	}
+}
+
 int cnss_suspend_pci_link(struct cnss_pci_data *pci_priv)
 {
 	int ret = 0;
@@ -750,6 +787,9 @@ int cnss_suspend_pci_link(struct cnss_pci_data *pci_priv)
 		if (pci_set_power_state(pci_priv->pci_dev, PCI_D3hot))
 			cnss_pr_err("Failed to set D3Hot, err =  %d\n", ret);
 	}
+
+	/* Always do PCIe L2 suspend during power off/PCIe link recovery */
+	pci_priv->drv_connected_last = 0;
 
 	ret = cnss_set_pci_link(pci_priv, PCI_LINK_DOWN);
 	if (ret)
@@ -842,6 +882,7 @@ int cnss_pci_recover_link_down(struct cnss_pci_data *pci_priv)
 		  jiffies + msecs_to_jiffies(DEV_RDDM_TIMEOUT));
 
 	mhi_debug_reg_dump(pci_priv->mhi_ctrl);
+	cnss_pci_soc_scratch_reg_dump(pci_priv);
 
 	return 0;
 }
@@ -1759,6 +1800,7 @@ static void cnss_pci_dump_misc_reg(struct cnss_pci_data *pci_priv)
 		return;
 
 	mhi_debug_reg_dump(pci_priv->mhi_ctrl);
+	cnss_pci_soc_scratch_reg_dump(pci_priv);
 	cnss_pci_misc_reg_dump(pci_priv, pci_priv->wcss_reg,
 			       pci_priv->wcss_reg_size, "wcss");
 	cnss_pci_misc_reg_dump(pci_priv, pci_priv->pcie_reg,
@@ -3265,7 +3307,7 @@ retry:
 				cnss_pr_err("Failed to allocate memory for FW, size: 0x%zx, type: %u\n",
 					    fw_mem[i].size, fw_mem[i].type);
 				CNSS_ASSERT(0);
-				return -ENOMEM;
+				BUG();
 			}
 		}
 	}
@@ -4042,6 +4084,7 @@ static void cnss_pci_dump_registers(struct cnss_pci_data *pci_priv)
 		return;
 
 	mhi_debug_reg_dump(pci_priv->mhi_ctrl);
+	cnss_pci_soc_scratch_reg_dump(pci_priv);
 	cnss_pci_dump_ce_reg(pci_priv, CNSS_CE_COMMON);
 	cnss_pci_dump_ce_reg(pci_priv, CNSS_CE_09);
 	cnss_pci_dump_ce_reg(pci_priv, CNSS_CE_10);
@@ -4398,6 +4441,9 @@ static int cnss_pci_update_fw_name(struct cnss_pci_data *pci_priv)
 		    plat_priv->device_version.major_version,
 		    plat_priv->device_version.minor_version);
 
+	/* Only keep lower 4 bits as real device major version */
+	plat_priv->device_version.major_version &= DEVICE_MAJOR_VERSION_MASK;
+
 	switch (pci_priv->device_id) {
 	case QCA6390_DEVICE_ID:
 		if (plat_priv->device_version.major_version < FW_V2_NUMBER) {
@@ -4479,6 +4525,7 @@ static void cnss_dev_rddm_timeout_hdlr(struct timer_list *t)
 		cnss_pr_err("Unable to collect ramdumps due to abrupt reset\n");
 
 	mhi_debug_reg_dump(mhi_ctrl);
+	cnss_pci_soc_scratch_reg_dump(pci_priv);
 
 	cnss_schedule_recovery(&pci_priv->pci_dev->dev, CNSS_REASON_TIMEOUT);
 }

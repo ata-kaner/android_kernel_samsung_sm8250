@@ -1093,7 +1093,7 @@ fw_start_done:
 	}
 	mutex_unlock(&host_ctx->lock);
 
-	return ret;
+    return ret;
 }
 
 static void npu_ipc_irq_work(struct work_struct *work)
