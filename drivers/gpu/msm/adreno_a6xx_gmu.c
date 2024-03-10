@@ -833,6 +833,9 @@ static bool a6xx_gmu_cx_is_on(struct kgsl_device *device)
 {
 	unsigned int val;
 
+	if (ADRENO_QUIRK(ADRENO_DEVICE(device), ADRENO_QUIRK_CX_GDSC))
+		return regulator_is_enabled(KGSL_GMU_DEVICE(device)->cx_gdsc);
+
 	gmu_core_regread(device, A6XX_GPU_CC_CX_GDSCR, &val);
 	return (val & BIT(31));
 }
@@ -1166,10 +1169,9 @@ static int a6xx_gmu_load_firmware(struct kgsl_device *device)
 
 	/* GMU fw already saved and verified so do nothing new */
 	if (!gmu->fw_image) {
-		if (a6xx_core->gmufw_name == NULL) {
-			dev_err(&gmu->pdev->dev, "Invalid gmufw_name\n");
+
+		if (a6xx_core->gmufw_name == NULL)
 			return -EINVAL;
-		}
 
 		ret = request_firmware(&gmu->fw_image, a6xx_core->gmufw_name,
 				device->dev);
