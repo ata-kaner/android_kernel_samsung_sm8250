@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2008-2014, 2016-2019 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2014, 2016-2019, 2021 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -172,7 +172,7 @@ void *diagmem_alloc(struct diagchar_dev *driver, int size, int pool_type)
 			break;
 		}
 		if (size == 0 || size > mempool->itemsize ||
-			size > (int)mempool->pool->pool_data) {			
+			size > (int)mempool->pool->pool_data) {
 			pr_err_ratelimited("diag: cannot alloc from mempool %s, invalid size: %d\n",
 					   mempool->name, size);
 			break;
