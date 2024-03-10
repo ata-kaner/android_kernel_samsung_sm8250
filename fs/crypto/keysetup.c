@@ -503,8 +503,8 @@ static void put_crypt_info(struct fscrypt_info *ci)
 
 	if (ci->ci_direct_key)
 		fscrypt_put_direct_key(ci->ci_direct_key);
-    else if (ci->ci_owns_key)
-        fscrypt_destroy_prepared_key(&ci->ci_key);
+	else if (ci->ci_owns_key)
+		fscrypt_destroy_prepared_key(&ci->ci_key);
 
 	key = ci->ci_master_key;
 	if (key) {
