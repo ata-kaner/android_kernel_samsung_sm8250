@@ -40,8 +40,8 @@ static int apss_cc_debug_mux_pre_divs[] = {
 
 static struct clk_debug_mux apss_cc_debug_mux = {
 	.priv = &debug_mux_priv,
-	.debug_offset = 0x1C,
-	.post_div_offset = 0x1C,
+	.debug_offset = 0x0,
+	.post_div_offset = 0x0,
 	.cbcr_offset = U32_MAX,
 	.src_sel_mask = 0x3FF00,
 	.src_sel_shift = 8,
@@ -124,8 +124,6 @@ static const char *const gcc_debug_mux_parent_names[] = {
 	"gcc_cam_throttle_rt_clk",
 	"gcc_camera_ahb_clk",
 	"gcc_camss_axi_clk",
-	"gcc_camss_camnoc_atb_clk",
-	"gcc_camss_camnoc_nts_xo_clk",
 	"gcc_camss_cci_0_clk",
 	"gcc_camss_cphy_0_clk",
 	"gcc_camss_cphy_1_clk",
@@ -236,8 +234,6 @@ static int gcc_debug_mux_sels[] = {
 	0x4E,		/* gcc_cam_throttle_rt_clk */
 	0x3A,		/* gcc_camera_ahb_clk */
 	0x141,		/* gcc_camss_axi_clk */
-	0x143,		/* gcc_camss_camnoc_atb_clk */
-	0x144,		/* gcc_camss_camnoc_nts_xo_clk */
 	0x13F,		/* gcc_camss_cci_0_clk */
 	0x130,		/* gcc_camss_cphy_0_clk */
 	0x131,		/* gcc_camss_cphy_1_clk */

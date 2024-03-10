@@ -613,7 +613,7 @@ static int npu_notifier_cb(struct notifier_block *this, unsigned long code,
 	struct npu_device *npu_dev = host_ctx->npu_dev;
 	uint32_t reg_val;
 
-	NPU_DBG("notifier code %d\n", code);
+	NPU_DBG("notifier code %lu\n", code);
 	switch (code) {
 	case SUBSYS_BEFORE_POWERUP:
 	{
@@ -1093,7 +1093,7 @@ fw_start_done:
 	}
 	mutex_unlock(&host_ctx->lock);
 
-	return ret;
+    return ret;
 }
 
 static void npu_ipc_irq_work(struct work_struct *work)
@@ -1576,7 +1576,6 @@ static int app_msg_proc(struct npu_host_ctx *host_ctx, uint32_t *msg)
 	struct npu_misc_cmd *misc_cmd = NULL;
 	int need_ctx_switch = 0;
 
-	memset(&kevt, 0, sizeof(kevt));
 	msg_id = msg[1];
 	switch (msg_id) {
 	case NPU_IPC_MSG_EXECUTE_DONE:

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved. */
 
 #ifndef _CNSS_REG_H
 #define _CNSS_REG_H
@@ -267,4 +267,8 @@
 #define QCA6390_SYSPM_DBG_BUS_SEL_REG 0x1F82008
 #define QCA6390_SYSPM_WCSSAON_SR_STATUS 0x1F8200C
 
+/* PCIE SOC scratch registers, address same for QCA6390 & QCA6490*/
+#define PCIE_SCRATCH_0_SOC_PCIE_REG 0x1E04040
+#define PCIE_SCRATCH_1_SOC_PCIE_REG 0x1E04044
+#define PCIE_SCRATCH_2_SOC_PCIE_REG 0x1E0405C
 #endif
