@@ -30,18 +30,6 @@
 #define QMI_WLFW_MAC_READY_TIMEOUT_MS	50
 #define QMI_WLFW_MAC_READY_MAX_RETRY	200
 
-#ifdef CONFIG_CNSS2_DEBUG
-static bool ignore_qmi_failure;
-#define CNSS_QMI_ASSERT() CNSS_ASSERT(ignore_qmi_failure)
-void cnss_ignore_qmi_failure(bool ignore)
-{
-	ignore_qmi_failure = ignore;
-}
-#else
-#define CNSS_QMI_ASSERT() do { } while (0)
-void cnss_ignore_qmi_failure(bool ignore) { }
-#endif
-
 static char *cnss_qmi_mode_to_str(enum cnss_driver_mode mode)
 {
 	switch (mode) {
@@ -154,7 +142,7 @@ static int cnss_wlfw_ind_register_send_sync(struct cnss_plat_data *plat_priv)
 	return 0;
 
 out:
-	CNSS_QMI_ASSERT();
+	CNSS_ASSERT(0);
 
 qmi_registered:
 	kfree(req);
@@ -274,7 +262,7 @@ static int cnss_wlfw_host_cap_send_sync(struct cnss_plat_data *plat_priv)
 	return 0;
 
 out:
-	CNSS_QMI_ASSERT();
+	CNSS_ASSERT(0);
 	kfree(req);
 	kfree(resp);
 	return ret;
@@ -363,7 +351,7 @@ int cnss_wlfw_respond_mem_send_sync(struct cnss_plat_data *plat_priv)
 	return 0;
 
 out:
-	CNSS_QMI_ASSERT();
+	CNSS_ASSERT(0);
 	kfree(req);
 	kfree(resp);
 	return ret;
@@ -461,6 +449,10 @@ int cnss_wlfw_tgt_cap_send_sync(struct cnss_plat_data *plat_priv)
 	if (resp->otp_version_valid)
 		plat_priv->otp_version = resp->otp_version;
 
+	if (resp->fw_caps_valid)
+		plat_priv->fw_pcie_gen_switch =
+			!!(resp->fw_caps & QMI_WLFW_HOST_PCIE_GEN_SWITCH_V01);
+
 	cnss_pr_dbg("Target capability: chip_id: 0x%x, chip_family: 0x%x, board_id: 0x%x, soc_id: 0x%x, fw_version: 0x%x, fw_build_timestamp: %s, fw_build_id: %s, otp_version: 0x%x\n",
 		    plat_priv->chip_info.chip_id,
 		    plat_priv->chip_info.chip_family,
@@ -475,7 +467,7 @@ int cnss_wlfw_tgt_cap_send_sync(struct cnss_plat_data *plat_priv)
 	return 0;
 
 out:
-	CNSS_QMI_ASSERT();
+	CNSS_ASSERT(0);
 	kfree(req);
 	kfree(resp);
 	return ret;
@@ -692,8 +684,7 @@ err_send:
 		release_firmware(fw_entry);
 err_req_fw:
 	if (bdf_type != CNSS_BDF_REGDB)
-		CNSS_QMI_ASSERT();
-
+		CNSS_ASSERT(0);
 	kfree(req);
 	kfree(resp);
 	return ret;
@@ -770,7 +761,7 @@ int cnss_wlfw_m3_dnld_send_sync(struct cnss_plat_data *plat_priv)
 	return 0;
 
 out:
-	CNSS_QMI_ASSERT();
+	CNSS_ASSERT(0);
 	kfree(req);
 	kfree(resp);
 	return ret;
@@ -981,7 +972,7 @@ out:
 		cnss_pr_dbg("WLFW service is disconnected while sending mode off request\n");
 		ret = 0;
 	} else {
-		CNSS_QMI_ASSERT();
+		CNSS_ASSERT(0);
 	}
 	kfree(req);
 	kfree(resp);
@@ -1091,7 +1082,7 @@ int cnss_wlfw_wlan_cfg_send_sync(struct cnss_plat_data *plat_priv,
 	return 0;
 
 out:
-	CNSS_QMI_ASSERT();
+	CNSS_ASSERT(0);
 	kfree(req);
 	kfree(resp);
 	return ret;
@@ -1330,6 +1321,64 @@ int cnss_wlfw_ini_send_sync(struct cnss_plat_data *plat_priv,
 out:
 	kfree(req);
 	kfree(resp);
+	return ret;
+}
+
+int cnss_wlfw_send_pcie_gen_speed_sync(struct cnss_plat_data *plat_priv)
+{
+	struct wlfw_pcie_gen_switch_req_msg_v01 req;
+	struct wlfw_pcie_gen_switch_resp_msg_v01 resp;
+	struct qmi_txn txn;
+	int ret = 0;
+
+	if (!plat_priv)
+		return -ENODEV;
+
+	if (plat_priv->pcie_gen_speed == QMI_PCIE_GEN_SPEED_INVALID_V01 ||
+	    !plat_priv->fw_pcie_gen_switch) {
+		cnss_pr_dbg("PCIE Gen speed not setup\n");
+		return 0;
+	}
+
+	cnss_pr_dbg("Sending PCIE Gen speed: %d state: 0x%lx\n",
+		    plat_priv->pcie_gen_speed, plat_priv->driver_state);
+	req.pcie_speed = (enum wlfw_pcie_gen_speed_v01)
+			plat_priv->pcie_gen_speed;
+
+	ret = qmi_txn_init(&plat_priv->qmi_wlfw, &txn,
+			   wlfw_pcie_gen_switch_resp_msg_v01_ei, &resp);
+	if (ret < 0) {
+		cnss_pr_err("Failed to initialize txn for PCIE speed switch err: %d\n",
+			    ret);
+		goto out;
+	}
+
+	ret = qmi_send_request(&plat_priv->qmi_wlfw, NULL, &txn,
+			       QMI_WLFW_PCIE_GEN_SWITCH_REQ_V01,
+			       WLFW_PCIE_GEN_SWITCH_REQ_MSG_V01_MAX_MSG_LEN,
+			       wlfw_pcie_gen_switch_req_msg_v01_ei, &req);
+	if (ret < 0) {
+		qmi_txn_cancel(&txn);
+		cnss_pr_err("Failed to send PCIE speed switch, err: %d\n", ret);
+		goto out;
+	}
+
+	ret = qmi_txn_wait(&txn, QMI_WLFW_TIMEOUT_JF);
+	if (ret < 0) {
+		cnss_pr_err("Failed to wait for PCIE Gen switch resp, err: %d\n",
+			    ret);
+		goto out;
+	}
+
+	if (resp.resp.result != QMI_RESULT_SUCCESS_V01) {
+		cnss_pr_err("PCIE Gen Switch req failed, Speed: %d, result: %d, err: %d\n",
+			    plat_priv->pcie_gen_speed, resp.resp.result,
+			    resp.resp.error);
+		ret = -resp.resp.result;
+	}
+out:
+	/* Reset PCIE Gen speed after one time use */
+	plat_priv->pcie_gen_speed = QMI_PCIE_GEN_SPEED_INVALID_V01;
 	return ret;
 }
 
@@ -2150,7 +2199,7 @@ static int cnss_wlfw_connect_to_server(struct cnss_plat_data *plat_priv,
 	return 0;
 
 out:
-	CNSS_QMI_ASSERT();
+	CNSS_ASSERT(0);
 	kfree(data);
 	return ret;
 }
@@ -2166,8 +2215,6 @@ int cnss_wlfw_server_arrive(struct cnss_plat_data *plat_priv, void *data)
 		cnss_pr_err("Unexpected WLFW server arrive\n");
 		return -EINVAL;
 	}
-
-	cnss_ignore_qmi_failure(false);
 
 	ret = cnss_wlfw_connect_to_server(plat_priv, data);
 	if (ret < 0)
@@ -2192,8 +2239,6 @@ out:
 
 int cnss_wlfw_server_exit(struct cnss_plat_data *plat_priv)
 {
-	int ret;
-
 	if (!plat_priv)
 		return -ENODEV;
 
@@ -2202,15 +2247,6 @@ int cnss_wlfw_server_exit(struct cnss_plat_data *plat_priv)
 	cnss_pr_info("QMI WLFW service disconnected, state: 0x%lx\n",
 		     plat_priv->driver_state);
 
-	cnss_qmi_deinit(plat_priv);
-
-	clear_bit(CNSS_QMI_DEL_SERVER, &plat_priv->driver_state);
-
-	ret = cnss_qmi_init(plat_priv);
-	if (ret < 0) {
-		cnss_pr_err("QMI WLFW service registraton failed, ret\n", ret);
-		CNSS_ASSERT(0);
-	}
 	return 0;
 }
 
@@ -2220,13 +2256,6 @@ static int wlfw_new_server(struct qmi_handle *qmi_wlfw,
 	struct cnss_plat_data *plat_priv =
 		container_of(qmi_wlfw, struct cnss_plat_data, qmi_wlfw);
 	struct cnss_qmi_event_server_arrive_data *event_data;
-
-	if (plat_priv && test_bit(CNSS_QMI_DEL_SERVER,
-				  &plat_priv->driver_state)) {
-		cnss_pr_info("WLFW server delete in progress, Ignore server arrive, state: 0x%lx\n",
-			     plat_priv->driver_state);
-		return 0;
-	}
 
 	cnss_pr_dbg("WLFW server arriving: node %u port %u\n",
 		    service->node, service->port);
@@ -2250,19 +2279,7 @@ static void wlfw_del_server(struct qmi_handle *qmi_wlfw,
 	struct cnss_plat_data *plat_priv =
 		container_of(qmi_wlfw, struct cnss_plat_data, qmi_wlfw);
 
-	if (plat_priv && test_bit(CNSS_QMI_DEL_SERVER,
-				  &plat_priv->driver_state)) {
-		cnss_pr_info("WLFW server delete in progress, Ignore server delete, state: 0x%lx\n",
-			     plat_priv->driver_state);
-		return;
-	}
-
 	cnss_pr_dbg("WLFW server exiting\n");
-
-	if (plat_priv) {
-		cnss_ignore_qmi_failure(true);
-		set_bit(CNSS_QMI_DEL_SERVER, &plat_priv->driver_state);
-	}
 
 	cnss_driver_event_post(plat_priv, CNSS_DRIVER_EVENT_SERVER_EXIT,
 			       0, NULL);
