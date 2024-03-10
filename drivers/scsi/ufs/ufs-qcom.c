@@ -2718,6 +2718,13 @@ static void ufs_qcom_dump_dbg_regs(struct ufs_hba *hba, bool no_sleep)
 	udelay(1000);
 }
 
+#ifdef CONFIG_QCOM_WB
+static u32 ufs_qcom_get_user_cap_mode(struct ufs_hba *hba)
+{
+	return UFS_WB_BUFF_PRESERVE_USER_SPACE;
+}
+#endif
+
 /**
  * struct ufs_hba_qcom_vops - UFS QCOM specific variant operations
  *
