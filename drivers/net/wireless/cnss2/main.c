@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2016-2021, The Linux Foundation. All rights reserved. */
 
 #include <linux/delay.h>
 #include <linux/jiffies.h>
@@ -45,6 +45,7 @@
 #define CNSS_QMI_TIMEOUT_DEFAULT	10000
 #define CNSS_BDF_TYPE_DEFAULT		CNSS_BDF_ELF
 #define CNSS_TIME_SYNC_PERIOD_DEFAULT	900000
+#define CNSS_MIN_TIME_SYNC_PERIOD	2000
 
 static struct cnss_plat_data *plat_env;
 
@@ -757,6 +758,7 @@ EXPORT_SYMBOL(cnss_idle_restart);
 int cnss_idle_shutdown(struct device *dev)
 {
 	struct cnss_plat_data *plat_priv = cnss_bus_dev_to_plat_priv(dev);
+	unsigned int timeout;
 	int ret;
 
 	if (!plat_priv) {
@@ -1217,7 +1219,7 @@ void cnss_schedule_recovery(struct device *dev,
 }
 EXPORT_SYMBOL(cnss_schedule_recovery);
 
-int cnss_force_fw_assert(struct device *dev)
+int cnss_force_fw_assert_async(struct device *dev)
 {
 	struct cnss_plat_data *plat_priv = cnss_bus_dev_to_plat_priv(dev);
 
@@ -1241,7 +1243,44 @@ int cnss_force_fw_assert(struct device *dev)
 		return 0;
 	}
 
-	if (in_interrupt() || irqs_disabled())
+	cnss_pr_info("Force assert (async)\n");
+
+	cnss_driver_event_post(plat_priv,
+			       CNSS_DRIVER_EVENT_FORCE_FW_ASSERT,
+			       0, NULL);
+
+	return 0;
+}
+EXPORT_SYMBOL(cnss_force_fw_assert_async);
+
+int cnss_force_fw_assert(struct device *dev)
+{
+	struct cnss_plat_data *plat_priv = cnss_bus_dev_to_plat_priv(dev);
+    bool post = (in_interrupt() || irqs_disabled());
+
+	if (!plat_priv) {
+		cnss_pr_err("plat_priv is NULL\n");
+		return -ENODEV;
+	}
+
+	if (plat_priv->device_id == QCA6174_DEVICE_ID) {
+		cnss_pr_info("Forced FW assert is not supported\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (cnss_bus_is_device_down(plat_priv)) {
+		cnss_pr_info("Device is already in bad state, ignore force assert\n");
+		return 0;
+	}
+
+	if (test_bit(CNSS_DRIVER_RECOVERY, &plat_priv->driver_state)) {
+		cnss_pr_info("Recovery is already in progress, ignore forced FW assert\n");
+		return 0;
+	}
+
+	cnss_pr_info("Force assert (%s)\n", post ? "async" : "sync");
+
+	if (post)
 		cnss_driver_event_post(plat_priv,
 				       CNSS_DRIVER_EVENT_FORCE_FW_ASSERT,
 				       0, NULL);

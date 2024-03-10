@@ -80,5 +80,5 @@ usb_f_ss_mon_gadget-y             := f_ss_mon_gadget.o
 obj-$(CONFIG_USB_F_SS_MON_GADGET) += usb_f_ss_mon_gadget.o
 usb_f_qcrndis-y			:= f_qc_rndis.o u_data_ipa.o
 obj-$(CONFIG_USB_F_QCRNDIS)	+= usb_f_qcrndis.o
-usb_f_rmnet_bam-y               := f_rmnet.o u_ctrl_qti.o
+usb_f_rmnet_bam-y               := f_rmnet.o u_ctrl_qti.o u_bam_dmux.o
 obj-$(CONFIG_USB_F_RMNET_BAM)   += usb_f_rmnet_bam.o
