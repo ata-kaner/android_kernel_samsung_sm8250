@@ -374,4 +374,10 @@ static inline int kvm_arm_get_spectre_bhb_state(void)
 
 #define kvm_arm_vcpu_loaded(vcpu)	(false)
 
+static inline int kvm_arm_get_spectre_bhb_state(void)
+{
+	/* 32bit guests don't need firmware for this */
+	return SPECTRE_VULNERABLE; /* aka SMCCC_RET_NOT_SUPPORTED */
+}
+
 #endif /* __ARM_KVM_HOST_H__ */

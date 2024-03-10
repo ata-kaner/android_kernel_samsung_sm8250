@@ -80,3 +80,4 @@ obj-$(CONFIG_FPR_FPC)		+= fpr_FingerprintCard/
 
 obj-$(CONFIG_DEV_RIL_BRIDGE) += dev_ril_bridge.o
 obj-y                           += qrc/
+obj-$(CONFIG_KINECTICS_XR_NORDIC) += kxrctrl/

@@ -1605,6 +1605,7 @@ static void ipa3_q6_clnt_svc_arrive(struct work_struct *work)
 			return;
 		}
 		IPAWANERR("Exit from service arrive fun\n");
+		return;
 	}
 
 	if (rc != 0) {
