@@ -51,6 +51,7 @@ static struct device_attribute sec_battery_attrs[] = {
 	SEC_BATTERY_ATTR(blkt_temp_adc),
 	SEC_BATTERY_ATTR(batt_vf_adc),
 	SEC_BATTERY_ATTR(batt_slate_mode),
+    SEC_BATTERY_ATTR(charging_enabled),
 
 	SEC_BATTERY_ATTR(batt_lp_charging),
 	SEC_BATTERY_ATTR(siop_activated),
@@ -549,7 +550,10 @@ ssize_t sec_bat_show_attrs(struct device *dev,
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
 			is_slate_mode(battery));
 		break;
-
+    case CHARGING_ENABLED:
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
+			battery->charging_enabled);
+		break;
 	case BATT_LP_CHARGING:
 		if (lpcharge) {
 			i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n", lpcharge ? 1 : 0);
@@ -2040,6 +2044,22 @@ ssize_t sec_bat_store_attrs(
 			ret = count;
 		}
 		break;
+	case CHARGING_ENABLED:
+		if (sscanf(buf, "%10d\n", &x) == 1) {
+			if (x) {
+				battery->charging_enabled = true;
+			} else {
+				battery->charging_enabled = false;
+				battery->charging_suspended = true;
+			}
+			__pm_stay_awake(battery->parse_mode_dt_wake_lock);
+			queue_delayed_work(battery->monitor_wqueue,
+					&battery->parse_mode_dt_work, 0);
+			queue_delayed_work(battery->monitor_wqueue,
+						&battery->monitor_work, 0);
+			ret = count;
+		}
+		break;
 	case BATT_LP_CHARGING:
 		break;
 	case SIOP_ACTIVATED:
@@ -2484,7 +2504,7 @@ ssize_t sec_bat_store_attrs(
 			mutex_lock(&battery->init_soc_updatelock);
 			dev_err(battery->dev,
 					"%s: BATT_CAPACITY_MAX(%d), fg_reset(%d)\n", __func__, x, fg_reset);
-			if (!fg_reset && !battery->store_mode) {
+			if (!fg_reset && !battery->store_mode && battery->charging_enabled) {
 				value.intval = x;
 				psy_do_property(battery->pdata->fuelgauge_name, set,
 						POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN, value);
