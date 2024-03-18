@@ -18,6 +18,3 @@ menuconfig RMNET_ARGOS
 	depends on RMNET
 	---help---
 	  argos for rmnet driver
-
-source "drivers/net/ethernet/qualcomm/rmnet/shs/Kconfig"
-source "drivers/net/ethernet/qualcomm/rmnet/perf/Kconfig"
