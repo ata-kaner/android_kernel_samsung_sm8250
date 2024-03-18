@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2068,31 +2069,6 @@ QDF_STATUS policy_mgr_check_and_set_hw_mode_for_channel_switch(
 		uint32_t ch_freq, enum policy_mgr_conn_update_reason reason);
 
 /**
- * policy_mgr_set_do_hw_mode_change_flag() - Set flag to indicate hw mode change
- * @psoc: PSOC object information
- * @flag: Indicate if hw mode change is required or not
- *
- * Set the flag to indicate whether a hw mode change is required after a
- * vdev up or not. Flag value of true indicates that a hw mode change is
- * required after vdev up.
- *
- * Return: None
- */
-void policy_mgr_set_do_hw_mode_change_flag(struct wlan_objmgr_psoc *psoc,
-		bool flag);
-
-/**
- * policy_mgr_is_hw_mode_change_after_vdev_up() - Check if hw
- * mode change is needed
- * @psoc: PSOC object information
- * Returns the flag which indicates if a hw mode change is required after
- * vdev up.
- *
- * Return: True if hw mode change is required, false otherwise
- */
-bool policy_mgr_is_hw_mode_change_after_vdev_up(struct wlan_objmgr_psoc *psoc);
-
-/**
  * policy_mgr_checkn_update_hw_mode_single_mac_mode() - Set hw_mode to SMM
  * if required
  * @psoc: PSOC object information
@@ -2820,6 +2796,21 @@ QDF_STATUS policy_mgr_get_updated_scan_and_fw_mode_config(
 		uint32_t channel_select_logic_conc);
 
 /**
+ * policy_mgr_is_sta_present_on_dfs_channel() - to find whether any DFS STA is
+ *                                              present
+ * @psoc: PSOC object information
+ * @vdev_id: pointer to vdev_id. It will be filled with the vdev_id of DFS STA
+ * @ch_freq: pointer to channel frequency on which DFS STA is present
+ * @ch_width: pointer channel width on which DFS STA is connected
+ * If any STA is connected on DFS channel then this function will return true
+ *
+ * Return: true if session is on DFS or false if session is on non-dfs channel
+ */
+bool policy_mgr_is_sta_present_on_dfs_channel(struct wlan_objmgr_psoc *psoc,
+                         uint8_t *vdev_id,
+                         qdf_freq_t *ch_freq,
+                         enum hw_mode_bandwidth *ch_width);
+/**
  * policy_mgr_is_safe_channel - Check if the channel is in LTE
  * coex channel avoidance list
  * @psoc: PSOC object information
@@ -3027,6 +3018,16 @@ bool policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(
  * Return: true if sta is connected in 2g else false
  */
 bool policy_mgr_is_sta_connected_2g(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_is_connected_sta_5g() - check if sta connected in 5 GHz
+ * @psoc: pointer to soc
+ * @freq: Pointer to the frequency on which sta is connected
+ *
+ * Return: true if sta is connected in 5 GHz else false
+ */
+bool policy_mgr_is_connected_sta_5g(struct wlan_objmgr_psoc *psoc,
+                   qdf_freq_t *freq);
 
 /**
  * policy_mgr_scan_trim_5g_chnls_for_dfs_ap() - check if sta scan should skip
