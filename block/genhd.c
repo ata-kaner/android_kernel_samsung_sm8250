@@ -1148,7 +1148,6 @@ static ssize_t disk_ios_show(struct device *dev,
 	int ret;
 
 	cpu = part_stat_lock();
-	part_round_stats(disk->queue, cpu, hd);
 	part_stat_unlock();
 
 	new.ios[STAT_READ] = part_stat_read(hd, ios[STAT_READ]);
@@ -1252,7 +1251,6 @@ static ssize_t iobd_show(struct device *dev,
 	int idx, sg;
 
 	cpu = part_stat_lock();
-	part_round_stats(disk->queue, cpu, hd);
 	part_stat_unlock();
 
 	for (idx = 0; idx < FSYNC_TIME_GROUP_MAX; idx++)
@@ -1713,7 +1711,6 @@ static int iostats_show(struct seq_file *seqf, void *v)
 	disk_part_iter_init(&piter, gp, DISK_PITER_INCL_EMPTY_PART0);
 	while ((hd = disk_part_iter_next(&piter))) {
 		cpu = part_stat_lock();
-		part_round_stats(gp->queue, cpu, hd);
 		part_in_flight_rw(gp->queue, hd, inflight);
 		part_stat_unlock();
 		uptime = ktime_to_ns(ktime_get());
