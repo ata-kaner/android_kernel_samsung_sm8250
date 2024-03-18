@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -515,6 +515,8 @@ kgsl_mmu_unmap(struct kgsl_pagetable *pagetable,
 		size = kgsl_memdesc_footprint(memdesc);
 
 		ret = pagetable->pt_ops->mmu_unmap(pagetable, memdesc);
+		if (ret)
+			return ret;
 
 		atomic_dec(&pagetable->stats.entries);
 		atomic_long_sub(size, &pagetable->stats.mapped);
@@ -628,7 +630,7 @@ bool kgsl_mmu_gpuaddr_in_range(struct kgsl_pagetable *pagetable,
 {
 	if (PT_OP_VALID(pagetable, addr_in_range))
 		return pagetable->pt_ops->addr_in_range(pagetable,
-				gpuaddr, size);
+			 gpuaddr, size);
 
 	return false;
 }

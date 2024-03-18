@@ -537,12 +537,7 @@ static unsigned long sugov_get_util(struct sugov_cpu *sg_cpu)
 {
 	struct rq *rq = cpu_rq(sg_cpu->cpu);
 
-#ifdef CONFIG_SCHED_TUNE
-	unsigned long util = stune_util(sg_cpu->cpu, cpu_util_rt(rq), NULL);
-#else
-	unsigned long util = cpu_util_freq(sg_cpu->cpu, NULL);
-#endif
-	unsigned long util_cfs = util - cpu_util_rt(rq);
+	unsigned long util_cfs = cpu_util_cfs(rq);
 	unsigned long max = arch_scale_cpu_capacity(NULL, sg_cpu->cpu);
 
 	sg_cpu->max = max;

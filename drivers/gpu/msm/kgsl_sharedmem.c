@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -171,7 +172,18 @@ imported_mem_show(struct kgsl_process_private *priv,
 			}
 		}
 
-		kgsl_mem_entry_put(entry);
+		/*
+		 * If refcount on mem entry is the last refcount, we will
+		 * call kgsl_mem_entry_destroy and detach it from process
+		 * list. When there is no refcount on the process private,
+		 * we will call kgsl_destroy_process_private to do cleanup.
+		 * During cleanup, we will try to remove the same sysfs
+		 * node which is in use by the current thread and this
+		 * situation will end up in a deadloack.
+		 * To avoid this situation, use a worker to put the refcount
+		 * on mem entry.
+		 */
+		kgsl_mem_entry_put_deferred(entry);
 		spin_lock(&priv->mem_lock);
 	}
 	spin_unlock(&priv->mem_lock);
@@ -247,13 +259,9 @@ static ssize_t process_sysfs_store(struct kobject *kobj,
 	return -EIO;
 }
 
+/* Dummy release function - we have nothing to do here */
 static void process_sysfs_release(struct kobject *kobj)
 {
-	struct kgsl_process_private *priv;
-
-	priv = container_of(kobj, struct kgsl_process_private, kobj);
-	/* Put the refcount we got in kgsl_process_init_sysfs */
-	kgsl_process_private_put(priv);
 }
 
 static const struct sysfs_ops process_sysfs_ops = {
@@ -300,9 +308,6 @@ void kgsl_process_init_sysfs(struct kgsl_device *device,
 		struct kgsl_process_private *private)
 {
 	int i;
-
-	/* Keep private valid until the sysfs enries are removed. */
-	kgsl_process_private_get(private);
 
 	if (kobject_init_and_add(&private->kobj, &process_ktype,
 		kgsl_driver.prockobj, "%d", pid_nr(private->pid))) {
@@ -590,6 +595,9 @@ static int kgsl_unlock_sgt(struct sg_table *sgt)
 
 static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 {
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
+
 	kgsl_page_alloc_unmap_kernel(memdesc);
 	/* we certainly do not expect the hostptr to still be mapped */
 	BUG_ON(memdesc->hostptr);
@@ -689,6 +697,9 @@ static int kgsl_contiguous_vmfault(struct kgsl_memdesc *memdesc,
 static void kgsl_cma_coherent_free(struct kgsl_memdesc *memdesc)
 {
 	unsigned long attrs = 0;
+
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
 
 	if (memdesc->hostptr) {
 		if (memdesc->priv & KGSL_MEMDESC_SECURE) {
@@ -970,6 +981,7 @@ static int kgsl_memdesc_file_setup(struct kgsl_memdesc *memdesc, uint64_t size)
 			memdesc->shmem_filp = NULL;
 			return ret;
 		}
+		mapping_set_unevictable(memdesc->shmem_filp->f_mapping);
 	}
 
 	return 0;
@@ -1252,7 +1264,8 @@ void kgsl_sharedmem_free(struct kgsl_memdesc *memdesc)
 
 	if (memdesc->sgt) {
 		sg_free_table(memdesc->sgt);
-		kvfree(memdesc->sgt);
+		kfree(memdesc->sgt);
+		memdesc->sgt = NULL;
 	}
 
 	memdesc->page_count = 0;

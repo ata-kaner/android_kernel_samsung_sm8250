@@ -4,11 +4,11 @@
  *
  *  Copyright (c) 2020 Sony Interactive Entertainment
  */
-
 #include <linux/bits.h>
 #include <linux/crc32.h>
 #include <linux/device.h>
 #include <linux/hid.h>
+#include <linux/idr.h>
 #include <linux/input/mt.h>
 #include <linux/module.h>
 
@@ -20,6 +20,8 @@
 static DEFINE_MUTEX(ps_devices_lock);
 static LIST_HEAD(ps_devices_list);
 
+static DEFINE_IDA(ps_player_id_allocator);
+
 #define HID_PLAYSTATION_VERSION_PATCH 0x8000
 
 /* Base class for playstation devices. */
@@ -28,17 +30,23 @@ struct ps_device {
 	struct hid_device *hdev;
 	spinlock_t lock;
 
+	uint32_t player_id;
+
 	struct power_supply_desc battery_desc;
 	struct power_supply *battery;
 	uint8_t battery_capacity;
 	int battery_status;
-
 	uint8_t mac_address[6]; /* Note: stored in little endian order. */
-
+	int32_t hw_version;
+	int32_t fw_version;
 	int (*parse_report)(struct ps_device *dev, struct hid_report *report, u8 *data, int size);
 };
 
-/* Calibration data for playstation motion sensors. */
+/* Seed values for DualShock4 / DualSense CRC32 for different report types. */
+#define PS_INPUT_CRC32_SEED    0xA1
+#define PS_OUTPUT_CRC32_SEED   0xA2
+#define PS_FEATURE_CRC32_SEED  0xA3
+
 struct ps_calibration_data {
 	int abs_code;
 	short bias;
@@ -46,24 +54,24 @@ struct ps_calibration_data {
 	int sens_denom;
 };
 
-/* Seed values for DualShock4 / DualSense CRC32 for different report types. */
-#define PS_INPUT_CRC32_SEED	0xA1
-#define PS_OUTPUT_CRC32_SEED	0xA2
-#define PS_FEATURE_CRC32_SEED	0xA3
-
 #define DS_INPUT_REPORT_USB			0x01
 #define DS_INPUT_REPORT_USB_SIZE		64
-#define DS_INPUT_REPORT_BT			0x31
-#define DS_INPUT_REPORT_BT_SIZE			78
-#define DS_OUTPUT_REPORT_USB			0x02
-#define DS_OUTPUT_REPORT_USB_SIZE		63
-#define DS_OUTPUT_REPORT_BT			0x31
-#define DS_OUTPUT_REPORT_BT_SIZE		78
 
-#define DS_FEATURE_REPORT_CALIBRATION		0x05
-#define DS_FEATURE_REPORT_CALIBRATION_SIZE	41
-#define DS_FEATURE_REPORT_PAIRING_INFO		0x09
-#define DS_FEATURE_REPORT_PAIRING_INFO_SIZE	20
+#define DS_FEATURE_REPORT_CALIBRATION          0x05
+#define DS_FEATURE_REPORT_CALIBRATION_SIZE     41
+
+#define DS_INPUT_REPORT_BT                     0x31
+#define DS_INPUT_REPORT_BT_SIZE                        78
+#define DS_OUTPUT_REPORT_USB                   0x02
+#define DS_OUTPUT_REPORT_USB_SIZE              63
+#define DS_OUTPUT_REPORT_BT                    0x31
+#define DS_OUTPUT_REPORT_BT_SIZE               78
+
+#define DS_FEATURE_REPORT_PAIRING_INFO         0x09
+#define DS_FEATURE_REPORT_PAIRING_INFO_SIZE    20
+
+#define DS_FEATURE_REPORT_FIRMWARE_INFO                0x20
+#define DS_FEATURE_REPORT_FIRMWARE_INFO_SIZE   64
 
 /* Button masks for DualSense input report. */
 #define DS_BUTTONS0_HAT_SWITCH	GENMASK(3, 0)
@@ -81,6 +89,7 @@ struct ps_calibration_data {
 #define DS_BUTTONS1_R3		BIT(7)
 #define DS_BUTTONS2_PS_HOME	BIT(0)
 #define DS_BUTTONS2_TOUCHPAD	BIT(1)
+#define DS_BUTTONS2_MIC_MUTE	BIT(2)
 
 /* Status field of DualSense input report. */
 #define DS_STATUS_BATTERY_CAPACITY	GENMASK(3, 0)
@@ -88,25 +97,34 @@ struct ps_calibration_data {
 #define DS_STATUS_CHARGING_SHIFT	4
 
 /*
- * Status of a DualSense touch point contact.
- * Contact IDs, with highest bit set are 'inactive'
- * and any associated data is then invalid.
- */
++ * Status of a DualSense touch point contact.
++ * Contact IDs, with highest bit set are 'inactive'
++ * and any associated data is then invalid.
++ */
 #define DS_TOUCH_POINT_INACTIVE BIT(7)
 
- /* Magic value required in tag field of Bluetooth output report. */
+/* Magic value required in tag field of Bluetooth output report. */
 #define DS_OUTPUT_TAG 0x10
 /* Flags for DualSense output report. */
 #define DS_OUTPUT_VALID_FLAG0_COMPATIBLE_VIBRATION BIT(0)
 #define DS_OUTPUT_VALID_FLAG0_HAPTICS_SELECT BIT(1)
+#define DS_OUTPUT_VALID_FLAG1_MIC_MUTE_LED_CONTROL_ENABLE BIT(0)
+#define DS_OUTPUT_VALID_FLAG1_POWER_SAVE_CONTROL_ENABLE BIT(1)
+#define DS_OUTPUT_VALID_FLAG1_LIGHTBAR_CONTROL_ENABLE BIT(2)
+#define DS_OUTPUT_VALID_FLAG1_RELEASE_LEDS BIT(3)
+#define DS_OUTPUT_VALID_FLAG1_PLAYER_INDICATOR_CONTROL_ENABLE BIT(4)
+#define DS_OUTPUT_VALID_FLAG2_LIGHTBAR_SETUP_CONTROL_ENABLE BIT(1)
+#define DS_OUTPUT_POWER_SAVE_CONTROL_MIC_MUTE BIT(4)
+#define DS_OUTPUT_LIGHTBAR_SETUP_LIGHT_OUT BIT(1)
+
+#define DS_ACC_RES_PER_G       8192
+#define DS_ACC_RANGE           (4*DS_ACC_RES_PER_G)
+#define DS_GYRO_RES_PER_DEG_S  1024
+#define DS_GYRO_RANGE          (2048*DS_GYRO_RES_PER_DEG_S)
 
 /* DualSense hardware limits */
-#define DS_ACC_RES_PER_G	8192
-#define DS_ACC_RANGE		(4*DS_ACC_RES_PER_G)
-#define DS_GYRO_RES_PER_DEG_S	1024
-#define DS_GYRO_RANGE		(2048*DS_GYRO_RES_PER_DEG_S)
-#define DS_TOUCHPAD_WIDTH	1920
-#define DS_TOUCHPAD_HEIGHT	1080
+#define DS_TOUCHPAD_WIDTH      1920
+#define DS_TOUCHPAD_HEIGHT     1080
 
 struct dualsense {
 	struct ps_device base;
@@ -117,7 +135,6 @@ struct dualsense {
 	/* Calibration data for accelerometer and gyroscope. */
 	struct ps_calibration_data accel_calib_data[3];
 	struct ps_calibration_data gyro_calib_data[3];
-
 	/* Timestamp for sensor data */
 	bool sensor_timestamp_initialized;
 	uint32_t prev_sensor_timestamp;
@@ -127,6 +144,22 @@ struct dualsense {
 	bool update_rumble;
 	uint8_t motor_left;
 	uint8_t motor_right;
+
+	/* RGB lightbar */
+	bool update_lightbar;
+	uint8_t lightbar_red;
+	uint8_t lightbar_green;
+	uint8_t lightbar_blue;
+
+	/* Microphone */
+	bool update_mic_mute;
+	bool mic_muted;
+	bool last_btn_mic_state;
+
+	/* Player leds */
+	bool update_player_leds;
+	uint8_t player_leds_state;
+	struct led_classdev player_leds[5];
 
 	struct work_struct output_worker;
 	void *output_report_dmabuf;
@@ -138,29 +171,6 @@ struct dualsense_touch_point {
 	uint8_t x_lo;
 	uint8_t x_hi:4, y_lo:4;
 	uint8_t y_hi;
-} __packed;
-
-/* Main DualSense input report excluding any BT/USB specific headers. */
-struct dualsense_input_report {
-	uint8_t x, y;
-	uint8_t rx, ry;
-	uint8_t z, rz;
-	uint8_t seq_number;
-	uint8_t buttons[4];
-	uint8_t reserved[4];
-
-	/* Motion sensors */
-	__le16 gyro[3]; /* x, y, z */
-	__le16 accel[3]; /* x, y, z */
-	__le32 sensor_timestamp;
-	uint8_t reserved2;
-
-	/* Touchpad */
-	struct dualsense_touch_point points[2];
-
-	uint8_t reserved3[12];
-	uint8_t status;
-	uint8_t reserved4[10];
 } __packed;
 
 /* Common data between DualSense BT/USB main output report. */
@@ -206,21 +216,47 @@ struct dualsense_output_report_usb {
 } __packed;
 
 /*
- * The DualSense has a main output report used to control most features. It is
- * largely the same between Bluetooth and USB except for different headers and CRC.
- * This structure hide the differences between the two to simplify sending output reports.
+ * The DualSense has a main output report used to control most features.
+ * It is largely the same between Bluetooth and USB except for different
+ * headers and CRC. This structure hide the differences between the two to
+ * simplify sending output reports.
  */
 struct dualsense_output_report {
 	uint8_t *data; /* Start of data */
 	uint8_t len; /* Size of output report */
 
-	/* Points to Bluetooth data payload in case for a Bluetooth report else NULL. */
+	/* Points to Bluetooth data payload
+	 * in case for a Bluetooth report else NULL.
+	 */
 	struct dualsense_output_report_bt *bt;
 	/* Points to USB data payload in case for a USB report else NULL. */
 	struct dualsense_output_report_usb *usb;
 	/* Points to common section of report, so past any headers. */
 	struct dualsense_output_report_common *common;
 };
+
+/* Main DualSense input report excluding any BT/USB specific headers. */
+struct dualsense_input_report {
+	uint8_t x, y;
+	uint8_t rx, ry;
+	uint8_t z, rz;
+	uint8_t seq_number;
+	uint8_t buttons[4];
+	uint8_t reserved[4];
+
+	/* Motion sensors */
+	__le16 gyro[3]; /* x, y, z */
+	__le16 accel[3]; /* x, y, z */
+	__le32 sensor_timestamp;
+	uint8_t reserved2;
+
+	/* Touchpad */
+	struct dualsense_touch_point points[2];
+
+	uint8_t reserved3[12];
+	uint8_t status;
+	uint8_t reserved4[10];
+} __packed;
 
 /*
  * Common gamepad buttons across DualShock 3 / 4 and DualSense.
@@ -280,6 +316,24 @@ static int ps_devices_list_remove(struct ps_device *dev)
 	return 0;
 }
 
+static int ps_device_set_player_id(struct ps_device *dev)
+{
+	int ret = ida_alloc(&ps_player_id_allocator, GFP_KERNEL);
+
+	if (ret < 0)
+		return ret;
+
+	dev->player_id = ret;
+	return 0;
+}
+
+static void ps_device_release_player_id(struct ps_device *dev)
+{
+	ida_free(&ps_player_id_allocator, dev->player_id);
+
+	dev->player_id = U32_MAX;
+}
+
 static struct input_dev *ps_allocate_input_dev(struct hid_device *hdev, const char *name_suffix)
 {
 	struct input_dev *input_dev;
@@ -308,6 +362,17 @@ static struct input_dev *ps_allocate_input_dev(struct hid_device *hdev, const ch
 	return input_dev;
 }
 
+/* Compute crc32 of HID data and compare against expected CRC. */
+static bool ps_check_crc32(uint8_t seed, uint8_t *data, size_t len, uint32_t report_crc)
+{
+	uint32_t crc;
+
+	crc = crc32_le(0xFFFFFFFF, &seed, 1);
+	crc = ~crc32_le(crc, data, len);
+
+	return crc == report_crc;
+}
+
 static enum power_supply_property ps_power_supply_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
@@ -316,14 +381,14 @@ static enum power_supply_property ps_power_supply_props[] = {
 };
 
 static int ps_battery_get_property(struct power_supply *psy,
-		enum power_supply_property psp,
-		union power_supply_propval *val)
+               enum power_supply_property psp,
+               union power_supply_propval *val)
 {
 	struct ps_device *dev = power_supply_get_drvdata(psy);
 	uint8_t battery_capacity;
 	int battery_status;
 	unsigned long flags;
-	int ret;
+	int ret = 0;
 
 	spin_lock_irqsave(&dev->lock, flags);
 	battery_capacity = dev->battery_capacity;
@@ -348,7 +413,7 @@ static int ps_battery_get_property(struct power_supply *psy,
 		break;
 	}
 
-	return 0;
+	return ret;
 }
 
 static int ps_device_register_battery(struct ps_device *dev)
@@ -362,7 +427,7 @@ static int ps_device_register_battery(struct ps_device *dev)
 	dev->battery_desc.num_properties = ARRAY_SIZE(ps_power_supply_props);
 	dev->battery_desc.get_property = ps_battery_get_property;
 	dev->battery_desc.name = devm_kasprintf(&dev->hdev->dev, GFP_KERNEL,
-			"ps-controller-battery-%pMR", dev->mac_address);
+		"ps-controller-battery-%pMR", dev->mac_address);
 	if (!dev->battery_desc.name)
 		return -ENOMEM;
 
@@ -383,19 +448,8 @@ static int ps_device_register_battery(struct ps_device *dev)
 	return 0;
 }
 
-/* Compute crc32 of HID data and compare against expected CRC. */
-static bool ps_check_crc32(uint8_t seed, uint8_t *data, size_t len, uint32_t report_crc)
-{
-	uint32_t crc;
-
-	crc = crc32_le(0xFFFFFFFF, &seed, 1);
-	crc = ~crc32_le(crc, data, len);
-
-	return crc == report_crc;
-}
-
 static struct input_dev *ps_gamepad_create(struct hid_device *hdev,
-		int (*play_effect)(struct input_dev *, void *, struct ff_effect *))
+	int (*play_effect)(struct input_dev *, void *, struct ff_effect *))
 {
 	struct input_dev *gamepad;
 	unsigned int i;
@@ -432,24 +486,25 @@ static struct input_dev *ps_gamepad_create(struct hid_device *hdev,
 	return gamepad;
 }
 
-static int ps_get_report(struct hid_device *hdev, uint8_t report_id, uint8_t *buf, size_t size)
+static int ps_get_report(struct hid_device *hdev, uint8_t report_id,
+		uint8_t *buf, size_t size)
 {
 	int ret;
 
 	ret = hid_hw_raw_request(hdev, report_id, buf, size, HID_FEATURE_REPORT,
-				 HID_REQ_GET_REPORT);
+				HID_REQ_GET_REPORT);
 	if (ret < 0) {
-		hid_err(hdev, "Failed to retrieve feature with reportID %d: %d\n", report_id, ret);
+		hid_err(hdev, "Failed to retrieve: reportID %d: %d\n", report_id, ret);
 		return ret;
 	}
 
 	if (ret != size) {
-		hid_err(hdev, "Invalid byte count transferred, expected %zu got %d\n", size, ret);
+		hid_err(hdev, "Invalid byte count, expected %zu got %d\n", size, ret);
 		return -EINVAL;
 	}
 
 	if (buf[0] != report_id) {
-		hid_err(hdev, "Invalid reportID received, expected %d got %d\n", report_id, buf[0]);
+		hid_err(hdev, "Invalid reportID: expected %d got %d\n", report_id, buf[0]);
 		return -EINVAL;
 	}
 
@@ -467,8 +522,8 @@ static int ps_get_report(struct hid_device *hdev, uint8_t report_id, uint8_t *bu
 	return 0;
 }
 
-static struct input_dev *ps_sensors_create(struct hid_device *hdev, int accel_range, int accel_res,
-		int gyro_range, int gyro_res)
+static struct input_dev *ps_sensors_create(struct hid_device *hdev,
+		int accel_range, int accel_res, int gyro_range, int gyro_res)
 {
 	struct input_dev *sensors;
 	int ret;
@@ -532,6 +587,40 @@ static struct input_dev *ps_touchpad_create(struct hid_device *hdev, int width, 
 	return touchpad;
 }
 
+static ssize_t firmware_version_show(struct device *dev,
+				struct device_attribute
+				*attr, char *buf)
+{
+	struct hid_device *hdev = to_hid_device(dev);
+	struct ps_device *ps_dev = hid_get_drvdata(hdev);
+
+	return scnprintf(buf, PAGE_SIZE, "0x%08x\n", ps_dev->fw_version);
+}
+
+static DEVICE_ATTR_RO(firmware_version);
+
+static ssize_t hardware_version_show(struct device *dev,
+				struct device_attribute
+				*attr, char *buf)
+{
+	struct hid_device *hdev = to_hid_device(dev);
+	struct ps_device *ps_dev = hid_get_drvdata(hdev);
+
+	return scnprintf(buf, PAGE_SIZE, "0x%08x\n", ps_dev->hw_version);
+}
+
+static DEVICE_ATTR_RO(hardware_version);
+
+static struct attribute *ps_device_attributes[] = {
+	&dev_attr_firmware_version.attr,
+	&dev_attr_hardware_version.attr,
+	NULL
+};
+
+static const struct attribute_group ps_device_attribute_group = {
+	.attrs = ps_device_attributes,
+};
+
 static int dualsense_get_calibration_data(struct dualsense *ds)
 {
 	short gyro_pitch_bias, gyro_pitch_plus, gyro_pitch_minus;
@@ -553,7 +642,7 @@ static int dualsense_get_calibration_data(struct dualsense *ds)
 	ret = ps_get_report(ds->base.hdev, DS_FEATURE_REPORT_CALIBRATION, buf,
 			DS_FEATURE_REPORT_CALIBRATION_SIZE);
 	if (ret) {
-		hid_err(ds->base.hdev, "Failed to retrieve DualSense calibration info: %d\n", ret);
+		hid_err(ds->base.hdev, "Failed: DualSense cal info: %d\n", ret);
 		goto err_free;
 	}
 
@@ -622,6 +711,30 @@ err_free:
 	return ret;
 }
 
+static int dualsense_get_firmware_info(struct dualsense *ds)
+{
+	uint8_t *buf;
+	int ret;
+
+	buf = kzalloc(DS_FEATURE_REPORT_FIRMWARE_INFO_SIZE, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	ret = ps_get_report(ds->base.hdev, DS_FEATURE_REPORT_FIRMWARE_INFO, buf,
+			DS_FEATURE_REPORT_FIRMWARE_INFO_SIZE);
+	if (ret) {
+		hid_err(ds->base.hdev, "Failed to retrieve DualSense firmware info: %d\n", ret);
+		goto err_free;
+	}
+
+	ds->base.hw_version = get_unaligned_le32(&buf[24]);
+	ds->base.fw_version = get_unaligned_le32(&buf[28]);
+
+err_free:
+	kfree(buf);
+	return ret;
+}
+
 static int dualsense_get_mac_address(struct dualsense *ds)
 {
 	uint8_t *buf;
@@ -634,7 +747,7 @@ static int dualsense_get_mac_address(struct dualsense *ds)
 	ret = ps_get_report(ds->base.hdev, DS_FEATURE_REPORT_PAIRING_INFO, buf,
 			DS_FEATURE_REPORT_PAIRING_INFO_SIZE);
 	if (ret) {
-		hid_err(ds->base.hdev, "Failed to retrieve DualSense pairing info: %d\n", ret);
+		hid_err(ds->base.hdev, "Failed to retrieve DualSense pair: %d\n", ret);
 		goto err_free;
 	}
 
@@ -645,8 +758,8 @@ err_free:
 	return ret;
 }
 
-static void dualsense_init_output_report(struct dualsense *ds, struct dualsense_output_report *rp,
-		void *buf)
+static void dualsense_init_output_report(struct dualsense *ds,
+		struct dualsense_output_report *rp, void *buf)
 {
 	struct hid_device *hdev = ds->base.hdev;
 
@@ -655,11 +768,12 @@ static void dualsense_init_output_report(struct dualsense *ds, struct dualsense_
 
 		memset(bt, 0, sizeof(*bt));
 		bt->report_id = DS_OUTPUT_REPORT_BT;
-		bt->tag = DS_OUTPUT_TAG; /* Tag must be set. Exact meaning is unclear. */
+		bt->tag = DS_OUTPUT_TAG; /* Tag to be set. It is unclear. */
 
 		/*
-		 * Highest 4-bit is a sequence number, which needs to be increased
-		 * every report. Lowest 4-bit is tag and can be zero for now.
+		 * Highest 4-bit is a sequence number, which needs to be
+		 * increased every report. Lowest 4-bit is tag and can be
+		 * zero for now.
 		 */
 		bt->seq_tag = (ds->output_seq << 4) | 0x0;
 		if (++ds->output_seq == 16)
@@ -685,15 +799,17 @@ static void dualsense_init_output_report(struct dualsense *ds, struct dualsense_
 }
 
 /*
- * Helper function to send DualSense output reports. Applies a CRC at the end of a report
- * for Bluetooth reports.
+ * Helper function to send DualSense output reports. Applies a CRC
+ *  at the end of a report for Bluetooth reports.
  */
 static void dualsense_send_output_report(struct dualsense *ds,
 		struct dualsense_output_report *report)
 {
 	struct hid_device *hdev = ds->base.hdev;
 
-	/* Bluetooth packets need to be signed with a CRC in the last 4 bytes. */
+	/* Bluetooth packets need to be signed
+	 * with a CRC in the last 4 bytes.
+	 */
 	if (report->bt) {
 		uint32_t crc;
 		uint8_t seed = PS_OUTPUT_CRC32_SEED;
@@ -709,7 +825,8 @@ static void dualsense_send_output_report(struct dualsense *ds,
 
 static void dualsense_output_worker(struct work_struct *work)
 {
-	struct dualsense *ds = container_of(work, struct dualsense, output_worker);
+	struct dualsense *ds = container_of(work, struct dualsense,
+		output_worker);
 	struct dualsense_output_report report;
 	struct dualsense_output_report_common *common;
 	unsigned long flags;
@@ -722,10 +839,49 @@ static void dualsense_output_worker(struct work_struct *work)
 	if (ds->update_rumble) {
 		/* Select classic rumble style haptics and enable it. */
 		common->valid_flag0 |= DS_OUTPUT_VALID_FLAG0_HAPTICS_SELECT;
-		common->valid_flag0 |= DS_OUTPUT_VALID_FLAG0_COMPATIBLE_VIBRATION;
+		common->valid_flag0 |=
+				DS_OUTPUT_VALID_FLAG0_COMPATIBLE_VIBRATION;
 		common->motor_left = ds->motor_left;
 		common->motor_right = ds->motor_right;
 		ds->update_rumble = false;
+	}
+
+	if (ds->update_lightbar) {
+		common->valid_flag1 |= DS_OUTPUT_VALID_FLAG1_LIGHTBAR_CONTROL_ENABLE;
+		common->lightbar_red = ds->lightbar_red;
+		common->lightbar_green = ds->lightbar_green;
+		common->lightbar_blue = ds->lightbar_blue;
+
+		ds->update_lightbar = false;
+	}
+
+	if (ds->update_player_leds) {
+		common->valid_flag1 |= DS_OUTPUT_VALID_FLAG1_PLAYER_INDICATOR_CONTROL_ENABLE;
+		common->player_leds = ds->player_leds_state;
+
+		ds->update_player_leds = false;
+	}
+
+	if (ds->update_mic_mute) {
+		common->valid_flag1 |=
+			DS_OUTPUT_VALID_FLAG1_MIC_MUTE_LED_CONTROL_ENABLE;
+		common->mute_button_led = ds->mic_muted;
+
+		if (ds->mic_muted) {
+			/* Disable microphone */
+			common->valid_flag1 |=
+				DS_OUTPUT_VALID_FLAG1_POWER_SAVE_CONTROL_ENABLE;
+			common->power_save_control |=
+				DS_OUTPUT_POWER_SAVE_CONTROL_MIC_MUTE;
+		} else {
+			/* Enable microphone */
+			common->valid_flag1 |=
+				DS_OUTPUT_VALID_FLAG1_POWER_SAVE_CONTROL_ENABLE;
+			common->power_save_control &=
+				~DS_OUTPUT_POWER_SAVE_CONTROL_MIC_MUTE;
+		}
+
+		ds->update_mic_mute = false;
 	}
 
 	spin_unlock_irqrestore(&ds->base.lock, flags);
@@ -733,16 +889,17 @@ static void dualsense_output_worker(struct work_struct *work)
 	dualsense_send_output_report(ds, &report);
 }
 
-static int dualsense_parse_report(struct ps_device *ps_dev, struct hid_report *report,
-		u8 *data, int size)
+static int dualsense_parse_report(struct ps_device *ps_dev,
+		struct hid_report *report, u8 *data, int size)
 {
 	struct hid_device *hdev = ps_dev->hdev;
 	struct dualsense *ds = container_of(ps_dev, struct dualsense, base);
 	struct dualsense_input_report *ds_report;
 	uint8_t battery_data, battery_capacity, charging_status, value;
 	int battery_status;
-	uint32_t sensor_timestamp;
 	unsigned long flags;
+	bool btn_mic_state;
+	uint32_t sensor_timestamp;
 	int i;
 
 	/*
@@ -753,12 +910,14 @@ static int dualsense_parse_report(struct ps_device *ps_dev, struct hid_report *r
 	if (hdev->bus == BUS_USB && report->id == DS_INPUT_REPORT_USB &&
 			size == DS_INPUT_REPORT_USB_SIZE) {
 		ds_report = (struct dualsense_input_report *)&data[1];
-	} else if (hdev->bus == BUS_BLUETOOTH && report->id == DS_INPUT_REPORT_BT &&
+	} else if (hdev->bus == BUS_BLUETOOTH &&
+		report->id == DS_INPUT_REPORT_BT &&
 			size == DS_INPUT_REPORT_BT_SIZE) {
 		/* Last 4 bytes of input report contain crc32 */
 		uint32_t report_crc = get_unaligned_le32(&data[size - 4]);
 
-		if (!ps_check_crc32(PS_INPUT_CRC32_SEED, data, size - 4, report_crc)) {
+		if (!ps_check_crc32(PS_INPUT_CRC32_SEED, data, size - 4,
+			report_crc)) {
 			hid_err(hdev, "DualSense input CRC's check failed\n");
 			return -EILSEQ;
 		}
@@ -777,7 +936,7 @@ static int dualsense_parse_report(struct ps_device *ps_dev, struct hid_report *r
 	input_report_abs(ds->gamepad, ABS_RZ, ds_report->rz);
 
 	value = ds_report->buttons[0] & DS_BUTTONS0_HAT_SWITCH;
-	if (value > ARRAY_SIZE(ps_gamepad_hat_mapping))
+	if (value >= ARRAY_SIZE(ps_gamepad_hat_mapping))
 		value = 8; /* center */
 	input_report_abs(ds->gamepad, ABS_HAT0X, ps_gamepad_hat_mapping[value].x);
 	input_report_abs(ds->gamepad, ABS_HAT0Y, ps_gamepad_hat_mapping[value].y);
@@ -797,6 +956,24 @@ static int dualsense_parse_report(struct ps_device *ps_dev, struct hid_report *r
 	input_report_key(ds->gamepad, BTN_MODE,   ds_report->buttons[2] & DS_BUTTONS2_PS_HOME);
 	input_sync(ds->gamepad);
 
+	/*
+	 * The DualSense has an internal microphone, which can bemuted
+	 * through a mute button on the device. The driver is expected
+	 * to read the button state and program the device
+	 * to mute/unmute audio at the hardware level.
+	 */
+	btn_mic_state = !!(ds_report->buttons[2] & DS_BUTTONS2_MIC_MUTE);
+	if (btn_mic_state && !ds->last_btn_mic_state) {
+		spin_lock_irqsave(&ps_dev->lock, flags);
+		ds->update_mic_mute = true;
+		ds->mic_muted = !ds->mic_muted; /* toggle */
+		spin_unlock_irqrestore(&ps_dev->lock, flags);
+
+		/* Schedule updating of microphone state at hardware level. */
+		schedule_work(&ds->output_worker);
+	}
+	ds->last_btn_mic_state = btn_mic_state;
+
 	/* Parse and calibrate gyroscope data. */
 	for (i = 0; i < ARRAY_SIZE(ds_report->gyro); i++) {
 		int raw_data = (short)le16_to_cpu(ds_report->gyro[i]);
@@ -804,7 +981,8 @@ static int dualsense_parse_report(struct ps_device *ps_dev, struct hid_report *r
 					   raw_data - ds->gyro_calib_data[i].bias,
 					   ds->gyro_calib_data[i].sens_denom);
 
-		input_report_abs(ds->sensors, ds->gyro_calib_data[i].abs_code, calib_data);
+		input_report_abs(ds->sensors, ds->gyro_calib_data[i].abs_code,
+					calib_data);
 	}
 
 	/* Parse and calibrate accelerometer data. */
@@ -814,30 +992,35 @@ static int dualsense_parse_report(struct ps_device *ps_dev, struct hid_report *r
 					   raw_data - ds->accel_calib_data[i].bias,
 					   ds->accel_calib_data[i].sens_denom);
 
-		input_report_abs(ds->sensors, ds->accel_calib_data[i].abs_code, calib_data);
+		input_report_abs(ds->sensors, ds->accel_calib_data[i].abs_code,
+					calib_data);
 	}
 
 	/* Convert timestamp (in 0.33us unit) to timestamp_us */
 	sensor_timestamp = le32_to_cpu(ds_report->sensor_timestamp);
 	if (!ds->sensor_timestamp_initialized) {
-		ds->sensor_timestamp_us = DIV_ROUND_CLOSEST(sensor_timestamp, 3);
+		ds->sensor_timestamp_us =
+				DIV_ROUND_CLOSEST(sensor_timestamp, 3);
 		ds->sensor_timestamp_initialized = true;
 	} else {
 		uint32_t delta;
 
 		if (ds->prev_sensor_timestamp > sensor_timestamp)
-			delta = (U32_MAX - ds->prev_sensor_timestamp + sensor_timestamp + 1);
+			delta = (U32_MAX - ds->prev_sensor_timestamp +
+					sensor_timestamp + 1);
 		else
 			delta = sensor_timestamp - ds->prev_sensor_timestamp;
 		ds->sensor_timestamp_us += DIV_ROUND_CLOSEST(delta, 3);
 	}
 	ds->prev_sensor_timestamp = sensor_timestamp;
-	input_event(ds->sensors, EV_MSC, MSC_TIMESTAMP, ds->sensor_timestamp_us);
+	input_event(ds->sensors, EV_MSC, MSC_TIMESTAMP,
+			ds->sensor_timestamp_us);
 	input_sync(ds->sensors);
 
 	for (i = 0; i < ARRAY_SIZE(ds_report->points); i++) {
 		struct dualsense_touch_point *point = &ds_report->points[i];
-		bool active = (point->contact & DS_TOUCH_POINT_INACTIVE) ? false : true;
+		bool active = (point->contact &
+			DS_TOUCH_POINT_INACTIVE) ? false : true;
 
 		input_mt_slot(ds->touchpad, i);
 		input_mt_report_slot_state(ds->touchpad, MT_TOOL_FINGER, active);
@@ -893,7 +1076,8 @@ static int dualsense_parse_report(struct ps_device *ps_dev, struct hid_report *r
 	return 0;
 }
 
-static int dualsense_play_effect(struct input_dev *dev, void *data, struct ff_effect *effect)
+static int dualsense_play_effect(struct input_dev *dev,
+		void *data, struct ff_effect *effect)
 {
 	struct hid_device *hdev = input_get_drvdata(dev);
 	struct dualsense *ds = hid_get_drvdata(hdev);
@@ -910,6 +1094,64 @@ static int dualsense_play_effect(struct input_dev *dev, void *data, struct ff_ef
 
 	schedule_work(&ds->output_worker);
 	return 0;
+}
+
+static int dualsense_reset_leds(struct dualsense *ds)
+{
+	struct dualsense_output_report report;
+	uint8_t *buf;
+
+	buf = kzalloc(sizeof(struct dualsense_output_report_bt), GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	dualsense_init_output_report(ds, &report, buf);
+	/*
+	 * On Bluetooth the DualSense outputs an animation on the lightbar
+	 * during startup and maintains a color afterwards. We need to explicitly
+	 * reconfigure the lightbar before we can do any programming later on.
+	 * In USB the lightbar is not on by default, but redoing the setup there
+	 * doesn't hurt.
+	 */
+	report.common->valid_flag2 = DS_OUTPUT_VALID_FLAG2_LIGHTBAR_SETUP_CONTROL_ENABLE;
+	report.common->lightbar_setup = DS_OUTPUT_LIGHTBAR_SETUP_LIGHT_OUT; /* Fade light out. */
+	dualsense_send_output_report(ds, &report);
+
+	kfree(buf);
+	return 0;
+}
+
+static void dualsense_set_lightbar(struct dualsense *ds, uint8_t red, uint8_t green, uint8_t blue)
+{
+	ds->update_lightbar = true;
+	ds->lightbar_red = red;
+	ds->lightbar_green = green;
+	ds->lightbar_blue = blue;
+
+	schedule_work(&ds->output_worker);
+}
+
+static void dualsense_set_player_leds(struct dualsense *ds)
+{
+	/*
+	 * The DualSense controller has a row of 5 LEDs used for player ids.
+	 * Behavior on the PlayStation 5 console is to center the player id
+	 * across the LEDs, so e.g. player 1 would be "--x--" with x being 'on'.
+	 * Follow a similar mapping here.
+	 */
+	static const int player_ids[5] = {
+		BIT(2),
+		BIT(3) | BIT(1),
+		BIT(4) | BIT(2) | BIT(0),
+		BIT(4) | BIT(3) | BIT(1) | BIT(0),
+		BIT(4) | BIT(3) | BIT(2) | BIT(1) | BIT(0)
+	};
+
+	uint8_t player_id = ds->base.player_id % ARRAY_SIZE(player_ids);
+
+	ds->update_player_leds = true;
+	ds->player_leds_state = player_ids[player_id];
+	schedule_work(&ds->output_worker);
 }
 
 static struct ps_device *dualsense_create(struct hid_device *hdev)
@@ -939,7 +1181,8 @@ static struct ps_device *dualsense_create(struct hid_device *hdev)
 	hid_set_drvdata(hdev, ds);
 
 	max_output_report_size = sizeof(struct dualsense_output_report_bt);
-	ds->output_report_dmabuf = devm_kzalloc(&hdev->dev, max_output_report_size, GFP_KERNEL);
+	ds->output_report_dmabuf = devm_kzalloc(&hdev->dev,
+			max_output_report_size, GFP_KERNEL);
 	if (!ds->output_report_dmabuf)
 		return ERR_PTR(-ENOMEM);
 
@@ -949,6 +1192,12 @@ static struct ps_device *dualsense_create(struct hid_device *hdev)
 		return ERR_PTR(ret);
 	}
 	snprintf(hdev->uniq, sizeof(hdev->uniq), "%pMR", ds->base.mac_address);
+
+	ret = dualsense_get_firmware_info(ds);
+	if (ret) {
+		hid_err(hdev, "Failed to get firmware info from DualSense\n");
+		return ERR_PTR(ret);
+	}
 
 	ret = ps_devices_list_add(ps_dev);
 	if (ret)
@@ -973,7 +1222,8 @@ static struct ps_device *dualsense_create(struct hid_device *hdev)
 		goto err;
 	}
 
-	ds->touchpad = ps_touchpad_create(hdev, DS_TOUCHPAD_WIDTH, DS_TOUCHPAD_HEIGHT, 2);
+	ds->touchpad = ps_touchpad_create(hdev, DS_TOUCHPAD_WIDTH,
+			DS_TOUCHPAD_HEIGHT, 2);
 	if (IS_ERR(ds->touchpad)) {
 		ret = PTR_ERR(ds->touchpad);
 		goto err;
@@ -982,6 +1232,33 @@ static struct ps_device *dualsense_create(struct hid_device *hdev)
 	ret = ps_device_register_battery(ps_dev);
 	if (ret)
 		goto err;
+
+	/*
+	 * The hardware may have control over the LEDs (e.g. in Bluetooth on startup).
+	 * Reset the LEDs (lightbar, mute, player leds), so we can control them
+	 * from software.
+	 */
+	ret = dualsense_reset_leds(ds);
+	if (ret)
+		goto err;
+
+	dualsense_set_lightbar(ds, 0, 0, 128); /* blue */
+
+	ret = ps_device_set_player_id(ps_dev);
+	if (ret) {
+		hid_err(hdev, "Failed to assign player id for DualSense: %d\n", ret);
+		goto err;
+	}
+
+	/* Set player LEDs to our player id. */
+	dualsense_set_player_leds(ds);
+
+	/*
+	 * Reporting hardware and firmware is important as there are frequent updates, which
+	 * can change behavior.
+	 */
+	hid_info(hdev, "Registered DualSense controller hw_version=0x%08x fw_version=0x%08x\n",
+			ds->base.hw_version, ds->base.fw_version);
 
 	return &ds->base;
 
@@ -1033,6 +1310,12 @@ static int ps_probe(struct hid_device *hdev, const struct hid_device_id *id)
 		}
 	}
 
+	ret = devm_device_add_group(&hdev->dev, &ps_device_attribute_group);
+	if (ret) {
+		hid_err(hdev, "Failed to register sysfs nodes.\n");
+		goto err_close;
+	}
+
 	return ret;
 
 err_close:
@@ -1047,6 +1330,7 @@ static void ps_remove(struct hid_device *hdev)
 	struct ps_device *dev = hid_get_drvdata(hdev);
 
 	ps_devices_list_remove(dev);
+	ps_device_release_player_id(dev);
 
 	hid_hw_close(hdev);
 	hid_hw_stop(hdev);
@@ -1067,8 +1351,20 @@ static struct hid_driver ps_driver = {
 	.raw_event	= ps_raw_event,
 };
 
-module_hid_driver(ps_driver);
+static int __init ps_init(void)
+{
+	return hid_register_driver(&ps_driver);
+}
+
+static void __exit ps_exit(void)
+{
+	hid_unregister_driver(&ps_driver);
+	ida_destroy(&ps_player_id_allocator);
+}
+
+module_init(ps_init);
+module_exit(ps_exit);
 
 MODULE_AUTHOR("Sony Interactive Entertainment");
 MODULE_DESCRIPTION("HID Driver for PlayStation peripherals.");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");

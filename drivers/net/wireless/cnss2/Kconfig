@@ -85,6 +85,13 @@ config CNSS_QCA6490
 	  These changes are needed to support the new hardware architecture
 	  for CNSS QCA6490 chipset.
 
+config SEC_CNSS2
+	bool "Enable SEC specific changes"
+	depends on CNSS2
+	depends on CNSS_QCA6390 || CNSS_QCA6490
+    help
+	  This enables CNSS2 changes from Samsung Electronics Co.
+
 config SEC_SEPARATE_BDFILE
 	bool "Enable/disable SEC_SEPARATE_BDFILE"
 	depends on CNSS2

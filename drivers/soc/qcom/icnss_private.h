@@ -175,6 +175,7 @@ struct icnss_vreg_info {
 	u32 load_ua;
 	unsigned long settle_delay;
 	bool required;
+	bool is_supported;
 };
 
 struct icnss_clk_info {
@@ -387,6 +388,9 @@ struct icnss_priv {
 	struct workqueue_struct *soc_update_wq;
 
 	struct kobject *wifi_kobj;
+	bool is_chain1_supported;
+	bool chain_reg_info_updated;
+	unsigned long device_config;
 };
 
 struct icnss_reg_info {

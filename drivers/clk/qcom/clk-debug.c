@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2016, 2019, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2016, 2019-2021 The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved. */
 
 #include <linux/clk.h>
 #include <linux/export.h>
@@ -11,9 +12,15 @@
 #include <linux/bitops.h>
 #include <linux/mfd/syscon.h>
 #include <linux/msm-bus.h>
+#include <trace/events/power.h>
+
+#define CREATE_TRACE_POINTS
+#include "trace.h"
 
 #include "clk-regmap.h"
 #include "clk-debug.h"
+#include "common.h"
+#include "gdsc-debug.h"
 
 static struct clk_hw *measure;
 
@@ -271,6 +278,8 @@ static int clk_debug_measure_get(void *data, u64 *val)
 
 	/* recursively calculate actual freq */
 	*val *= get_mux_divs(measure);
+	/* enable ftrace support */
+	trace_clk_measure(clk_hw_get_name(hw), *val);
 	disable_debug_clks(measure);
 exit:
 	if (meas->bus_cl_id)
@@ -409,3 +418,60 @@ int map_debug_bases(struct platform_device *pdev, const char *base,
 	return 0;
 }
 EXPORT_SYMBOL(map_debug_bases);
+
+/**
+ * qcom_clk_dump - dump the HW specific registers associated with this clock
+ * and regulator
+ * @clk: clock source
+ * @regulator: regulator
+ * @calltrace: indicates whether calltrace is required
+ *
+ * This function attempts to print all the registers associated with the
+ * clock, it's parents and regulator.
+ */
+void qcom_clk_dump(struct clk *clk, struct regulator *regulator,
+			bool calltrace)
+{
+	struct clk_hw *hw;
+
+	if (!IS_ERR_OR_NULL(regulator))
+		gdsc_debug_print_regs(regulator);
+
+	if (IS_ERR_OR_NULL(clk))
+		return;
+
+	hw = __clk_get_hw(clk);
+	if (IS_ERR_OR_NULL(hw))
+		return;
+
+	pr_info("Dumping %s Registers:\n", clk_hw_get_name(hw));
+	WARN_CLK(hw->core, clk_hw_get_name(hw), calltrace, "");
+}
+EXPORT_SYMBOL(qcom_clk_dump);
+
+/**
+ * qcom_clk_bulk_dump - dump the HW specific registers associated with clocks
+ * and regulator
+ * @num_clks: the number of clk_bulk_data
+ * @clks: the clk_bulk_data table of consumer
+ * @regulator: regulator source
+ * @calltrace: indicates whether calltrace is required
+ *
+ * This function attempts to print all the registers associated with the
+ * clocks in the list and regulator.
+ */
+void qcom_clk_bulk_dump(int num_clks, struct clk_bulk_data *clks,
+			struct regulator *regulator, bool calltrace)
+{
+	int i;
+
+	if (!IS_ERR_OR_NULL(regulator))
+		gdsc_debug_print_regs(regulator);
+
+	if (IS_ERR_OR_NULL(clks))
+		return;
+
+	for (i = 0; i < num_clks; i++)
+		qcom_clk_dump(clks[i].clk, NULL, calltrace);
+}
+EXPORT_SYMBOL(qcom_clk_bulk_dump);

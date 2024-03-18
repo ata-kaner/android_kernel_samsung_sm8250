@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: ISC
 /*
  * Copyright (c) 2012-2017 Qualcomm Atheros, Inc.
- * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/moduleparam.h>
@@ -313,6 +313,7 @@ __acquires(&sta->tid_rx_lock) __releases(&sta->tid_rx_lock)
 	/* statistics */
 	memset(&sta->stats, 0, sizeof(sta->stats));
 	sta->stats.tx_latency_min_us = U32_MAX;
+	wil_sta_info_amsdu_init(sta);
 }
 
 static void _wil6210_disconnect_complete(struct wil6210_vif *vif,
@@ -723,6 +724,13 @@ void wil_bcast_fini_all(struct wil6210_priv *wil)
 	}
 }
 
+void wil_sta_info_amsdu_init(struct wil_sta_info *sta)
+{
+	sta->amsdu_drop_sn = -1;
+	sta->amsdu_drop_tid = -1;
+	sta->amsdu_drop = 0;
+}
+
 int wil_priv_init(struct wil6210_priv *wil)
 {
 	uint i;
@@ -806,6 +814,7 @@ int wil_priv_init(struct wil6210_priv *wil)
 
 	wil->amsdu_en = 1;
 	wil->fw_state = WIL_FW_STATE_DOWN;
+	wil->max_mcs = 0;
 
 	return 0;
 

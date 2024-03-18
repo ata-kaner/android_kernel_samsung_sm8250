@@ -38,3 +38,12 @@ config FSCRYPT_SDP
 	  Enable SDP functional to fscrypto module.
 	  This feature is supporting "Data-At-Rest" for file systems using
 	  Per-file-encryption being controlled by SDP user status.
+
+config ENABLE_LEGACY_PFK
+	bool "Legacy method to generate per file key"
+	default n
+	help
+	  Enable legacy method to generate aes keys derived
+	  from nonce and master key. In private mode the keys
+	  will be used by inline crypto hardware to encrypt the
+	  file content.

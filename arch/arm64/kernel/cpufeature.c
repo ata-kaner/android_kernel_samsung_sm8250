@@ -152,7 +152,7 @@ static const struct arm64_ftr_bits ftr_id_aa64isar1[] = {
 
 static const struct arm64_ftr_bits ftr_id_aa64isar2[] = {
 	ARM64_FTR_BITS(FTR_HIDDEN, FTR_STRICT, FTR_HIGHER_SAFE, ID_AA64ISAR2_CLEARBHB_SHIFT, 4, 0),
-	ARM64_FTR_END,
+        ARM64_FTR_END,
 };
 
 static const struct arm64_ftr_bits ftr_id_aa64pfr0[] = {
@@ -670,7 +670,6 @@ void update_cpu_features(int cpu,
 				      info->reg_id_aa64isar1, boot->reg_id_aa64isar1);
 	taint |= check_update_ftr_reg(SYS_ID_AA64ISAR2_EL1, cpu,
 				      info->reg_id_aa64isar2, boot->reg_id_aa64isar2);
-
 	/*
 	 * Differing PARange support is fine as long as all peripherals and
 	 * memory are mapped within the minimum PARange of all CPUs.
@@ -899,8 +898,7 @@ static bool has_cache_dic(const struct arm64_cpu_capabilities *entry,
 }
 
 static bool __meltdown_safe = true;
-/* 0: not forced, >0: forced on, <0: forced off */
-static int __kpti_forced = -1;
+static int __kpti_forced; /* 0: not forced, >0: forced on, <0: forced off */
 
 static bool unmap_kernel_at_el0(const struct arm64_cpu_capabilities *entry,
 				int scope)

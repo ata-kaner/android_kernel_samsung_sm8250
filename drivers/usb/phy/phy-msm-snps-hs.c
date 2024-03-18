@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -665,14 +665,13 @@ static int msm_hsphy_set_suspend(struct usb_phy *uphy, int suspend)
 	}
 
 	if (suspend) { /* Bus suspend */
-		if (phy->cable_connected ||
-			(phy->phy.flags & PHY_HOST_MODE)) {
-			/* Enable auto-resume functionality only when
-			 * there is some peripheral connected and real
-			 * bus suspend happened
+		if (phy->cable_connected) {
+			/* Enable auto-resume functionality only during host
+			 * mode bus suspend with some peripheral connected.
 			 */
-			if ((phy->phy.flags & PHY_HSFS_MODE) ||
-				(phy->phy.flags & PHY_LS_MODE)) {
+			if ((phy->phy.flags & PHY_HOST_MODE) &&
+				((phy->phy.flags & PHY_HSFS_MODE) ||
+				(phy->phy.flags & PHY_LS_MODE))) {
 				/* Enable auto-resume functionality by pulsing
 				 * signal
 				 */
@@ -788,9 +787,10 @@ static int msm_hsphy_dpdm_regulator_enable(struct regulator_dev *rdev)
 	dev_dbg(phy->phy.dev, "%s dpdm_enable:%d\n",
 				__func__, phy->dpdm_enable);
 
+	msm_hsphy_enable_clocks(phy, true);
 	if (phy->eud_enable_reg && readl_relaxed(phy->eud_enable_reg)) {
 		dev_err(phy->phy.dev, "eud is enabled\n");
-		return 0;
+		goto exit;
 	}
 
 	mutex_lock(&phy->phy_lock);
@@ -798,10 +798,8 @@ static int msm_hsphy_dpdm_regulator_enable(struct regulator_dev *rdev)
 		ret = msm_hsphy_enable_power(phy, true);
 		if (ret) {
 			mutex_unlock(&phy->phy_lock);
-			return ret;
+			goto exit;
 		}
-
-		msm_hsphy_enable_clocks(phy, true);
 
 		msm_hsphy_reset(phy);
 
@@ -818,11 +816,11 @@ static int msm_hsphy_dpdm_regulator_enable(struct regulator_dev *rdev)
 					UTMI_PHY_DATAPATH_CTRL_OVERRIDE_EN,
 					UTMI_PHY_DATAPATH_CTRL_OVERRIDE_EN);
 
-		msm_hsphy_enable_clocks(phy, false);
 		phy->dpdm_enable = true;
 	}
 	mutex_unlock(&phy->phy_lock);
-
+exit:
+	msm_hsphy_enable_clocks(phy, false);
 	return ret;
 }
 
@@ -837,6 +835,13 @@ static int msm_hsphy_dpdm_regulator_disable(struct regulator_dev *rdev)
 	mutex_lock(&phy->phy_lock);
 	if (phy->dpdm_enable) {
 		if (!phy->cable_connected) {
+			/*
+			 * Phy reset is needed in case multiple instances
+			 * of HSPHY exists with shared power supplies. This
+			 * reset is to bring out the PHY from high-Z state
+			 * and avoid extra current consumption.
+			 */
+			msm_hsphy_reset(phy);
 			ret = msm_hsphy_enable_power(phy, false);
 			if (ret < 0) {
 				mutex_unlock(&phy->phy_lock);

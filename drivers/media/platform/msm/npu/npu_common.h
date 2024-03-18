@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _NPU_COMMON_H
@@ -109,12 +109,6 @@ struct npu_debugfs_ctx {
 	struct dentry *root;
 	uint32_t reg_off;
 	uint32_t reg_cnt;
-	uint8_t *log_buf;
-	struct mutex log_lock;
-	uint32_t log_num_bytes_buffered;
-	uint32_t log_read_index;
-	uint32_t log_write_index;
-	uint32_t log_buf_size;
 };
 
 struct npu_debugfs_reg_ctx {
@@ -134,7 +128,7 @@ struct npu_mbox {
 };
 
 /**
- * struct npul_pwrlevel - Struct holding different pwrlevel info obtained from
+ * struct npu_pwrlevel - Struct holding different pwrlevel info obtained
  * from dtsi file
  * @pwr_level:           NPU power level
  * @freq[]:              NPU frequency vote in Hz
@@ -176,6 +170,7 @@ struct npu_reg {
  */
 struct npu_pwrctrl {
 	int32_t pwr_vote_num;
+	int32_t pwr_vote_num_sysfs;
 
 	struct npu_pwrlevel pwrlevels[NPU_MAX_PWRLEVELS];
 	uint32_t active_pwrlevel;
@@ -245,6 +240,7 @@ struct mbox_bridge_data {
 
 struct npu_device {
 	struct mutex dev_lock;
+	spinlock_t ipc_lock;
 
 	struct platform_device *pdev;
 

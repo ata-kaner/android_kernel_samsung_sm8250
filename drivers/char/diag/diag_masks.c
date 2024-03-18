@@ -54,7 +54,8 @@ static const struct diag_ssid_range_t msg_mask_tbl[] = {
 	{ .ssid_first = MSG_SSID_22, .ssid_last = MSG_SSID_22_LAST },
 	{ .ssid_first = MSG_SSID_23, .ssid_last = MSG_SSID_23_LAST },
 	{ .ssid_first = MSG_SSID_24, .ssid_last = MSG_SSID_24_LAST },
-	{ .ssid_first = MSG_SSID_25, .ssid_last = MSG_SSID_25_LAST }
+	{ .ssid_first = MSG_SSID_25, .ssid_last = MSG_SSID_25_LAST },
+	{ .ssid_first = MSG_SSID_26, .ssid_last = MSG_SSID_26_LAST }
 };
 
 static int diag_save_user_msg_mask(struct diag_md_session_t *info);
@@ -1155,7 +1156,7 @@ static int diag_cmd_set_msg_mask(unsigned char *src_buf, int src_len,
 			mask_size = MAX_SSID_PER_RANGE;
 			mask->range_tools = MAX_SSID_PER_RANGE;
 			mask->ssid_last_tools =
-				mask->ssid_first + mask->range_tools;
+				mask->ssid_first + mask->range_tools - 1;
 		}
 		if (ssid_range.ssid_last > mask->ssid_last_tools) {
 			pr_debug("diag: Msg SSID range mismatch\n");
@@ -3120,7 +3121,8 @@ int diag_copy_to_user_msg_mask(char __user *buf, size_t count,
 		return -EINVAL;
 	}
 
-	if ((count - (sizeof(int))) >= mask_info->update_buf_client_len) {
+	if ((count - (sizeof(int))) >=
+			mask_info->update_buf_client_len) {
 		err = copy_to_user(buf, mask_info->update_buf_client,
 				mask_info->update_buf_client_len);
 	} else {
@@ -3151,7 +3153,8 @@ int diag_copy_to_user_log_mask(char __user *buf, size_t count,
 		return -EINVAL;
 	}
 
-	if ((count - (sizeof(int))) >= mask_info->update_buf_client_len) {
+	if ((count - (sizeof(int))) >=
+			mask_info->update_buf_client_len) {
 		err = copy_to_user(buf, mask_info->update_buf_client,
 				mask_info->update_buf_client_len);
 	} else {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
@@ -51,6 +52,7 @@ static const char * const clocks[] = {
 	"gmu_clk",
 	"ahb_clk",
 	"smmu_vote",
+	"apb_pclk",
 };
 
 static unsigned long ib_votes[KGSL_MAX_BUSLEVELS];
@@ -672,11 +674,11 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 	if (pwr->gpu_bimc_int_clk) {
 		if (pwr->active_pwrlevel == 0 &&
 				!pwr->gpu_bimc_interface_enabled) {
-			kgsl_pwrctrl_clk_set_rate(pwr->gpu_bimc_int_clk,
-					pwr->gpu_bimc_int_clk_freq,
-					"bimc_gpu_clk");
 			_bimc_clk_prepare_enable(device,
 					pwr->gpu_bimc_int_clk,
+					"bimc_gpu_clk");
+			kgsl_pwrctrl_clk_set_rate(pwr->gpu_bimc_int_clk,
+					pwr->gpu_bimc_int_clk_freq,
 					"bimc_gpu_clk");
 			pwr->gpu_bimc_interface_enabled = true;
 		} else if (pwr->previous_pwrlevel == 0
@@ -1529,23 +1531,29 @@ static ssize_t temp_show(struct device *dev,
 					char *buf)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct device *_dev;
 	struct thermal_zone_device *thermal_dev;
-	int ret, temperature = 0;
+	int temperature = INT_MIN, max_temp = INT_MIN;
+	const char *name;
+	struct property *prop;
 
-	if (!pwr->tzone_name)
-		return 0;
+	_dev = &device->pdev->dev;
 
-	thermal_dev = thermal_zone_get_zone_by_name((char *)pwr->tzone_name);
-	if (thermal_dev == NULL)
-		return 0;
+	of_property_for_each_string(_dev->of_node,
+		"qcom,tzone-names", prop, name) {
+		thermal_dev = thermal_zone_get_zone_by_name(name);
 
-	ret = thermal_zone_get_temp(thermal_dev, &temperature);
-	if (ret)
-		return 0;
+		if (IS_ERR(thermal_dev))
+			continue;
+
+		if (thermal_zone_get_temp(thermal_dev, &temperature))
+			continue;
+
+		max_temp = max(temperature, max_temp);
+	}
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
-			temperature);
+			max_temp);
 }
 
 static ssize_t pwrscale_store(struct device *dev,
@@ -2272,13 +2280,6 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	if (pwr->grp_clks[0] == NULL)
 		pwr->grp_clks[0] = pwr->grp_clks[1];
 
-	/* Getting gfx-bimc-interface-clk frequency */
-	if (!of_property_read_u32(pdev->dev.of_node,
-			"qcom,gpu-bimc-interface-clk-freq",
-			&pwr->gpu_bimc_int_clk_freq))
-		pwr->gpu_bimc_int_clk = devm_clk_get(&pdev->dev,
-					"bimc_gpu_clk");
-
 	if (of_property_read_bool(pdev->dev.of_node, "qcom,no-nap"))
 		device->pwrctrl.ctrl_flags |= BIT(KGSL_PWRFLAGS_NAP_OFF);
 
@@ -2440,16 +2441,20 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 		goto error_cleanup_bus_ib;
 	}
 
+	pwr->cooling_pwr_limit = kgsl_pwr_limits_add(KGSL_DEVICE_3D0);
+	if (IS_ERR_OR_NULL(pwr->cooling_pwr_limit)) {
+		dev_err(device->dev, "Failed to add cooling power limit\n");
+		result = -EINVAL;
+		pwr->cooling_pwr_limit = NULL;
+		goto error_cleanup_bus_ib;
+	}
+
 	INIT_WORK(&pwr->thermal_cycle_ws, kgsl_thermal_cycle);
 	timer_setup(&pwr->thermal_timer, kgsl_thermal_timer, 0);
 
 	pwr->sysfs_pwr_limit = kgsl_pwr_limits_add(KGSL_DEVICE_3D0);
 
 	kgsl_pwrctrl_vbif_init(device);
-
-	/* temperature sensor name */
-	of_property_read_string(pdev->dev.of_node, "qcom,tzone-name",
-		&pwr->tzone_name);
 
 	return result;
 
@@ -2496,6 +2501,10 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 		kfree(pwr->sysfs_pwr_limit);
 		pwr->sysfs_pwr_limit = NULL;
 	}
+
+	kgsl_pwr_limits_del(pwr->cooling_pwr_limit);
+	pwr->cooling_pwr_limit = NULL;
+
 	kfree(pwr->bus_ib);
 
 	_close_pcl(pwr);

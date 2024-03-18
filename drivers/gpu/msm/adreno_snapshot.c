@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/msm-bus.h>
@@ -195,7 +196,17 @@ static inline void parse_ib(struct kgsl_device *device,
 	 * then push it into the static blob otherwise put it in the dynamic
 	 * list
 	 */
-	if (gpuaddr == snapshot->ib1base) {
+	if (kgsl_addr_range_overlap(gpuaddr, dwords,
+		snapshot->ib1base, snapshot->ib1size)) {
+		/*
+		 * During restore after preemption, ib1base in the register
+		 * can be updated by CP. In such scenarios, to dump complete
+		 * IB1 in snapshot, we should consider ib1base from ringbuffer.
+		 */
+		if (gpuaddr != snapshot->ib1base) {
+			snapshot->ib1base = gpuaddr;
+			snapshot->ib1size = dwords;
+		}
 		kgsl_snapshot_push_object(device, process, gpuaddr, dwords);
 		return;
 	}
@@ -309,16 +320,29 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 		}
 
 		if (adreno_cmd_is_ib(adreno_dev, rbptr[index])) {
-			if (ADRENO_LEGACY_PM4(adreno_dev)) {
-				if (rbptr[index + 1] == snapshot->ib1base)
-					break;
-			} else {
-				uint64_t ibaddr;
+			uint64_t ibaddr;
+			uint64_t ibsize;
 
+			if (ADRENO_LEGACY_PM4(adreno_dev)) {
+				ibaddr = rbptr[index + 1];
+				ibsize = rbptr[index + 2];
+			} else {
 				ibaddr = rbptr[index + 2];
 				ibaddr = ibaddr << 32 | rbptr[index + 1];
-				if (ibaddr == snapshot->ib1base)
-					break;
+				ibsize = rbptr[index + 3];
+			}
+
+			if (kgsl_addr_range_overlap(ibaddr, ibsize,
+				snapshot->ib1base, snapshot->ib1size)) {
+				/*
+				 * During restore after preemption, ib1base in
+				 * the register can be updated by CP. In such
+				 * scenario, to dump complete IB1 in snapshot,
+				 * we should consider ib1base from ringbuffer.
+				 */
+				snapshot->ib1base = ibaddr;
+				snapshot->ib1size = ibsize;
+				break;
 			}
 		}
 	} while (index != rb->wptr);
@@ -479,28 +503,15 @@ struct mem_entry {
 	unsigned int type;
 } __packed;
 
-static int _save_mem_entries(int id, void *ptr, void *data)
-{
-	struct kgsl_mem_entry *entry = ptr;
-	struct mem_entry *m = (struct mem_entry *) data;
-	unsigned int index = id - 1;
-
-	m[index].gpuaddr = entry->memdesc.gpuaddr;
-	m[index].size = entry->memdesc.size;
-	m[index].type = kgsl_memdesc_get_memtype(&entry->memdesc);
-
-	return 0;
-}
-
 static size_t snapshot_capture_mem_list(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
 	struct kgsl_snapshot_mem_list_v2 *header =
 		(struct kgsl_snapshot_mem_list_v2 *)buf;
-	int num_mem = 0;
-	int ret = 0;
-	unsigned int *data = (unsigned int *)(buf + sizeof(*header));
+	int id, index = 0, ret = 0, num_mem = 0;
 	struct kgsl_process_private *process = priv;
+	struct mem_entry *m = (struct mem_entry *)(buf + sizeof(*header));
+	struct kgsl_mem_entry *entry;
 
 	/* we need a process to search! */
 	if (process == NULL)
@@ -527,7 +538,12 @@ static size_t snapshot_capture_mem_list(struct kgsl_device *device,
 	 * Walk through the memory list and store the
 	 * tuples(gpuaddr, size, memtype) in snapshot
 	 */
-	idr_for_each(&process->mem_idr, _save_mem_entries, data);
+	idr_for_each_entry(&process->mem_idr, entry, id) {
+		m[index].gpuaddr = entry->memdesc.gpuaddr;
+		m[index].size = entry->memdesc.size;
+		m[index].type = kgsl_memdesc_get_memtype(&entry->memdesc);
+		index++;
+	}
 
 	ret = sizeof(*header) + (num_mem * sizeof(struct mem_entry));
 out:
@@ -916,8 +932,7 @@ void adreno_snapshot(struct kgsl_device *device, struct kgsl_snapshot *snapshot,
 	 * figure how often this really happens.
 	 */
 
-	if (-ENOENT == find_object(snapshot->ib1base, snapshot->process) &&
-			snapshot->ib1size) {
+	if (-ENOENT == find_object(snapshot->ib1base, snapshot->process)) {
 		struct kgsl_mem_entry *entry;
 		u64 ibsize;
 

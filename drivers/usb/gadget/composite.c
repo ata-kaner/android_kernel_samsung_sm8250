@@ -1903,8 +1903,10 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 			set_string_mode(w_length);
 #endif
+			spin_lock(&cdev->lock);
 			value = get_string(cdev, req->buf,
 					w_index, w_value & 0xff);
+			spin_unlock(&cdev->lock);
 			if (value >= 0)
 				value = min(w_length, (u16) value);
 			break;
@@ -2418,6 +2420,11 @@ int composite_dev_prepare(struct usb_composite_driver *composite,
 	 * drivers will zero ep->driver_data.
 	 */
 	usb_ep_autoconfig_reset(gadget);
+	/*
+	 * Reset deactivations as it is not possible to synchronize
+	 * between bind/unbind and open/close by user space application.
+	 */
+	cdev->deactivations = 0;
 	return 0;
 fail_dev:
 	kfree(cdev->req->buf);

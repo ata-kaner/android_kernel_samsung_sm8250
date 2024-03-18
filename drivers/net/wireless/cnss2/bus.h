@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved. */
 
 #ifndef _CNSS_BUS_H
 #define _CNSS_BUS_H
@@ -37,6 +37,7 @@ int cnss_bus_qmi_send_put(struct cnss_plat_data *plat_priv);
 void cnss_bus_fw_boot_timeout_hdlr(struct timer_list *t);
 void cnss_bus_collect_dump_info(struct cnss_plat_data *plat_priv,
 				bool in_panic);
+void cnss_bus_device_crashed(struct cnss_plat_data *plat_priv);
 int cnss_bus_call_driver_probe(struct cnss_plat_data *plat_priv);
 int cnss_bus_call_driver_remove(struct cnss_plat_data *plat_priv);
 int cnss_bus_dev_powerup(struct cnss_plat_data *plat_priv);
@@ -49,6 +50,8 @@ int cnss_bus_call_driver_modem_status(struct cnss_plat_data *plat_priv,
 				      int modem_current_status);
 int cnss_bus_update_status(struct cnss_plat_data *plat_priv,
 			   enum cnss_driver_status status);
+int cnss_bus_update_uevent(struct cnss_plat_data *plat_priv,
+			   enum cnss_driver_status status, void *data);
 int cnss_bus_is_device_down(struct cnss_plat_data *plat_priv);
 int cnss_bus_check_link_status(struct cnss_plat_data *plat_priv);
 int cnss_bus_recover_link_down(struct cnss_plat_data *plat_priv);

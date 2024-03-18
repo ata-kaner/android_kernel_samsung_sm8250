@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -35,6 +35,12 @@
 #include <linux/soc/qcom/smem_state.h>
 #include <linux/of_irq.h>
 #include <linux/ctype.h>
+#include <linux/sched.h>
+#include <asm/arch_timer.h>
+#include <linux/sched/clock.h>
+#include <linux/jiffies.h>
+#include <linux/delay.h>
+#include <linux/wait.h>
 
 #ifdef CONFIG_ARM64
 
@@ -388,6 +394,7 @@ static void ipa3_active_clients_log_destroy(void)
 	kfree(active_clients_table_buf);
 	active_clients_table_buf = NULL;
 	kfree(ipa3_ctx->ipa3_active_clients_logging.log_buffer[0]);
+	ipa3_ctx->ipa3_active_clients_logging.log_buffer[0] = NULL;
 	ipa3_ctx->ipa3_active_clients_logging.log_head = 0;
 	ipa3_ctx->ipa3_active_clients_logging.log_tail =
 			IPA3_ACTIVE_CLIENTS_LOG_BUFFER_SIZE_LINES - 1;
@@ -703,6 +710,7 @@ static int ipa3_ioctl_add_rt_rule_v2(unsigned long arg)
 	u32 pyld_sz;
 	u64 uptr = 0;
 	u8 *param = NULL;
+	u8 *param2 = NULL;
 	u8 *kptr = NULL;
 
 	if (copy_from_user(header, (const void __user *)arg,
@@ -740,6 +748,24 @@ static int ipa3_ioctl_add_rt_rule_v2(unsigned long arg)
 	if (IS_ERR(param)) {
 		retval = -EFAULT;
 		goto free_param_kptr;
+	}
+
+	param2 = memdup_user((const void __user *)arg,
+		sizeof(struct ipa_ioc_add_rt_rule_v2));
+	if (IS_ERR(param2)) {
+		retval = -EFAULT;
+		goto free_param_kptr;
+	}
+
+
+	/* add check in case user-space module compromised */
+	if (unlikely(((struct ipa_ioc_add_rt_rule_v2 *)param2)->num_rules
+		!= pre_entry)) {
+		IPAERR_RL("current %d pre %d\n",
+			((struct ipa_ioc_add_rt_rule_v2 *)param2)->
+				num_rules, pre_entry);
+			retval = -EFAULT;
+			goto free_param_kptr;
 	}
 	/* alloc kernel pointer with actual payload size */
 	kptr = kzalloc(pyld_sz, GFP_KERNEL);
@@ -780,6 +806,8 @@ static int ipa3_ioctl_add_rt_rule_v2(unsigned long arg)
 free_param_kptr:
 	if (!IS_ERR(param))
 		kfree(param);
+	if (!IS_ERR(param2))
+		kfree(param2);
 	kfree(kptr);
 
 	return retval;
@@ -795,6 +823,7 @@ static int ipa3_ioctl_add_rt_rule_ext_v2(unsigned long arg)
 	u32 pyld_sz;
 	u64 uptr = 0;
 	u8 *param = NULL;
+	u8 *param2 = NULL;
 	u8 *kptr = NULL;
 
 	if (copy_from_user(header,
@@ -835,6 +864,24 @@ static int ipa3_ioctl_add_rt_rule_ext_v2(unsigned long arg)
 	if (IS_ERR(param)) {
 		retval = -EFAULT;
 		goto free_param_kptr;
+	}
+
+	param2 = memdup_user((const void __user *)arg,
+		sizeof(struct ipa_ioc_add_rt_rule_ext_v2));
+	if (IS_ERR(param2)) {
+		retval = -EFAULT;
+		goto free_param_kptr;
+	}
+
+
+	/* add check in case user-space module compromised */
+	if (unlikely(((struct ipa_ioc_add_rt_rule_ext_v2 *)param2)->num_rules
+		!= pre_entry)) {
+		IPAERR_RL("current %d pre %d\n",
+			((struct ipa_ioc_add_rt_rule_ext_v2 *)param2)->
+				num_rules, pre_entry);
+			retval = -EFAULT;
+			goto free_param_kptr;
 	}
 	/* alloc kernel pointer with actual payload size */
 	kptr = kzalloc(pyld_sz, GFP_KERNEL);
@@ -877,6 +924,8 @@ static int ipa3_ioctl_add_rt_rule_ext_v2(unsigned long arg)
 free_param_kptr:
 	if (!IS_ERR(param))
 		kfree(param);
+	if (!IS_ERR(param2))
+		kfree(param2);
 	kfree(kptr);
 
 	return retval;
@@ -892,6 +941,7 @@ static int ipa3_ioctl_add_rt_rule_after_v2(unsigned long arg)
 	u32 pyld_sz;
 	u64 uptr = 0;
 	u8 *param = NULL;
+	u8 *param2 = NULL;
 	u8 *kptr = NULL;
 
 	if (copy_from_user(header, (const void __user *)arg,
@@ -932,6 +982,23 @@ static int ipa3_ioctl_add_rt_rule_after_v2(unsigned long arg)
 		retval = -EFAULT;
 		goto free_param_kptr;
 	}
+
+	param2 = memdup_user((const void __user *)arg,
+		sizeof(struct ipa_ioc_add_rt_rule_after_v2));
+	if (IS_ERR(param2)) {
+		retval = -EFAULT;
+		goto free_param_kptr;
+	}
+
+	/* add check in case user-space module compromised */
+	if (unlikely(((struct ipa_ioc_add_rt_rule_after_v2 *)param2)->num_rules
+		!= pre_entry)) {
+		IPAERR_RL("current %d pre %d\n",
+			((struct ipa_ioc_add_rt_rule_after_v2 *)param2)->
+				num_rules, pre_entry);
+			retval = -EFAULT;
+			goto free_param_kptr;
+	}
 	/* alloc kernel pointer with actual payload size */
 	kptr = kzalloc(pyld_sz, GFP_KERNEL);
 	if (!kptr) {
@@ -971,6 +1038,8 @@ static int ipa3_ioctl_add_rt_rule_after_v2(unsigned long arg)
 free_param_kptr:
 	if (!IS_ERR(param))
 		kfree(param);
+	if (!IS_ERR(param2))
+		kfree(param2);
 	kfree(kptr);
 
 	return retval;
@@ -986,6 +1055,7 @@ static int ipa3_ioctl_mdfy_rt_rule_v2(unsigned long arg)
 	u32 pyld_sz;
 	u64 uptr = 0;
 	u8 *param = NULL;
+	u8 *param2 = NULL;
 	u8 *kptr = NULL;
 
 	if (copy_from_user(header, (const void __user *)arg,
@@ -1026,6 +1096,23 @@ static int ipa3_ioctl_mdfy_rt_rule_v2(unsigned long arg)
 		retval = -EFAULT;
 		goto free_param_kptr;
 	}
+
+	param2 = memdup_user((const void __user *)arg,
+		sizeof(struct ipa_ioc_mdfy_rt_rule_v2));
+	if (IS_ERR(param2)) {
+		retval = -EFAULT;
+		goto free_param_kptr;
+	}
+
+	/* add check in case user-space module compromised */
+	if (unlikely(((struct ipa_ioc_mdfy_rt_rule_v2 *)param2)->num_rules
+		!= pre_entry)) {
+		IPAERR_RL("current %d pre %d\n",
+			((struct ipa_ioc_mdfy_rt_rule_v2 *)param2)->
+				num_rules, pre_entry);
+			retval = -EFAULT;
+			goto free_param_kptr;
+	}
 	/* alloc kernel pointer with actual payload size */
 	kptr = kzalloc(pyld_sz, GFP_KERNEL);
 	if (!kptr) {
@@ -1065,6 +1152,8 @@ static int ipa3_ioctl_mdfy_rt_rule_v2(unsigned long arg)
 free_param_kptr:
 	if (!IS_ERR(param))
 		kfree(param);
+	if (!IS_ERR(param2))
+		kfree(param2);
 	kfree(kptr);
 
 	return retval;
@@ -1080,6 +1169,7 @@ static int ipa3_ioctl_add_flt_rule_v2(unsigned long arg)
 	u32 pyld_sz;
 	u64 uptr = 0;
 	u8 *param = NULL;
+	u8 *param2 = NULL;
 	u8 *kptr = NULL;
 
 	if (copy_from_user(header, (const void __user *)arg,
@@ -1119,6 +1209,23 @@ static int ipa3_ioctl_add_flt_rule_v2(unsigned long arg)
 		retval = -EFAULT;
 		goto free_param_kptr;
 	}
+
+	param2 = memdup_user((const void __user *)arg,
+		sizeof(struct ipa_ioc_add_flt_rule_v2));
+	if (IS_ERR(param2)) {
+		retval = -EFAULT;
+		goto free_param_kptr;
+	}
+
+	/* add check in case user-space module compromised */
+	if (unlikely(((struct ipa_ioc_add_flt_rule_v2 *)param2)->num_rules
+		!= pre_entry)) {
+		IPAERR_RL("current %d pre %d\n",
+			((struct ipa_ioc_add_flt_rule_v2 *)param2)->
+				num_rules, pre_entry);
+			retval = -EFAULT;
+			goto free_param_kptr;
+	}
 	/* alloc kernel pointer with actual payload size */
 	kptr = kzalloc(pyld_sz, GFP_KERNEL);
 	if (!kptr) {
@@ -1157,6 +1264,8 @@ static int ipa3_ioctl_add_flt_rule_v2(unsigned long arg)
 free_param_kptr:
 	if (!IS_ERR(param))
 		kfree(param);
+	if (!IS_ERR(param2))
+		kfree(param2);
 	kfree(kptr);
 
 	return retval;
@@ -1172,6 +1281,7 @@ static int ipa3_ioctl_add_flt_rule_after_v2(unsigned long arg)
 	u32 pyld_sz;
 	u64 uptr = 0;
 	u8 *param = NULL;
+	u8 *param2 = NULL;
 	u8 *kptr = NULL;
 
 	if (copy_from_user(header, (const void __user *)arg,
@@ -1212,6 +1322,23 @@ static int ipa3_ioctl_add_flt_rule_after_v2(unsigned long arg)
 		retval = -EFAULT;
 		goto free_param_kptr;
 	}
+
+	param2 = memdup_user((const void __user *)arg,
+		sizeof(struct ipa_ioc_add_flt_rule_after_v2));
+	if (IS_ERR(param2)) {
+		retval = -EFAULT;
+		goto free_param_kptr;
+	}
+
+	/* add check in case user-space module compromised */
+	if (unlikely(((struct ipa_ioc_add_flt_rule_after_v2 *)param2)->num_rules
+		!= pre_entry)) {
+		IPAERR_RL("current %d pre %d\n",
+			((struct ipa_ioc_add_flt_rule_after_v2 *)param2)->
+				num_rules, pre_entry);
+			retval = -EFAULT;
+			goto free_param_kptr;
+	}
 	/* alloc kernel pointer with actual payload size */
 	kptr = kzalloc(pyld_sz, GFP_KERNEL);
 	if (!kptr) {
@@ -1251,6 +1378,8 @@ static int ipa3_ioctl_add_flt_rule_after_v2(unsigned long arg)
 free_param_kptr:
 	if (!IS_ERR(param))
 		kfree(param);
+	if (!IS_ERR(param2))
+		kfree(param2);
 	kfree(kptr);
 
 	return retval;
@@ -1266,6 +1395,7 @@ static int ipa3_ioctl_mdfy_flt_rule_v2(unsigned long arg)
 	u32 pyld_sz;
 	u64 uptr = 0;
 	u8 *param = NULL;
+	u8 *param2 = NULL;
 	u8 *kptr = NULL;
 
 	if (copy_from_user(header, (const void __user *)arg,
@@ -1306,6 +1436,23 @@ static int ipa3_ioctl_mdfy_flt_rule_v2(unsigned long arg)
 		retval = -EFAULT;
 		goto free_param_kptr;
 	}
+
+	param2 = memdup_user((const void __user *)arg,
+		sizeof(struct ipa_ioc_mdfy_flt_rule_v2));
+	if (IS_ERR(param2)) {
+		retval = -EFAULT;
+		goto free_param_kptr;
+	}
+
+	/* add check in case user-space module compromised */
+	if (unlikely(((struct ipa_ioc_mdfy_flt_rule_v2 *)param2)->num_rules
+		!= pre_entry)) {
+		IPAERR_RL("current %d pre %d\n",
+			((struct ipa_ioc_mdfy_flt_rule_v2 *)param2)->
+				num_rules, pre_entry);
+			retval = -EFAULT;
+			goto free_param_kptr;
+	}
 	/* alloc kernel pointer with actual payload size */
 	kptr = kzalloc(pyld_sz, GFP_KERNEL);
 	if (!kptr) {
@@ -1345,6 +1492,8 @@ static int ipa3_ioctl_mdfy_flt_rule_v2(unsigned long arg)
 free_param_kptr:
 	if (!IS_ERR(param))
 		kfree(param);
+	if (!IS_ERR(param2))
+		kfree(param2);
 	kfree(kptr);
 
 	return retval;
@@ -3060,16 +3209,16 @@ static void ipa3_q6_avoid_holb(void)
 			 * setting HOLB on Q6 pipes, and from APPS perspective
 			 * they are not valid, therefore, the above function
 			 * will fail.
+			 * Also don't reset the HOLB timer to 0 for Q6 pipes.
 			 */
-			ipahal_write_reg_n_fields(
-				IPA_ENDP_INIT_HOL_BLOCK_TIMER_n,
-				ep_idx, &ep_holb);
 			ipahal_write_reg_n_fields(
 				IPA_ENDP_INIT_HOL_BLOCK_EN_n,
 				ep_idx, &ep_holb);
 
-			/* IPA4.5 issue requires HOLB_EN to be written twice */
-			if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5)
+			/* For targets > IPA_4.0 issue requires HOLB_EN to be
+			 * written twice.
+			 */
+			if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_0)
 				ipahal_write_reg_n_fields(
 					IPA_ENDP_INIT_HOL_BLOCK_EN_n,
 					ep_idx, &ep_holb);
@@ -3673,6 +3822,8 @@ void ipa3_update_ssr_state(bool is_ssr)
  */
 void ipa3_q6_pre_shutdown_cleanup(void)
 {
+	bool prod = false;
+
 	IPADBG_LOW("ENTER\n");
 
 	IPA_ACTIVE_CLIENTS_INC_SIMPLE();
@@ -3681,6 +3832,10 @@ void ipa3_q6_pre_shutdown_cleanup(void)
 	if (!ipa3_ctx->ipa_endp_delay_wa)
 		ipa3_q6_pipe_delay(true);
 	ipa3_q6_avoid_holb();
+	if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_0) {
+		prod = true;
+		ipa3_halt_q6_gsi_channels(prod);
+	}
 	if (ipa3_ctx->ipa_config_is_mhi)
 		ipa3_set_reset_client_cons_pipe_sus_holb(true,
 		IPA_CLIENT_MHI_CONS);
@@ -3738,8 +3893,6 @@ void ipa3_q6_post_shutdown_cleanup(void)
 
 	/* halt both prod and cons channels starting at IPAv4 */
 	if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_0) {
-		prod = true;
-		ipa3_halt_q6_gsi_channels(prod);
 		IPA_ACTIVE_CLIENTS_DEC_SIMPLE();
 		IPADBG("Exit without consumer check\n");
 		return;
@@ -4971,13 +5124,14 @@ static void ipa3_active_clients_log_mod(
 	}
 
 	if (id->type != SIMPLE) {
-		t = local_clock();
+		t = sched_clock();
 		nanosec_rem = do_div(t, 1000000000) / 1000;
 		snprintf(temp_str, IPA3_ACTIVE_CLIENTS_LOG_LINE_LEN,
-				inc ? "[%5lu.%06lu] ^ %s, %s: %d" :
-						"[%5lu.%06lu] v %s, %s: %d",
+				inc ? "[%5lu.%06lu] ^ %s, %s: %d cnt = %d" :
+					"[%5lu.%06lu] v %s, %s: %d cnt = %d",
 				(unsigned long)t, nanosec_rem,
-				id->id_string, id->file, id->line);
+				id->id_string, id->file, id->line,
+			atomic_read(&ipa3_ctx->ipa3_active_clients.cnt));
 		ipa3_active_clients_log_insert(temp_str);
 	}
 	spin_unlock_irqrestore(&ipa3_ctx->ipa3_active_clients_logging.lock,
@@ -6203,6 +6357,7 @@ static void ipa3_load_ipa_fw(struct work_struct *work)
 	if (result) {
 		IPAERR("IPA FW loading process has failed result=%d\n",
 			result);
+		ipa_assert();
 		return;
 	}
 	pr_info("IPA FW loaded successfully\n");
@@ -7110,11 +7265,15 @@ fail_bus_reg:
 fail_init_mem_partition:
 fail_bind:
 	kfree(ipa3_ctx->ctrl);
+	ipa3_ctx->ctrl = NULL;
 fail_mem_ctrl:
 	kfree(ipa3_ctx->ipa_tz_unlock_reg);
+	ipa3_ctx->ipa_tz_unlock_reg = NULL;
 fail_tz_unlock_reg:
-	if (ipa3_ctx->logbuf)
+	if (ipa3_ctx->logbuf) {
 		ipc_log_context_destroy(ipa3_ctx->logbuf);
+		ipa3_ctx->logbuf = NULL;
+	}
 fail_uc_file_alloc:
 	kfree(ipa3_ctx->gsi_fw_file_name);
 fail_gsi_file_alloc:
@@ -7550,6 +7709,7 @@ static int get_ipa_dts_configuration(struct platform_device *pdev,
 			IPAERR("failed to read register addresses\n");
 			kfree(ipa_tz_unlock_reg);
 			kfree(ipa_drv_res->ipa_tz_unlock_reg);
+			ipa_drv_res->ipa_tz_unlock_reg = NULL;
 			return -EFAULT;
 		}
 
