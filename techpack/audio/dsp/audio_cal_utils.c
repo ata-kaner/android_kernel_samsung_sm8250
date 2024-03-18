@@ -1088,7 +1088,7 @@ bool cal_utils_is_cal_stale(struct cal_block_data *cal_block)
 	}
 
 	if (cal_block->cal_stale)
-		ret = true;
+	    ret = true;
 
 unlock:
 	mutex_unlock(&cal_lock);
