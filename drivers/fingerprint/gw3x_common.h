@@ -20,41 +20,26 @@
 #include <linux/spi/spidev.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
-
-#ifdef CONFIG_OF
 #include <linux/of.h>
 #include <linux/of_irq.h>
+#include <linux/irq.h>
 #include <linux/of_platform.h>
-#endif
 
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
 
 #ifdef ENABLE_SENSORS_FPRINT_SECURE
-#include <linux/wakelock.h>
-#include <linux/clk.h>
 #include <linux/pm_runtime.h>
 #include <linux/of_device.h>
 #include <linux/of_dma.h>
-#include <linux/amba/bus.h>
-#if defined(CONFIG_SECURE_OS_BOOSTER_API)
-#include <mach/secos_booster.h>
-#elif defined(CONFIG_TZDEV_BOOST)
-#include <../drivers/misc/tzdev/tz_boost.h>
-#endif
-struct sec_spi_info {
-	int		port;
-	unsigned long	speed;
-};
 #endif
 
-#include <linux/wakelock.h>
-#include <linux/cpufreq.h>
 #include <linux/pinctrl/consumer.h>
 #include "../pinctrl/core.h"
-#include <linux/pm_qos.h>
 #include <linux/version.h>
+#include <linux/uaccess.h>
+#include "fingerprint_common.h"
 
 /*
  * This feature is temporary for exynos AP only.
@@ -65,16 +50,26 @@ struct sec_spi_info {
  */
 #undef DISABLED_GPIO_PROTECTION
 
+#define SPI_CLK_DIV_MTK 12
+
 #define GF_IOC_MAGIC	'g'
 
-#define GF_GW32J_CHIP_ID	0x00220e
-#define GF_GW32N_CHIP_ID	0x002215
-#define GF_GW36H_CHIP_ID	0x002504
-#define GF_GW36C_CHIP_ID	0x002502
-#define GF_GW36T_CHIP_ID	0x004a0f
+#define GF_GW32J_CHIP_ID		0x00220e
+#define GF_GW32N_CHIP_ID		0x002215
+#define GF_GW36H_CHIP_ID		0x002504
+#define GF_GW36C_CHIP_ID		0x002502
+#define GF_GW36T1_CHIP_ID		0x002507 /* FAB : SMIC */
+#define GF_GW36T2_CHIP_ID		0x002510 /* FAB : SILTRRA */
+#define GF_GW36T3_CHIP_ID		0x002508 /* FAB : CANSEMI */
+#define GF_GW39B_CHIP_ID		0x02010502
+#define GF_GW39U_CHIP_ID		0x02010505
+#define GF_GW36T1_SHIFT_CHIP_ID	0x004a0f
+#define GF_GW36T2_SHIFT_CHIP_ID	0x004a21
+#define GF_GW36T3_SHIFT_CHIP_ID	0x004a11
 
 #define gw3x_SPI_BAUD_RATE 9600000
 #define TANSFER_MAX_LEN (512*1024)
+#define SPI_TRANSFER_DELAY 5
 
 enum gf_netlink_cmd {
 	GF_NETLINK_TEST = 0,
@@ -99,6 +94,22 @@ struct gf_ioc_transfer_raw {
 	uint32_t bits_per_word;
 };
 
+struct gf_ioc_transfer_32 {
+	u8 cmd;    /* spi read = 0, spi  write = 1 */
+	u8 reserved;
+	u16 addr;
+	u32 len;
+	u32 buf;
+};
+
+struct gf_ioc_transfer_raw_32 {
+	u32 len;
+	u32 read_buf;
+	u32 write_buf;
+	uint32_t high_time;
+	uint32_t bits_per_word;
+};
+
 /* define commands */
 #define GF_IOC_INIT             _IOR(GF_IOC_MAGIC, 0, u8)
 #define GF_IOC_EXIT             _IO(GF_IOC_MAGIC, 1)
@@ -115,10 +126,20 @@ struct gf_ioc_transfer_raw {
 
 /* for SPI REE transfer */
 #ifndef ENABLE_SENSORS_FPRINT_SECURE
+#ifdef CONFIG_SENSORS_FINGERPRINT_32BITS_PLATFORM_ONLY
+#define GF_IOC_TRANSFER_CMD     _IOWR(GF_IOC_MAGIC, 15, \
+		struct gf_ioc_transfer_32)
+#else
 #define GF_IOC_TRANSFER_CMD     _IOWR(GF_IOC_MAGIC, 15, \
 		struct gf_ioc_transfer)
+#endif
+#ifdef CONFIG_SENSORS_FINGERPRINT_32BITS_PLATFORM_ONLY
+#define GF_IOC_TRANSFER_RAW_CMD _IOWR(GF_IOC_MAGIC, 16, \
+		struct gf_ioc_transfer_raw_32)
+#else
 #define GF_IOC_TRANSFER_RAW_CMD _IOWR(GF_IOC_MAGIC, 16, \
 		struct gf_ioc_transfer_raw)
+#endif
 #else
 #define GF_IOC_SET_SENSOR_TYPE _IOW(GF_IOC_MAGIC, 18, unsigned int)
 #endif
@@ -132,6 +153,7 @@ struct gf_ioc_transfer_raw {
 struct gf_device {
 	dev_t devno;
 	struct cdev cdev;
+	struct device *dev;
 	struct device *fp_device;
 	struct class *class;
 	struct spi_device *spi;
@@ -156,53 +178,39 @@ struct gf_device {
 	/* for netlink use */
 	int pid;
 
-	struct work_struct work_debug;
-	struct workqueue_struct *wq_dbg;
-	struct timer_list dbg_timer;
-
-#ifdef ENABLE_SENSORS_FPRINT_SECURE
-	bool enabled_clk;
-	struct clk *fp_spi_pclk;
-	struct clk *fp_spi_sclk;
-#else
+#ifndef ENABLE_SENSORS_FPRINT_SECURE
 	u8 *spi_buffer;
 	u8 *tx_buf;
 	u8 *rx_buf;
 	struct mutex buf_lock;
 #endif
-	unsigned int current_spi_speed;
 	unsigned int orient;
-	unsigned int min_cpufreq_limit;
-	u32 spi_speed;
 	int sensortype;
 	int reset_count;
 	int interrupt_count;
 	bool ldo_onoff;
 	bool tz_mode;
 	const char *chipid;
-	struct wake_lock wake_lock;
+	struct wakeup_source *wake_lock;
 	const char *btp_vdd;
+	const char *position;
 	struct regulator *regulator_3p3;
 	struct pinctrl *p;
 	struct pinctrl_state *pins_poweron;
 	struct pinctrl_state *pins_poweroff;
-	struct pm_qos_request pm_qos;
+	struct spi_clk_setting *clk_setting;
+	struct boosting_config *boosting;
+	struct debug_logger *logger;
 };
 
 
 int gw3x_get_gpio_dts_info(struct device *dev, struct gf_device *gf_dev);
 void gw3x_cleanup_info(struct gf_device *gf_dev);
 void gw3x_hw_power_enable(struct gf_device *gf_dev, u8 onoff);
-int gw3x_spi_clk_enable(struct gf_device *gf_dev);
-int gw3x_spi_clk_disable(struct gf_device *gf_dev);
 void gw3x_hw_reset(struct gf_device *gf_dev, u8 delay);
-void gw3x_spi_setup_conf(struct gf_device *gf_dev, u32 speed);
-int gw3x_pin_control(struct gf_device *gf_dev, bool pin_set);
-int gw3x_register_platform_variable(struct gf_device *gf_dev);
-int gw3x_unregister_platform_variable(struct gf_device *gf_dev);
-int gw3x_set_cpu_speedup(struct gf_device *gf_dev, int onoff);
 
 #ifndef ENABLE_SENSORS_FPRINT_SECURE
+void gw3x_spi_setup_conf(struct gf_device *gf_dev, u32 bits);
 int gw3x_spi_read_bytes(struct gf_device *gf_dev, u16 addr,
 		u32 data_len, u8 *rx_buf);
 int gw3x_spi_write_bytes(struct gf_device *gf_dev, u16 addr,
@@ -214,5 +222,14 @@ int gw3x_ioctl_transfer_raw_cmd(struct gf_device *gf_dev,
 int gw3x_init_buffer(struct gf_device *gf_dev);
 int gw3x_free_buffer(struct gf_device *gf_dev);
 #endif /* !ENABLE_SENSORS_FPRINT_SECURE */
+
+extern int fingerprint_register(struct device *dev, void *drvdata,
+	struct device_attribute *attributes[], char *name);
+extern void fingerprint_unregister(struct device *dev,
+	struct device_attribute *attributes[]);
+
+#ifdef CONFIG_BATTERY_SAMSUNG
+extern unsigned int lpcharge;
+#endif
 
 #endif	/* __GF_SPI_DRIVER_H */

@@ -2,6 +2,18 @@
 #include "gw3x_common.h"
 
 #ifndef ENABLE_SENSORS_FPRINT_SECURE
+void gw3x_spi_setup_conf(struct gf_device *gf_dev, u32 bits)
+{
+	gf_dev->spi->bits_per_word = 8;
+	if (gf_dev->prev_bits_per_word != gf_dev->spi->bits_per_word) {
+		if (spi_setup(gf_dev->spi))
+			pr_err("failed to setup spi conf\n");
+		pr_info("prev-bpw:%d, bpw:%d\n",
+				gf_dev->prev_bits_per_word, gf_dev->spi->bits_per_word);
+		gf_dev->prev_bits_per_word = gf_dev->spi->bits_per_word;
+	}
+}
+
 int gw3x_spi_read_bytes(struct gf_device *gf_dev, u16 addr,
 		u32 data_len, u8 *rx_buf)
 {
@@ -21,7 +33,7 @@ int gw3x_spi_read_bytes(struct gf_device *gf_dev, u16 addr,
 	*(tmp_buf + 2) = (u8)(addr & 0xFF);
 	xfer[0].tx_buf = tmp_buf;
 	xfer[0].len = 3;
-	xfer[0].delay_usecs = 5;
+	set_delay_in_spi_transfer(&xfer[0], SPI_TRANSFER_DELAY);
 	spi_message_add_tail(&xfer[0], &msg);
 	spi_sync(gf_dev->spi, &msg);
 
@@ -32,7 +44,7 @@ int gw3x_spi_read_bytes(struct gf_device *gf_dev, u16 addr,
 	xfer[1].tx_buf = tmp_buf + 4;
 	xfer[1].rx_buf = tmp_buf + 4;
 	xfer[1].len = data_len + 1;
-	xfer[1].delay_usecs = 5;
+	set_delay_in_spi_transfer(&xfer[1], SPI_TRANSFER_DELAY);
 	spi_message_add_tail(&xfer[1], &msg);
 	spi_sync(gf_dev->spi, &msg);
 
@@ -65,7 +77,7 @@ int gw3x_spi_write_bytes(struct gf_device *gf_dev, u16 addr,
 	memcpy(tmp_buf + 3, tx_buf, data_len);
 	xfer[0].len = data_len + 3;
 	xfer[0].tx_buf = tmp_buf;
-	xfer[0].delay_usecs = 5;
+	set_delay_in_spi_transfer(&xfer[0], SPI_TRANSFER_DELAY);
 	spi_message_add_tail(&xfer[0], &msg);
 	spi_sync(gf_dev->spi, &msg);
 
@@ -92,7 +104,7 @@ int gw3x_spi_read_byte(struct gf_device *gf_dev, u16 addr, u8 *value)
 
 	xfer[0].tx_buf = gf_dev->spi_buffer;
 	xfer[0].len = 3;
-	xfer[0].delay_usecs = 5;
+	set_delay_in_spi_transfer(&xfer[0], SPI_TRANSFER_DELAY);
 	spi_message_add_tail(&xfer[0], &msg);
 	spi_sync(gf_dev->spi, &msg);
 
@@ -102,7 +114,7 @@ int gw3x_spi_read_byte(struct gf_device *gf_dev, u16 addr, u8 *value)
 	xfer[1].tx_buf = gf_dev->spi_buffer + 4;
 	xfer[1].rx_buf = gf_dev->spi_buffer + 4;
 	xfer[1].len = 2;
-	xfer[1].delay_usecs = 5;
+	set_delay_in_spi_transfer(&xfer[1], SPI_TRANSFER_DELAY);
 	spi_message_add_tail(&xfer[1], &msg);
 	spi_sync(gf_dev->spi, &msg);
 
@@ -132,7 +144,7 @@ int gw3x_spi_write_byte(struct gf_device *gf_dev, u16 addr, u8 value)
 
 	xfer[0].tx_buf = gf_dev->spi_buffer;
 	xfer[0].len = 3 + 1;
-	xfer[0].delay_usecs = 5;
+	set_delay_in_spi_transfer(&xfer[0], SPI_TRANSFER_DELAY);
 	spi_message_add_tail(&xfer[0], &msg);
 	spi_sync(gf_dev->spi, &msg);
 
@@ -167,16 +179,35 @@ int gw3x_ioctl_transfer_raw_cmd(struct gf_device *gf_dev,
 	struct gf_ioc_transfer_raw ioc_xraw;
 	int retval = 0;
 	uint32_t len;
+#ifdef CONFIG_SENSORS_FINGERPRINT_32BITS_PLATFORM_ONLY
+	struct gf_ioc_transfer_raw_32 ioc_xraw_32;
+	u64 read_buf_64;
+	u64 write_buf_64;
+#endif
 
 	do {
+#ifdef CONFIG_SENSORS_FINGERPRINT_32BITS_PLATFORM_ONLY
+		if (copy_from_user(&ioc_xraw_32, (void __user *)arg,
+				sizeof(struct gf_ioc_transfer_raw_32)))
+#else
 		if (copy_from_user(&ioc_xraw, (void __user *)arg,
 				sizeof(struct gf_ioc_transfer_raw)))
+#endif
 		{
 			pr_err("Failed to copy gf_ioc_transfer_raw from user to kernel\n");
 			retval = -EFAULT;
 			break;
 		}
 
+#ifdef CONFIG_SENSORS_FINGERPRINT_32BITS_PLATFORM_ONLY
+		read_buf_64 = (u64)ioc_xraw_32.read_buf;
+		write_buf_64 = (u64)ioc_xraw_32.write_buf;
+		ioc_xraw.read_buf = (u8 *)read_buf_64;
+		ioc_xraw.write_buf = (u8 *)write_buf_64;
+		ioc_xraw.high_time = ioc_xraw_32.high_time;
+		ioc_xraw.bits_per_word = ioc_xraw_32.bits_per_word;
+		ioc_xraw.len = ioc_xraw_32.len;
+#endif
 		if ((ioc_xraw.len > bufsiz) || (ioc_xraw.len == 0)) {
 			pr_err("request transfer length larger than maximum buffer\n");
 			retval = -EINVAL;
@@ -220,21 +251,19 @@ int gw3x_init_buffer(struct gf_device *gf_dev)
 	int len = TANSFER_MAX_LEN;
 
 	gf_dev->spi_buffer = kzalloc(len, GFP_KERNEL);
-	if (NULL == gf_dev->spi_buffer) {
-		pr_err("failed to allocate spi buffer\n");
+	if (gf_dev->spi_buffer == NULL) {
 		retval = -ENOMEM;
 		goto alloc_failed;
 	}
 
 	gf_dev->tx_buf = kzalloc(len, GFP_KERNEL);
-	if (NULL == gf_dev->tx_buf) {
-		pr_err("failed to allocate raw tx buffer\n");
+	if (gf_dev->tx_buf == NULL) {
 		retval = -ENOMEM;
 		goto alloc_failed;
 	}
 
 	gf_dev->rx_buf = kzalloc(len, GFP_KERNEL);
-	if (NULL == gf_dev->rx_buf) {
+	if (gf_dev->rx_buf == NULL) {
 		kfree(gf_dev->tx_buf);
 		pr_err("failed to allocate raw rx buffer\n");
 		retval = -ENOMEM;
