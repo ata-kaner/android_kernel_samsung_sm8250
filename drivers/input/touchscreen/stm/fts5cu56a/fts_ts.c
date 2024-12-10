@@ -4206,6 +4206,7 @@ int fts_set_lowpowermode(struct fts_ts_info *info, u8 mode)
 					&d_lowpower_flag, sizeof(d_lowpower_flag));
 		}
 #endif
+		info->press_prop = 0;
 
 	} else {
 		ret = fts_set_opmode(info, FTS_OPMODE_NORMAL);
@@ -4221,8 +4222,11 @@ int fts_set_lowpowermode(struct fts_ts_info *info, u8 mode)
 			disable_irq_wake(info->irq);
 
 		info->lp_dump_readmore = 1;
+		info->press_prop = 1;
 	}
 out:
+
+	fts_set_press_property(info);
 
 	return 0;
 }
