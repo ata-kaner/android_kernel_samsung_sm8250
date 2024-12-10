@@ -6855,11 +6855,14 @@ static void fod_enable(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (sec->cmd_param[0])
+	if (sec->cmd_param[0]) {
 		info->lowpower_flag |= FTS_MODE_PRESS;
-	else
+		info->fod_press_enabled = true;
+	}
+	else {
 		info->lowpower_flag &= ~FTS_MODE_PRESS;
-
+		info->fod_press_enabled = false;
+	}
 	info->press_prop = !!sec->cmd_param[1];
 
 	input_info(true, &info->client->dev, "%s: %s, fast:%d, 0x%02X\n",

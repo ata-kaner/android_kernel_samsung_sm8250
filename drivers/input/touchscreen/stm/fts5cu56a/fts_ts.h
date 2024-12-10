@@ -914,6 +914,8 @@ struct fts_ts_info {
 	int fod_vi_size;
 	u8 *fod_vi_data;
 
+	bool fod_press_enabled;
+
 #if defined(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	atomic_t st_enabled;
 	atomic_t st_pending_irqs;
