@@ -273,6 +273,7 @@ config SEC_CP_SEPARATE_DEBUG
 config SEC_DEBUG_MODULE_INFO
 	bool "store module information"
 	default n
+	depends on MODULES
 	help
 	  store module information for bootloader to use them
 endif
