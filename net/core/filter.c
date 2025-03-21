@@ -5027,7 +5027,7 @@ __bpf_sk_lookup(struct sk_buff *skb, struct bpf_sock_tuple *tuple, u32 len,
 
 	if ((s32)netns_id < 0) {
 		net = caller_net;
-		sk = sk_lookup(net, tuple, skb, family, proto);
+		sk = sk_lookup(net, tuple, ifindex, sdif, family, proto);
 	} else {
 		net = get_net_ns_by_id(caller_net, netns_id);
 		if (unlikely(!net))
