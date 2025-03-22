@@ -240,8 +240,6 @@ static void put_cpu_map_entry(struct bpf_cpu_map_entry *rcpu)
 	}
 }
 
-#define CPUMAP_BATCH 8
-
 static int cpu_map_kthread_run(void *data)
 {
 	struct bpf_cpu_map_entry *rcpu = data;
@@ -254,9 +252,8 @@ static int cpu_map_kthread_run(void *data)
 	 * kthread_stop signal until queue is empty.
 	 */
 	while (!kthread_should_stop() || !__ptr_ring_empty(rcpu->queue)) {
-		unsigned int drops = 0, sched = 0;
-		void *frames[CPUMAP_BATCH];
-		int i, n;
+		unsigned int processed = 0, drops = 0, sched = 0;
+		struct xdp_frame *xdpf;
 
 		/* Release CPU reschedule checks */
 		if (__ptr_ring_empty(rcpu->queue)) {
@@ -272,16 +269,14 @@ static int cpu_map_kthread_run(void *data)
 			sched = cond_resched();
 		}
 
+		/* Process packets in rcpu->queue */
+		local_bh_disable();
 		/*
 		 * The bpf_cpu_map_entry is single consumer, with this
 		 * kthread CPU pinned. Lockless access to ptr_ring
 		 * consume side valid as no-resize allowed of queue.
 		 */
-		n = ptr_ring_consume_batched(rcpu->queue, frames, CPUMAP_BATCH);
-
-		local_bh_disable();
-		for (i = 0; i < n; i++) {
-			struct xdp_frame *xdpf = frames[i];
+		while ((xdpf = __ptr_ring_consume(rcpu->queue))) {
 			struct sk_buff *skb;
 			int ret;
 
@@ -295,9 +290,13 @@ static int cpu_map_kthread_run(void *data)
 			ret = netif_receive_skb_core(skb);
 			if (ret == NET_RX_DROP)
 				drops++;
+
+			/* Limit BH-disable period */
+			if (++processed == 8)
+				break;
 		}
 		/* Feedback loop via tracepoint */
-		trace_xdp_cpumap_kthread(rcpu->map_id, n, drops, sched);
+		trace_xdp_cpumap_kthread(rcpu->map_id, processed, drops, sched);
 
 		local_bh_enable(); /* resched point, may call do_softirq() */
 	}
