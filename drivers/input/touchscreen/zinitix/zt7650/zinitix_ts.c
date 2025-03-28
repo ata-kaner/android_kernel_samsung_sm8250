@@ -1874,6 +1874,7 @@ static void zt_ts_fod_event_report(struct zt_ts_info *info, struct point_info to
 	if ((touch_info.byte01.value_u8bit == 0)
 			 || (touch_info.byte01.value_u8bit == 1)) {
 		info->scrub_id = SPONGE_EVENT_TYPE_FOD_PRESS;
+		sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 
 		info->scrub_x = ((touch_info.byte02.value_u8bit << 4) & 0xFF0)
 			| ((touch_info.byte04.value_u8bit & 0xF0) >> 4);
@@ -1889,6 +1890,7 @@ static void zt_ts_fod_event_report(struct zt_ts_info *info, struct point_info to
 #endif
 	} else if (touch_info.byte01.value_u8bit == 2) {
 		info->scrub_id = SPONGE_EVENT_TYPE_FOD_RELEASE;
+		sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 
 		info->scrub_x = ((touch_info.byte02.value_u8bit << 4) & 0xFF0)
 			| ((touch_info.byte04.value_u8bit & 0xF0) >> 4);
@@ -1902,6 +1904,7 @@ static void zt_ts_fod_event_report(struct zt_ts_info *info, struct point_info to
 #endif
 	} else if (touch_info.byte01.value_u8bit == 3) {
 		info->scrub_id = SPONGE_EVENT_TYPE_FOD_OUT;
+		sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 
 		info->scrub_x = ((touch_info.byte02.value_u8bit << 4) & 0xFF0)
 			| ((touch_info.byte04.value_u8bit & 0xF0) >> 4);
