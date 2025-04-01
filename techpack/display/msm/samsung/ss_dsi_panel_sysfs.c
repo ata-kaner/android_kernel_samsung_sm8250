@@ -4459,40 +4459,6 @@ static ssize_t ss_finger_hbm_updated_show(struct device *dev,
 	return strlen(buf);
 }
 
-static ssize_t ss_finger_hbm_enable_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	struct samsung_display_driver_data *vdd =
-		(struct samsung_display_driver_data *)dev_get_drvdata(dev);
-	int value;
-
-	if (IS_ERR_OR_NULL(vdd)) {
-		LCD_ERR("no vdd");
-		return size;
-	}
-
-	if (sscanf(buf, "%d", &value) > 1)
-		return size;
-
-	LCD_INFO("finger_mask_enable value : %d\n", value);
-	vdd->finger_mask_enable = value;
-
-	return size;
-}
-
-static ssize_t ss_finger_hbm_enable_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct samsung_display_driver_data *vdd =
-		(struct samsung_display_driver_data *)dev_get_drvdata(dev);
-
-	sprintf(buf, "%d\n", vdd->finger_mask_enable);
-
-	LCD_INFO("vdd->finger_mask_enable value : %x\n", vdd->finger_mask_enable);
-
-	return strlen(buf);
-}
-
 static ssize_t ss_ub_con_det_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -5252,7 +5218,6 @@ static DEVICE_ATTR(dia, S_IRUGO | S_IWUSR | S_IWGRP, NULL, ss_dia_store);
 /* SAMSUNG_FINGERPRINT */
 static DEVICE_ATTR(mask_brightness, S_IRUGO | S_IWUSR | S_IWGRP, NULL, ss_finger_hbm_store);
 static DEVICE_ATTR(actual_mask_brightness, S_IRUGO | S_IWUSR | S_IWGRP, ss_finger_hbm_updated_show, NULL);
-static DEVICE_ATTR(mask_enable, S_IRUGO | S_IWUSR | S_IWGRP, ss_finger_hbm_enable_show, ss_finger_hbm_enable_store);
 
 static DEVICE_ATTR(conn_det, S_IRUGO | S_IWUSR | S_IWGRP, ss_ub_con_det_show, ss_ub_con_det_store);
 static DEVICE_ATTR(vrr, S_IRUGO|S_IWUSR|S_IWGRP, vrr_show, NULL);
@@ -5338,7 +5303,6 @@ static struct attribute *panel_sysfs_attributes[] = {
 	&dev_attr_partial_disp.attr,
 	&dev_attr_mask_brightness.attr,
 	&dev_attr_actual_mask_brightness.attr,
-	&dev_attr_mask_enable.attr,
 	&dev_attr_conn_det.attr,
 	&dev_attr_dia.attr,
 	&dev_attr_vrr.attr,
