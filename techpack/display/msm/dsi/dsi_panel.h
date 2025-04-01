@@ -237,8 +237,6 @@ struct dsi_panel {
 #endif
     struct brightness_alpha_pair *fod_dim_lut;
 	unsigned int fod_dim_lut_len;
-	u8 fod_dim_alpha;
-	bool fod_hbm_enabled;
 
 	enum dsi_dms_mode dms_mode;
 
@@ -375,7 +373,5 @@ int dsi_panel_tx_cmd_set(struct dsi_panel *panel, enum dsi_cmd_set_type type);
 int ss_dsi_panel_parse_cmd_sets(struct dsi_panel_cmd_set *cmd_sets,
 			struct dsi_panel *panel);
 #endif
-
-int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status);
 
 #endif /* _DSI_PANEL_H_ */
