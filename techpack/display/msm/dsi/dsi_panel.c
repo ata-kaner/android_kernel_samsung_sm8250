@@ -3238,12 +3238,8 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 	struct dsi_display *display = get_main_display();
 	struct samsung_display_driver_data *vdd = (struct samsung_display_driver_data *)display->panel->panel_private;
 
-	if (status){
-		if (vdd->br_info.common_br.bl_level > 255)
-			vdd->br_info.common_br.finger_mask_bl_level = vdd->br_info.common_br.bl_level;
-		else
-			vdd->br_info.common_br.finger_mask_bl_level = 311;
-	}
+	if (status)
+		vdd->br_info.common_br.finger_mask_bl_level = 311;
 	else
 		vdd->br_info.common_br.finger_mask_bl_level = 0;
 
