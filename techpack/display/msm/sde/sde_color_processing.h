@@ -219,5 +219,4 @@ void sde_cp_crtc_enable(struct drm_crtc *crtc);
  * @crtc:  Pointer to drm_crtc.
  */
 void sde_cp_crtc_disable(struct drm_crtc *crtc);
-const struct drm_msm_pcc *sde_cp_crtc_get_pcc_cfg(struct drm_crtc *crtc);
 #endif /*_SDE_COLOR_PROCESSING_H */
