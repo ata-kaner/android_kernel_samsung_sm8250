@@ -3170,7 +3170,7 @@ error:
 static int dsi_panel_parse_fod_dim_lut(struct dsi_panel *panel,
 		struct dsi_parser_utils *utils)
 {
-	const char *prop_name = "samsung,fod-dim-lut";
+	const char *prop_name = "qcom,fod-dim-lut";
 	unsigned int i;
 	u32 *array;
 	int count;
