@@ -831,7 +831,6 @@ struct brightness_info {
 	/* SAMSUNG_FINGERPRINT */
 	int finger_mask_bl_level;
 	int finger_mask_hbm_on;
-	int hbm_mask_brightness;
 
 	int cd_idx;			// original idx
 	int pac_cd_idx;		// scaled idx
