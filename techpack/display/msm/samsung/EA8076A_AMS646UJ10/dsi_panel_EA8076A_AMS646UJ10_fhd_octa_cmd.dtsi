@@ -106,6 +106,7 @@
 		samsung,support_gpara;
 		samsung,support_dynamic_mipi_clk;
 		//samsung,pll_ssc_disabled;
+		samsung,hbm-mask-brightness = <319>;
 
 		/* *************************************************************
 		 *  Tx

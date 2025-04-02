@@ -831,6 +831,10 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 		vdd = display->panel->panel_private;
 		finger_mask_state = sde_connector_get_property(c_conn->base.state,
 				CONNECTOR_PROP_FINGERPRINT_MASK);
+		if (finger_mask_state)
+			vdd->br_info.common_br.finger_mask_bl_level = vdd->br_info.common_br.hbm_mask_brightness;
+		else
+			vdd->br_info.common_br.finger_mask_bl_level = 0;
 		vdd->finger_mask_updated = false;
 		if (finger_mask_state != vdd->finger_mask) {
 			SDE_ERROR("[FINGER MASK]updated finger mask mode %d\n", finger_mask_state);

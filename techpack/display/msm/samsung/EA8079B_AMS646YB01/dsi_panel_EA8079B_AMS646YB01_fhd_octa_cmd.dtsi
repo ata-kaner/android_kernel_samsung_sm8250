@@ -110,6 +110,7 @@
 		samsung,support_factory_panel_swap;
 		samsung,support_gpara;
 		samsung,pll_ssc_disabled;
+		samsung,hbm-mask-brightness = <319>;
 
 		/* *************************************************************
 		 *  Tx
