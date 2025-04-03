@@ -23,8 +23,8 @@
 		qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
 
 		qcom,mdss-dsi-bl-min-level = <1>;
-		qcom,mdss-dsi-bl-max-level = <486>;
-		qcom,mdss-brightness-max-level = <486>;
+		qcom,mdss-dsi-bl-max-level = <255>;
+		qcom,mdss-brightness-max-level = <255>;
 		qcom,mdss-brightness-default-level = <255>;
 
 		qcom,mdss-dsi-panel-type = "dsi_cmd_mode";
