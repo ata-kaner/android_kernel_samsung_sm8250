@@ -809,7 +809,6 @@ struct zt_ts_info {
 	u8 fod_info_vi_trx[3];
 	u16 fod_info_vi_data_len;
 	u16 fod_rect[4];
-	atomic_t fod_pressed;
 
 	u16 aod_rect[4];
 	u16 aod_active_area[3];
@@ -1434,7 +1433,7 @@ static void zt_set_lp_mode(struct zt_ts_info *info, int event, bool enable)
 
 	if (enable) {
 		zinitix_bit_set(info->lpm_mode, event);
-		atomic_set(&info->fod_pressed, 0);
+		info->fod_pressed = 0;
 	}
 	else {
 		zinitix_bit_clr(info->lpm_mode, event);
@@ -1610,23 +1609,13 @@ static ssize_t secure_touch_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%u", val);
 }
 
-static ssize_t zt_fod_pressed_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct zt_ts_info *info = dev_get_drvdata(dev);
-
-	return snprintf(buf, PAGE_SIZE, "%d", atomic_read(&info->fod_pressed));
-}
-
 static DEVICE_ATTR(secure_touch_enable, (S_IRUGO | S_IWUSR | S_IWGRP),
 		secure_touch_enable_show, secure_touch_enable_store);
 static DEVICE_ATTR(secure_touch, S_IRUGO, secure_touch_show, NULL);
-static DEVICE_ATTR(fod_pressed, S_IRUGO, zt_fod_pressed_show, NULL);
 
 static struct attribute *secure_attr[] = {
 	&dev_attr_secure_touch_enable.attr,
 	&dev_attr_secure_touch.attr,
-	&dev_attr_fod_pressed.attr,
 	NULL,
 };
 
@@ -1898,8 +1887,6 @@ static void zt_ts_fod_event_report(struct zt_ts_info *info, struct point_info to
 				touch_info.byte01.value_u8bit ? "NORMAL" : "LONG",
 				info->scrub_id, info->scrub_x, info->scrub_y);
 #endif
-		atomic_set(&info->fod_pressed, 1);
-		sysfs_notify(&info->input_dev->dev.kobj, NULL, "fod_pressed");
 	} else if (touch_info.byte01.value_u8bit == 2) {
 		info->scrub_id = SPONGE_EVENT_TYPE_FOD_RELEASE;
 
@@ -1913,8 +1900,6 @@ static void zt_ts_fod_event_report(struct zt_ts_info *info, struct point_info to
 		input_info(true, &info->client->dev, "%s: FOD RELEASE: %d, %d, %d\n",
 				__func__, info->scrub_id, info->scrub_x, info->scrub_y);
 #endif
-		atomic_set(&info->fod_pressed, 0);
-		sysfs_notify(&info->input_dev->dev.kobj, NULL, "fod_pressed");
 	} else if (touch_info.byte01.value_u8bit == 3) {
 		info->scrub_id = SPONGE_EVENT_TYPE_FOD_OUT;
 
@@ -1928,8 +1913,6 @@ static void zt_ts_fod_event_report(struct zt_ts_info *info, struct point_info to
 		input_info(true, &info->client->dev, "%s: FOD OUT: %d, %d, %d\n",
 				__func__, info->scrub_id, info->scrub_x, info->scrub_y);
 #endif
-		atomic_set(&info->fod_pressed, 0);
-		sysfs_notify(&info->input_dev->dev.kobj, NULL, "fod_pressed");
 	}
 }
 
