@@ -6733,13 +6733,47 @@ static void singletap_enable(void *device_data)
 	input_info(true, &info->client->dev, "%s: %d\n", __func__, sec->cmd_param[0]);
 }
 
+int fts_set_aod_rect(struct fts_ts_info *info, u16 w, u16 h, u16 x, u16 y)
+{
+    u8 data[8] = {0,};
+    int ret = -1;
+    int i;
+    u16 rect[4] = { w, h, x, y };
+
+    for (i = 0; i < 4; i++) {
+        data[i * 2]     = rect[i] & 0xFF;
+        data[i * 2 + 1] = (rect[i] >> 8) & 0xFF;
+        info->rect_data[i] = rect[i];
+    }
+
+#ifdef FTS_SUPPORT_SPONGELIB
+    if (!info->use_sponge)
+        return -EINVAL;
+
+    ret = info->fts_write_to_sponge(info, FTS_CMD_SPONGE_OFFSET_AOD_RECT, data, sizeof(data));
+    if (ret < 0)
+        return ret;
+#endif
+
+    if (info->fts_power_state == FTS_POWER_STATE_LOWPOWER) {
+        if (w == 0 && h == 0 && x == 0 && y == 0)
+            ret = fts_set_hsync_scanmode(info, FTS_CMD_LPM_ASYNC_SCAN);
+        else
+            ret = fts_set_hsync_scanmode(info, FTS_CMD_LPM_SYNC_SCAN);
+
+        if (ret <= 0)
+            return ret;
+    }
+
+    return 0;
+}
+
 static void set_aod_rect(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct fts_ts_info *info = container_of(sec, struct fts_ts_info, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
-	u8 data[8] = {0, };
-	int i, ret = -1;
+	int ret = -1;
 
 	sec_cmd_set_default_result(sec);
 
@@ -6749,39 +6783,12 @@ static void set_aod_rect(void *device_data)
 			sec->cmd_param[2], sec->cmd_param[3]);
 #endif
 
-	for (i = 0; i < 4; i++) {
-		data[i * 2] = sec->cmd_param[i] & 0xFF;
-		data[i * 2 + 1] = (sec->cmd_param[i] >> 8) & 0xFF;
-		info->rect_data[i] = sec->cmd_param[i];
-	}
+	ret = fts_set_aod_rect(info, sec->cmd_param[0], sec->cmd_param[1],
+		sec->cmd_param[2], sec->cmd_param[3]);
 
-#ifdef FTS_SUPPORT_SPONGELIB
-	if (!info->use_sponge)
-		goto NG;
-
-	ret = info->fts_write_to_sponge(info, FTS_CMD_SPONGE_OFFSET_AOD_RECT, data, sizeof(data));
-#endif
 	if (ret < 0) {
 		input_err(true, &info->client->dev, "%s: failed. ret: %d\n", __func__, ret);
 		goto NG;
-	}
-
-	if (info->fts_power_state == FTS_POWER_STATE_LOWPOWER) {
-		if (sec->cmd_param[0] == 0 && sec->cmd_param[1] == 0 &&
-			sec->cmd_param[2] == 0 && sec->cmd_param[3] == 0) {
-
-			input_info(true, &info->client->dev, "%s: sync -> async base scan\n", __func__);
-			ret = fts_set_hsync_scanmode(info, FTS_CMD_LPM_ASYNC_SCAN);
-		} else {
-
-			input_info(true, &info->client->dev, "%s: sync base scan\n", __func__);
-			ret = fts_set_hsync_scanmode(info, FTS_CMD_LPM_SYNC_SCAN);
-		}
-
-		if (ret <= 0) {
-			input_err(true, &info->client->dev, "%s: Failed to send command!", __func__);
-			goto NG;
-		}
 	}
 
 	snprintf(buff, sizeof(buff), "OK");

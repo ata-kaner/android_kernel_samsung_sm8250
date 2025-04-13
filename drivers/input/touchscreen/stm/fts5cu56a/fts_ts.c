@@ -111,10 +111,12 @@ static int fts_panel_state_notifier(struct notifier_block *nb,
     switch (panel_state) {
     case PANEL_ON:
         fts_set_lowpowermode(info, TO_TOUCH_MODE);
+        fts_set_aod_rect(info, 0, 0, 0, 0);
         break;
     case PANEL_OFF:
     case PANEL_LPM:
         fts_set_lowpowermode(info, TO_LOWPOWER_MODE);
+        fts_set_aod_rect(info, 1080, 2400, 0, 0);
         break;
     default:
         break;

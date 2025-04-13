@@ -1063,6 +1063,7 @@ int fts_panel_ito_test(struct fts_ts_info *info, int testmode);
 void fts_chk_tsp_ic_status(struct fts_ts_info *info, int call_pos);
 int fts_set_lowpowermode(struct fts_ts_info *info, u8 mode);
 int fts_set_hsync_scanmode(struct fts_ts_info *info, u8 mode);
+int fts_set_aod_rect(struct fts_ts_info *info, u16 w, u16 h, u16 x, u16 y);
 int fts_set_external_noise_mode(struct fts_ts_info *info, u8 mode);
 int fts_fix_active_mode(struct fts_ts_info *info, bool enable);
 #ifdef FTS_SUPPORT_SPONGELIB
