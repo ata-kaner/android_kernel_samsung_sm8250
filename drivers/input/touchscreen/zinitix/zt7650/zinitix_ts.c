@@ -2394,6 +2394,7 @@ static int zt_panel_state_notify(struct notifier_block *nb,
 
     switch (panel_state) {
     case PANEL_ON:
+        info->fod_lp_mode = 0;
         zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, 0);
         zt_set_aod_rect(info, 0, 0, 0, 0);
         info->fod_mode_set |= FOD_SHORT_MODE;
@@ -2401,6 +2402,7 @@ static int zt_panel_state_notify(struct notifier_block *nb,
         break;
     case PANEL_OFF:
     case PANEL_LPM:
+        info->fod_lp_mode = 1;
         zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, 1);
         zt_set_aod_rect(info, 1080, 2400, 0, 0);
         info->fod_mode_set &= ~FOD_SHORT_MODE;
