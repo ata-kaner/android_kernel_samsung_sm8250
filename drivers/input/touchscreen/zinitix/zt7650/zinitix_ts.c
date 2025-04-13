@@ -1435,13 +1435,10 @@ static void zt_set_lp_mode(struct zt_ts_info *info, int event, bool enable)
 
 	mutex_lock(&info->set_lpmode_lock);
 
-	if (enable) {
+	if (enable)
 		zinitix_bit_set(info->lpm_mode, event);
-		info->fod_pressed = 0;
-	}
-	else {
+	else
 		zinitix_bit_clr(info->lpm_mode, event);
-    }
 
 	ret = ts_write_to_sponge(info, ZT_SPONGE_LP_FEATURE, &info->lpm_mode, 1);
 	if (ret < 0)
@@ -2397,16 +2394,20 @@ static int zt_panel_state_notify(struct notifier_block *nb,
         info->fod_lp_mode = 0;
         zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, 0);
         zt_set_aod_rect(info, 0, 0, 0, 0);
-        info->fod_mode_set |= FOD_SHORT_MODE;
-        zt_set_fod_property(info);
+        if (info->fod_enable) {
+			info->fod_mode_set |= FOD_SHORT_MODE;
+			zt_set_fod_property(info);
+        }
         break;
     case PANEL_OFF:
     case PANEL_LPM:
         info->fod_lp_mode = 1;
         zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, 1);
         zt_set_aod_rect(info, 1080, 2400, 0, 0);
-        info->fod_mode_set &= ~FOD_SHORT_MODE;
-        zt_set_fod_property(info);
+        if (info->fod_enable) {
+			info->fod_mode_set &= ~FOD_SHORT_MODE;
+			zt_set_fod_property(info);
+        }
         break;
     default:
         break;
