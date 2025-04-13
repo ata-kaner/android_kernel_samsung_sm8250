@@ -556,6 +556,10 @@ typedef enum {
 	SPONGE_EVENT_TYPE_FOD_OUT			= 0x11,
 } SPONGE_EVENT_TYPE;
 
+/* FoD Modes*/
+#define FOD_SHORT_MODE  (1 << 0)
+#define FOD_STRICT_MODE (1 << 1)
+
 /* Touch Screen */
 #define TSP_CMD_STR_LEN			32
 #define TSP_CMD_RESULT_STR_LEN		3264	//34*16*6
@@ -1656,6 +1660,10 @@ static int zt_pinctrl_configure(struct zt_ts_info *info, bool active);
 
 static bool init_touch(struct zt_ts_info *info);
 static bool mini_init_touch(struct zt_ts_info *info);
+
+static int zt_set_aod_rect(struct zt_ts_info *info, u16 w, u16 h, u16 x, u16 y);
+static int zt_set_fod_property(struct zt_ts_info *info);
+
 static void clear_report_data(struct zt_ts_info *info);
 
 #if ESD_TIMER_INTERVAL
@@ -2387,10 +2395,16 @@ static int zt_panel_state_notify(struct notifier_block *nb,
     switch (panel_state) {
     case PANEL_ON:
         zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, 0);
+        zt_set_aod_rect(info, 0, 0, 0, 0);
+        info->fod_mode_set |= FOD_SHORT_MODE;
+        zt_set_fod_property(info);
         break;
     case PANEL_OFF:
     case PANEL_LPM:
         zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, 1);
+        zt_set_aod_rect(info, 1080, 2400, 0, 0);
+        info->fod_mode_set &= ~FOD_SHORT_MODE;
+        zt_set_fod_property(info);
         break;
     default:
         break;
@@ -3302,15 +3316,17 @@ static int zt_set_fod_rect(struct zt_ts_info *info)
 	return ret;
 }
 
-static int zt_set_aod_rect(struct zt_ts_info *info)
+static int zt_set_aod_rect(struct zt_ts_info *info, u16 w, u16 h, u16 x, u16 y)
 {
 	u8 data[8] = {0};
 	int i;
 	int ret;
+	u16 rect[4] = { w, h, x, y };
 
 	for (i = 0; i < 4; i++) {
-		data[i * 2] = info->aod_rect[i] & 0xFF;
-		data[i * 2 + 1] = (info->aod_rect[i] >> 8) & 0xFF;
+		data[i * 2] = rect[i] & 0xFF;
+		data[i * 2 + 1] = (rect[i] >> 8) & 0xFF;
+		info->aod_rect[i] = rect[i];
 	}
 
 	ret = ts_write_to_sponge(info, ZT_SPONGE_TOUCHBOX_W_OFFSET, data, sizeof(data));
@@ -3370,7 +3386,7 @@ static bool mini_init_touch(struct zt_ts_info *info)
 		write_cmd(info->client, ZT_SLEEP_CMD);
 		input_info(true, &info->client->dev, "%s, sleep mode\n", __func__);
 
-		zt_set_aod_rect(info);
+		zt_set_aod_rect(info, info->aod_rect[0], info->aod_rect[1], info->aod_rect[2], info->aod_rect[3]);
 	} else {
 		zt_set_grip_type(info, ONLY_EDGE_HANDLER);
 	}
@@ -7279,7 +7295,7 @@ static void fod_enable(void *device_data)
 	info->fod_mode_set = (sec->cmd_param[1] & 0x01) | ((sec->cmd_param[2] & 0x01) << 1);
 
 	zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, info->fod_enable);
-	ret = ts_write_to_sponge(info, ZT_SPONGE_FOD_PROPERTY, (u8 *)&info->fod_mode_set, 2);
+	ret = zt_set_fod_property(info);
 	if (ret < 0)
 		input_err(true, &info->client->dev, "%s: Failed to write sponge\n", __func__);
 
@@ -7298,6 +7314,17 @@ static void fod_enable(void *device_data)
 	input_info(true, &client->dev, "%s, %s\n", __func__, sec->cmd_result);
 
 	return;
+}
+
+static int zt_set_fod_property(struct zt_ts_info *info)
+{
+	int ret = 0;
+
+	ret = ts_write_to_sponge(info, ZT_SPONGE_FOD_PROPERTY, (u8 *)&info->fod_mode_set, 2);
+	if (ret < 0)
+		input_err(true, &info->client->dev, "%s: failed. ret: %d\n", __func__, ret);
+
+	return ret;
 }
 
 static void fod_lp_mode(void *device_data)
@@ -7446,7 +7473,6 @@ static void set_aod_rect(void *device_data)
 	struct zt_ts_info *info = container_of(sec, struct zt_ts_info, sec);
 	struct i2c_client *client = info->client;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int i;
 	int ret;
 
 	sec_cmd_set_default_result(sec);
@@ -7455,10 +7481,10 @@ static void set_aod_rect(void *device_data)
 			__func__, sec->cmd_param[0], sec->cmd_param[1],
 			sec->cmd_param[2], sec->cmd_param[3]);
 
-	for (i = 0; i < 4; i++)
-		info->aod_rect[i] = sec->cmd_param[i];
 
-	ret = zt_set_aod_rect(info);
+	ret = zt_set_aod_rect(info, sec->cmd_param[0], sec->cmd_param[1],
+		sec->cmd_param[2], sec->cmd_param[3]);
+
 	if (ret < 0) {
 		input_err(true, &info->client->dev, "%s: failed. ret: %d\n", __func__, ret);
 		goto error;
