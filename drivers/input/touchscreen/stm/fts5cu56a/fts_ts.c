@@ -2108,9 +2108,9 @@ static u8 fts_event_handler_type_b(struct fts_ts_info *info)
 						info->scrub_y = (p_gesture_status->gesture_data_2 << 4) | (p_gesture_status->gesture_data_3 & 0x0F);
 
 						input_info(true, &info->client->dev, "%s: AOD\n", __func__);
-						input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
+						input_report_key(info->input_dev, KEY_WAKEUP, 1);
 						input_sync(info->input_dev);
-						input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
+						input_report_key(info->input_dev, KEY_WAKEUP, 0);
 					} else if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_DOUBLETAP_TO_WAKEUP) {
 						input_report_key(info->input_dev, KEY_WAKEUP, 1);
 						input_sync(info->input_dev);
