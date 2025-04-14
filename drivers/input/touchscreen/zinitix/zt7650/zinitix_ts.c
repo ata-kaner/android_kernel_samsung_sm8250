@@ -2071,9 +2071,9 @@ static bool ts_read_coord(struct zt_ts_info *info)
 				info->scrub_y = ((info->touch_info[0].byte03.value_u8bit << 4) & 0xFF0)
 					| ((info->touch_info[0].byte04.value_u8bit & 0x0F));
 
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
+				input_report_key(info->input_dev, KEY_WAKEUP, 1);
 				input_sync(info->input_dev);
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
+				input_report_key(info->input_dev, KEY_WAKEUP, 0);
 				input_sync(info->input_dev);
 
 #ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
