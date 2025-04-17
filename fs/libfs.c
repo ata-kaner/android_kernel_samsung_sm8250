@@ -1423,7 +1423,11 @@ static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
  * performance hit, we use custom dentry_operations for each possible
  * combination rather than always installing all operations.
  */
+#ifdef CONFIG_FSCRYPT_SDP
+void generic_set_encrypted_ci_d_ops(struct inode *dir, struct dentry *dentry)
+#else
 void generic_set_encrypted_ci_d_ops(struct dentry *dentry)
+#endif
 {
 #ifdef CONFIG_FS_ENCRYPTION
 	bool needs_encrypt_ops = dentry->d_flags & DCACHE_NOKEY_NAME;

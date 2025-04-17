@@ -518,7 +518,11 @@ static struct dentry *f2fs_lookup(struct inode *dir, struct dentry *dentry,
 	}
 
 	err = f2fs_prepare_lookup(dir, dentry, &fname);
+#ifdef CONFIG_FSCRYPT_SDP
+	generic_set_encrypted_ci_d_ops(dir, dentry);
+#else
 	generic_set_encrypted_ci_d_ops(dentry);
+#endif
 	if (err == -ENOENT)
 		goto out_splice;
 	if (err)

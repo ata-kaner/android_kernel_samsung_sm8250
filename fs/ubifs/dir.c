@@ -222,7 +222,11 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 	dbg_gen("'%pd' in dir ino %lu", dentry, dir->i_ino);
 
 	err = fscrypt_prepare_lookup(dir, dentry, &nm);
+#ifdef CONFIG_FSCRYPT_SDP
+	generic_set_encrypted_ci_d_ops(dir, dentry);
+#else
 	generic_set_encrypted_ci_d_ops(dentry);
+#endif
 	if (err == -ENOENT)
 		return d_splice_alias(NULL, dentry);
 	if (err)

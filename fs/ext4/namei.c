@@ -1731,7 +1731,11 @@ static struct buffer_head *ext4_lookup_entry(struct inode *dir,
 	struct buffer_head *bh;
 
 	err = ext4_fname_prepare_lookup(dir, dentry, &fname);
+#ifdef CONFIG_FSCRYPT_SDP
+	generic_set_encrypted_ci_d_ops(dir, dentry);
+#else
 	generic_set_encrypted_ci_d_ops(dentry);
+#endif
 	if (err == -ENOENT)
 		return NULL;
 	if (err)

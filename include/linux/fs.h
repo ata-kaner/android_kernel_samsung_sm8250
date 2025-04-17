@@ -3378,7 +3378,12 @@ extern int generic_file_fsync(struct file *, loff_t, loff_t, int);
 
 extern int generic_check_addressable(unsigned, u64);
 
+#ifdef CONFIG_FSCRYPT_SDP
+extern void generic_set_encrypted_ci_d_ops(struct inode *dir,
+ 					   struct dentry *dentry);
+#else
 extern void generic_set_encrypted_ci_d_ops(struct dentry *dentry);
+#endif
 
 #ifdef CONFIG_MIGRATION
 extern int buffer_migrate_page(struct address_space *,
