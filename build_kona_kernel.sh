@@ -241,7 +241,8 @@ FUNC_BUILD_KERNEL() {
             $KERNEL_DEFCONFIG \
             $PROJECT_CONFIG \
             $KSU_DEFCONFIG \
-            $SDFS_DEFCONFIG
+            $SDFS_DEFCONFIG \
+            "vendor/lto.config"
 
         make -C "$KERNEL_DIR" O="$KERNEL_OUT_DIR" -j"$BUILD_JOB_NUMBER" $KERNEL_MAKE_PARAM ARCH="$KERNEL_ARCH" \
             CROSS_COMPILE="$GAS_CROSS_COMPILE" \
