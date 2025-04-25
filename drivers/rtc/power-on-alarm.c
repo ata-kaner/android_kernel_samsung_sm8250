@@ -39,7 +39,7 @@ static long power_on_alarm_ioctl(struct file *file, unsigned int cmd, unsigned l
 	int rv = 0;
 	char bootalarm_data[14];
 
-	pr_info("sapa: power_on_alarm cmd = %u\n", cmd);
+	pr_info("[SAPA] %s: cmd = %u\n", __func__, cmd);
 
 	switch (ANDROID_ALARM_BASE_CMD(cmd)) {
 	case ANDROID_ALARM_SET_ALARM_BOOT_NEW:
@@ -48,6 +48,7 @@ static long power_on_alarm_ioctl(struct file *file, unsigned int cmd, unsigned l
 			rv = -EFAULT;
 			return rv;
 		}
+		pr_info("[SAPA] %s: data = %s\n", __func__, bootalarm_data);
 		rv = alarm_set_alarm(bootalarm_data);
 		break;
 	}
@@ -98,5 +99,3 @@ static void  __exit power_on_alarm_dev_exit(void)
 
 module_init(power_on_alarm_dev_init);
 module_exit(power_on_alarm_dev_exit);
-
-

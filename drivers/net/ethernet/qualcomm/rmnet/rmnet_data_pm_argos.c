@@ -78,7 +78,11 @@ bool rmnet_data_tx_aggr_enabled;
 static unsigned int rmnet_ipa_napi_chain_mbps = ARGOS_RMNET_IPA_NAPI_CHAIN_MBPS;
 module_param(rmnet_ipa_napi_chain_mbps, uint, 0644);
 MODULE_PARM_DESC(rmnet_ipa_napi_chain_mbps, "IPA NAPI chained rx Threshold");
-extern void ipa3_set_napi_chained_rx(bool enable);
+//extern void ipa3_set_napi_chained_rx(bool enable);
+
+/* mhi napi chained rx */
+#define ARGOS_RMNET_MHI_NAPI_CHAIN_MBPS 200
+static unsigned int rmnet_mhi_napi_chain_mbps = ARGOS_RMNET_MHI_NAPI_CHAIN_MBPS;
 
 /* gro count variation */
 u32 config_flushcount = 2;
@@ -92,7 +96,6 @@ u32 config_flushcount = 2;
 			    RMNET_GRO_LVL1_CNT :		\
 			    (speed < RMNET_GRO_CNT_LVL2_MBPS ?	\
 			     RMNET_GRO_LVL2_CNT : RMNET_GRO_MAX_CNT))
-
 
 #ifdef CONFIG_RPS
 /* reference :  net/core/net-sysfs.c store_rps_map() */
@@ -148,9 +151,9 @@ static int rmnet_data_pm_change_rps_map(struct netdev_rx_queue *queue,
 	rcu_assign_pointer(queue->rps_map, map);
 
 	if (map)
-		static_key_slow_inc(&rps_needed);
+		static_key_slow_inc((struct static_key *)&rps_needed);
 	if (old_map)
-		static_key_slow_dec(&rps_needed);
+		static_key_slow_dec((struct static_key *)&rps_needed);
 
 	mutex_unlock(&rps_map_mutex);
 
@@ -184,6 +187,8 @@ static int rmnet_data_pm_set_rps(char *buf, int len)
 		ret = rmnet_data_pm_change_rps_map(ndev->_rx, buf, len);
 		if (ret < 0)
 			pr_err("set rps %s:%s, err %d\n", ndev->name, buf, ret);
+
+		pr_err("set rps %s:%s, done\n", ndev->name, buf);
 
 		dev_put(ndev);
 	}
@@ -243,20 +248,29 @@ static void rmnet_data_pm_boost_rps(unsigned long speed)
 	}
 }
 
+static void rmnet_data_pm_set_mhi_napi_chain(unsigned long speed)
+{
+	if (speed >= rmnet_mhi_napi_chain_mbps) {
+		mhi_set_napi_chained_rx(cfg->real_dev, true);
+	} else {
+		mhi_set_napi_chained_rx(cfg->real_dev, false);
+	}
+}
+
 static void rmnet_data_pm_set_ipa_napi_chain(unsigned long speed)
 {
 	if (speed >= rmnet_ipa_napi_chain_mbps) {
 		pr_info("%s enabled\n", __func__);
-		ipa3_set_napi_chained_rx(true);
+		//ipa3_set_napi_chained_rx(true);
 	} else {
 		pr_info("%s disabled\n", __func__);
-		ipa3_set_napi_chained_rx(false);
+		//ipa3_set_napi_chained_rx(false);
 	}
 }
 
 struct rmnet_data_pm_ops rmnet_mhi_ops = {
 	.boost_rps = rmnet_data_pm_boost_rps,
-	.pnd_chain = NULL,
+	.pnd_chain = rmnet_data_pm_set_mhi_napi_chain,
 	.gro_count = rmnet_data_pm_set_gro_cnt,
 	.tx_aggr = rmnet_data_pm_set_tx_aggr,
 	.pm_qos = rmnet_data_pm_set_pm_qos,
@@ -297,9 +311,11 @@ static int rmnet_data_pm_argos_cb(struct notifier_block *nb,
 
 	if (cfg->ops->pm_qos)
 		cfg->ops->pm_qos(speed);
+
+	/*
 	if (cfg->ops->boost_rps)
 		cfg->ops->boost_rps(speed);
-	/*
+
 	if (cfg->ops->pnd_chain)
 		cfg->ops->pnd_chain(speed);
 	if (cfg->ops->gro_count)

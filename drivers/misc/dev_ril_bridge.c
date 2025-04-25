@@ -91,6 +91,7 @@ int dev_ril_bridge_send_msg(int id, int size, void *buf)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(dev_ril_bridge_send_msg);
 
 static RAW_NOTIFIER_HEAD(dev_ril_bridge_chain);
 
@@ -101,6 +102,7 @@ int register_dev_ril_bridge_event_notifier(struct notifier_block *nb)
 
 	return raw_notifier_chain_register(&dev_ril_bridge_chain, nb);
 }
+EXPORT_SYMBOL_GPL(register_dev_ril_bridge_event_notifier);
 
 int unregister_dev_ril_bridge_event_notifier(struct notifier_block *nb)
 {
@@ -109,6 +111,7 @@ int unregister_dev_ril_bridge_event_notifier(struct notifier_block *nb)
 
 	return raw_notifier_chain_unregister(&dev_ril_bridge_chain, nb);
 }
+EXPORT_SYMBOL_GPL(unregister_dev_ril_bridge_event_notifier);
 
 static int misc_open(struct inode *inode, struct file *filp)
 {
@@ -168,38 +171,37 @@ static ssize_t misc_write(struct file *filp, const char __user *data,
 {
 	struct dev_ril_bridge_msg msg;
 	struct sipc_fmt_hdr *sipc_hdr;
-	char buf[256] = { 0, };
-	unsigned int size;
-	
+	char *buf;
+
 	if (count <= sizeof(struct sipc_fmt_hdr)) {
 		drb_err("ERR! too small size data(count %lu)\n",
 			(unsigned long)count);
 		return -EFAULT;
 	}
 
-	if (count > sizeof(buf)) {
-		drb_err("ERR! pkt_size is bigger than buf_size(pkt:%lu, buf:%lu)\n",
-			count, sizeof(buf));
-		return -EFAULT;
+	buf = kmalloc(count, GFP_KERNEL);
+	if (!buf) {
+		drb_err("ERR! kmalloc failed\n");
+		return -ENOMEM;
 	}
 
-	size = min_t(unsigned int, (unsigned int)count, (unsigned int)sizeof(buf));
-	if (copy_from_user(buf, data, size)) {
+	if (copy_from_user(buf, data, count)) {
 		drb_err("ERR! copy_from_user fail(count %lu)\n",
 			(unsigned long)count);
+		kfree(buf);
 		return -EFAULT;
 	}
 
 	sipc_hdr = (struct sipc_fmt_hdr *)buf;
-
 	if (sipc_hdr->main_cmd != 0x27 || sipc_hdr->cmd_type != 0x03) {
 		drb_err("ERR! wrong cmd(main_cmd=%02x, cmd_type=%02x)\n",
 				sipc_hdr->main_cmd, sipc_hdr->cmd_type);
+		kfree(buf);
 		return -EFAULT;
 	}
 	
 	msg.dev_id = sipc_hdr->sub_cmd;
-	msg.data_len = size - (unsigned int)sizeof(struct sipc_fmt_hdr);
+	msg.data_len = count - (unsigned int)sizeof(struct sipc_fmt_hdr);
 	msg.data = (void *)(buf + sizeof(struct sipc_fmt_hdr));
 
 	drb_info("notifier_call: dev_id=%u data_len=%u\n", msg.dev_id, msg.data_len);
@@ -207,7 +209,8 @@ static ssize_t misc_write(struct file *filp, const char __user *data,
 	raw_notifier_call_chain(&dev_ril_bridge_chain, 
 			sizeof(struct dev_ril_bridge_msg), (void *)&msg);
 
-	return size;
+	kfree(buf);
+	return count;
 }
 
 static ssize_t misc_read(struct file *filp, char *buf, size_t count,
