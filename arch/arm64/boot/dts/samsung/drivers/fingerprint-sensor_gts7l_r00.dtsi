@@ -115,14 +115,15 @@
 	dma-names = "tx", "rx";
 	status = "ok";
 
-	gfspi-spi@0 {
+	gw3x-spi@0 {
 		compatible = "goodix,fingerprint_factory";
 		reg = <0>;
-		spi-max-frequency = <9600000>;
-		pinctrl-names = "default", "pins_poweroff", "pins_poweron";
+		pinctrl-names = "default", "pins_poweroff", "pins_poweron", "pins_poweroff_tz", "pins_poweron_tz";
 		pinctrl-0 = <&gfspi_ldopin &gfspi_rstpin &gfspi_drdypin_suspend>;
 		pinctrl-1 = <&gfspi_drdypin_suspend>;
 		pinctrl-2 = <&gfspi_drdypin_active>;
+		pinctrl-3 = <&gfspi_drdypin_suspend>;
+		pinctrl-4 = <&gfspi_drdypin_active>;
 
 		gpio-controller;
 		#gpio-cells = <2>;
@@ -133,18 +134,20 @@
 		goodix,min_cpufreq_limit = <2016000>;
 		goodix,chip_id = "GW36T1";
 		goodix,orient = <0>;
+		goodix,spiclk_speed = <9600000>;
 	};
 };
 
 &soc {
-	gfspi@0 {
+	gw3x@0 {
 		compatible = "goodix,fingerprint";
 		reg = <0>;
-		spi-max-frequency = <9600000>;
-		pinctrl-names = "default", "pins_poweroff", "pins_poweron";
+		pinctrl-names = "default", "pins_poweroff", "pins_poweron", "pins_poweroff_tz", "pins_poweron_tz";
 		pinctrl-0 = <&gfspi_ldopin &gfspi_rstpin &gfspi_drdypin_suspend>;
 		pinctrl-1 = <&gfspi_drdypin_suspend>;
 		pinctrl-2 = <&gfspi_drdypin_active>;
+		pinctrl-3 = <&gfspi_drdypin_suspend>;
+		pinctrl-4 = <&gfspi_drdypin_active>;
 
 		gpio-controller;
 		#gpio-cells = <2>;
@@ -155,5 +158,6 @@
 		goodix,min_cpufreq_limit = <2016000>;
 		goodix,chip_id = "GW36T1";
 		goodix,orient = <0>;
+		goodix,spiclk_speed = <9600000>;
 	};
 };
