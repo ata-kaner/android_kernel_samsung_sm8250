@@ -26,6 +26,10 @@
 #include "binder_internal.h"
 #include "binder_trace.h"
 
+#ifdef CONFIG_SAMSUNG_FREECESS
+#include <linux/freecess.h>
+#endif
+
 struct list_lru binder_freelist;
 
 static DEFINE_MUTEX(binder_alloc_mmap_lock);
@@ -461,6 +465,19 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 	unsigned long next_used_page;
 	unsigned long curr_last_page;
 	size_t buffer_size;
+
+#ifdef CONFIG_SAMSUNG_FREECESS
+	if (is_async && (alloc->free_async_space < 3 * size
+		|| alloc->free_async_space < alloc->buffer_size/4)) {
+		struct task_struct *p;
+
+		rcu_read_lock();
+		p = find_task_by_vpid(alloc->pid);
+		rcu_read_unlock();
+		if (p && (thread_group_is_frozen(p) || (p->jobctl & JOBCTL_TRAP_FREEZE)))
+			binder_report(p, -1, "free_buffer_full", is_async);
+	}
+#endif
 
 	if (is_async && alloc->free_async_space < size) {
 		binder_alloc_debug(BINDER_DEBUG_BUFFER_ALLOC,
