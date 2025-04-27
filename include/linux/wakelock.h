@@ -66,7 +66,7 @@ static inline int wake_lock_active(struct wake_lock *lock)
 	return lock->ws->active;
 }
 
-static inline int wake_lock_deinit(struct wake_lock *lock)
+static inline void wake_lock_deinit(struct wake_lock *lock)
 {
 	wakeup_source_unregister(lock->ws);
 }
