@@ -460,7 +460,7 @@ static ssize_t sec_tsp_log_write(struct file *file,
 		goto out;
 
 	ret = -EINVAL;
-	if (sscanf(page, "%u", &new_value) != 1) {
+	if (sscanf(page, "%d", &new_value) != 1) {
 		pr_info("%s\n", page);
 		/* print tsp_log to sec_tsp_log_buf */
 		sec_debug_tsp_log("%s", page);
@@ -496,7 +496,7 @@ static ssize_t sec_tsp_raw_data_write(struct file *file,
 		goto out;
 
 	ret = -EINVAL;
-	if (sscanf(page, "%u", &new_value) != 1) {
+	if (sscanf(page, "%d", &new_value) != 1) {
 		pr_info("%s\n", page);
 		sec_debug_tsp_raw_data("%s", page);
 	}
@@ -739,6 +739,105 @@ static int __init __init_sec_tsp_command_history(void)
 	return 0;
 }
 fs_initcall(__init_sec_tsp_command_history);	/* earlier than device_initcall */
+
+/* Sponge Infinite dump */
+static int sec_tsp_sponge_log_index;
+static char *sec_tsp_sponge_log_buf;
+static unsigned int sec_tsp_sponge_log_size;
+static int sec_tsp_sponge_log_index_fix;
+
+void sec_tsp_sponge_log(char *buf)
+{
+	int len = 0;
+	unsigned int idx;
+	size_t size;
+
+	/* In case of sec_tsp_log_setup is failed */
+	if (!sec_tsp_sponge_log_size || !sec_tsp_sponge_log_buf)
+		return;
+
+	idx = sec_tsp_sponge_log_index;
+	size = strlen(buf);
+
+	/* Overflow buffer size */
+	if (idx + size + 1 > sec_tsp_sponge_log_size) {
+		if (sec_tsp_sponge_log_index_fix + size + 1 > sec_tsp_sponge_log_size)
+			return;
+		len = scnprintf(&sec_tsp_sponge_log_buf[sec_tsp_sponge_log_index_fix],
+					size + 1, "%s ", buf);
+		sec_tsp_sponge_log_index = sec_tsp_sponge_log_index_fix + len;
+	} else {
+		len = scnprintf(&sec_tsp_sponge_log_buf[idx],
+					size + 1, "%s ", buf);
+		sec_tsp_sponge_log_index += len;
+	}
+}
+EXPORT_SYMBOL(sec_tsp_sponge_log);
+
+static ssize_t sec_tsp_sponge_log_read(struct file *file, char __user *buf,
+					size_t len, loff_t *offset)
+{
+	loff_t pos = *offset;
+	ssize_t count;
+
+	if (!sec_tsp_sponge_log_buf)
+		return 0;
+
+	if (pos >= sec_tsp_sponge_log_index)
+		return 0;
+
+	count = min(len, (size_t)(sec_tsp_sponge_log_index - pos));
+	if (copy_to_user(buf, sec_tsp_sponge_log_buf + pos, count))
+		return -EFAULT;
+	*offset += count;
+	return count;
+}
+
+static const struct file_operations tsp_sponge_log_file_ops = {
+	.owner = THIS_MODULE,
+	.read = sec_tsp_sponge_log_read,
+	.llseek = generic_file_llseek,
+};
+
+static int __init sec_tsp_sponge_log_late_init(void)
+{
+	struct proc_dir_entry *entry;
+
+	if (!sec_tsp_sponge_log_buf)
+		return 0;
+
+	entry = proc_create("tsp_sponge_log", S_IFREG | 0444,
+			NULL, &tsp_sponge_log_file_ops);
+	if (!entry) {
+		pr_err("%s: failed to create proc entry of tsp_sponge_log\n", __func__);
+		return 0;
+	}
+
+	proc_set_size(entry, sec_tsp_sponge_log_size);
+
+	return 0;
+}
+late_initcall(sec_tsp_sponge_log_late_init);
+
+static int __init __init_sec_tsp_sponge_log(void)
+{
+	char *vaddr;
+
+	sec_tsp_sponge_log_size = SEC_TSP_SPONGE_LOG_BUF_SIZE;
+	vaddr = kmalloc(sec_tsp_sponge_log_size, GFP_KERNEL);
+
+	if (!vaddr) {
+		pr_info("%s: ERROR! init failed!\n", __func__);
+		return -ENOMEM;
+	}
+
+	sec_tsp_sponge_log_buf = vaddr;
+
+	pr_info("%s: init done\n", __func__);
+
+	return 0;
+}
+fs_initcall(__init_sec_tsp_sponge_log);	/* earlier than device_initcall */
 
 #endif /* CONFIG_SEC_DEBUG_TSP_LOG */
 

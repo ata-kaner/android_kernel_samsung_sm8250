@@ -328,7 +328,7 @@ static struct attribute_group sec_secure_touch_attr_group = {
 	.attrs = sec_secure_touch_attrs,
 };
 
-#ifdef CONFIG_TOUCHSCREEN_DUAL_FOLDABLE
+#if (defined(CONFIG_TOUCHSCREEN_DUAL_FOLDABLE)) && defined(CONFIG_FOLDER_HALL)
 static void sec_secure_touch_hall_ic_work(struct work_struct *work)
 {
 	struct sec_secure_touch *data = container_of(work, struct sec_secure_touch, folder_work.work);
@@ -462,7 +462,7 @@ static int sec_secure_touch_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-#ifdef CONFIG_TOUCHSCREEN_DUAL_FOLDABLE
+#if (defined(CONFIG_TOUCHSCREEN_DUAL_FOLDABLE)) && defined(CONFIG_FOLDER_HALL)
 	data->nb.notifier_call = sec_secure_touch_hall_ic_notifier;
 	data->nb.priority = 1;
 	hall_ic_register_notify(&data->nb);
@@ -481,7 +481,7 @@ static int sec_secure_touch_remove(struct platform_device *pdev)
 	int ii;
 
 	pr_info("%s: %s\n", SECLOG, __func__);
-#ifdef CONFIG_TOUCHSCREEN_DUAL_FOLDABLE
+#if (defined(CONFIG_TOUCHSCREEN_DUAL_FOLDABLE)) && defined(CONFIG_FOLDER_HALL)
 	mutex_lock(&data->lock);
 	hall_ic_unregister_notify(&data->nb);
 	mutex_unlock(&data->lock);

@@ -296,13 +296,16 @@ static bool sec_tclm_check_condition_valid(struct sec_tclm_data *data)
 	/* enter case */
 	switch (data->tclm_level) {
 	case TCLM_LEVEL_LOCKDOWN:
-		if ((data->root_of_calibration == CALPOSITION_TUNEUP)
+		if (data->afe_base > data->nvdata.tune_fix_ver) {
+			return true;
+		} else if ((data->root_of_calibration == CALPOSITION_TUNEUP)
 			|| (data->root_of_calibration == CALPOSITION_INITIAL)) {
 			return true;
 		} else if ((data->root_of_calibration == CALPOSITION_TESTMODE)
 			&& ((data->nvdata.cal_position == CALPOSITION_TESTMODE)
 			|| (data->nvdata.cal_position == CALPOSITION_TUNEUP)
-			|| (data->nvdata.cal_position == CALPOSITION_FIRMUP))) {
+			|| (data->nvdata.cal_position == CALPOSITION_FIRMUP)
+			|| (data->nvdata.cal_position == CALPOSITION_NONE))) {
 			return true;
 		}
 		break;
