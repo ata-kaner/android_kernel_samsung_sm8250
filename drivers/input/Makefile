@@ -34,5 +34,6 @@ obj-$(CONFIG_INPUT_KEYCOMBO)	+= keycombo.o
 obj-$(CONFIG_RMI4_CORE)		+= rmi4/
 
 obj-$(CONFIG_INPUT_SEC_INPUT)	+= sec_input/
+obj-$(CONFIG_INPUT_SEC_INPUT_V2)	+= sec_input_v2/
 
 ccflags-y += -Wformat
