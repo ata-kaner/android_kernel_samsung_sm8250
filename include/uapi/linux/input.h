@@ -19,6 +19,9 @@
 
 #include "input-event-codes.h"
 
+#define SECLOG			"[sec_input]"
+
+#if IS_ENABLED(CONFIG_INPUT_SEC_INPUT)
 /*
  * sys/class/sec/tsp/support_feature
  * bit value should be made a promise with InputFramework.
@@ -36,7 +39,6 @@
 /*
  * sec Log
  */
-#define SECLOG			"[sec_input]"
 #define INPUT_LOG_BUF_SIZE	512
 
 #ifdef CONFIG_SEC_DEBUG_TSP_LOG
@@ -144,6 +146,7 @@
 #define input_log_fix()	{}
 #define input_raw_data_clear() {}
 #endif
+#endif // CONFIG_INPUT_SEC_INPUT
 
 /*
  * The event structure itself
