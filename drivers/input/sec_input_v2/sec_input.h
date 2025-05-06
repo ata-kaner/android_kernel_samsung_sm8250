@@ -49,7 +49,7 @@
 #if IS_ENABLED(CONFIG_VBUS_NOTIFIER)
 #include <linux/vbus_notifier.h>
 #if IS_ENABLED(CONFIG_USB_TYPEC_MANAGER_NOTIFIER)
-#include <linux/usb/typec/manager/usb_typec_manager_notifier.h>
+#include <linux/usb/manager/usb_typec_manager_notifier.h>
 #endif
 #endif
 
