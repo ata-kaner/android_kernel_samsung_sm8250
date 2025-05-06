@@ -1187,14 +1187,14 @@ static int sec_input_ccic_notification(struct notifier_block *nb,
 	   unsigned long action, void *data)
 {
 	struct sec_ts_plat_data *pdata = container_of(nb, struct sec_ts_plat_data, ccic_nb);
-	PD_NOTI_USB_STATUS_TYPEDEF usb_status = *(PD_NOTI_USB_STATUS_TYPEDEF *)data;
+	CC_NOTI_USB_STATUS_TYPEDEF usb_status = *(CC_NOTI_USB_STATUS_TYPEDEF *)data;
 
 	if (pdata->dev == NULL) {
 		pr_err("%s %s: dev is null\n", SECLOG, __func__);
 		return 0;
 	}
 
-	if (usb_status.dest != PDIC_NOTIFY_DEV_USB)
+	if (usb_status.dest != CCIC_NOTIFY_DEV_USB)
 		return 0;
 
 	switch (usb_status.drp) {
@@ -1291,7 +1291,7 @@ void sec_input_register_vbus_notifier(struct device *dev)
 #if IS_ENABLED(CONFIG_VBUS_NOTIFIER)
 #if IS_ENABLED(CONFIG_USB_TYPEC_MANAGER_NOTIFIER)
 	manager_notifier_register(&pdata->ccic_nb, sec_input_ccic_notification,
-		MANAGER_NOTIFY_PDIC_INITIAL);
+		MANAGER_NOTIFY_CCIC_INITIAL);
 	input_info(true, dev, "%s: register ccic notification\n", __func__);
 #endif
 	pdata->vbus_notifier_workqueue = create_singlethread_workqueue("sec_input_vbus_noti");
