@@ -489,20 +489,23 @@
 		status = "ok";
 		compatible = "novatek,nvt-ts";
 		reg = <0x62>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <15 0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&attn_irq>;
 		novatek,irq-gpio = <&tlmm 15 0x2002>;
-		novatek,resolution = <1600 2560>; /* x y */
 		novatek,max_touch_num = <10>;
 		novatek,area-size = <48 96 60>;
-		novatek,firmware_name = "tsp_novatek/nt36523_gts7l.bin";
 		novatek,mp-support-dt;
 		check_fw_project_id;
-		enable_settings_aot;
-		enable_sysinput_enabled;
-		novatek,scanoff_when_cover_closed; /* for tablet */
+//		novatek,lcdtype = <0x47f243 0x77240>;
+		novatek,firmware_name = "tsp_novatek/nt36523_gts7l.bin";
+		novatek,resolution = <1600 2560>; /* x y */
+		novatek,scanoff_when_cover_closed;
+		novatek,enable_settings_aot;
+		novatek,enable_sysinput_enabled;
+// To-Do: A similar bringup like not_support_io_ldo flag from STM TS?
+//		novatek,regulator_panel_ldo_en = "panel_ldo_en";
+//		novatek,regulator_panel_buck_en = "panel_buck_en";
+//		novatek,regulator_panel_reset = "panel_reset";
 
 		novatek-mp-criteria-720A@0 {
 			#address-cells = <1>;

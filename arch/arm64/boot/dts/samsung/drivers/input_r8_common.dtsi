@@ -102,53 +102,58 @@
 		pinctrl-names = "on_state", "off_state";
 		pinctrl-0 = <&attn_irq>;
 		pinctrl-1 = <&attn_irq>;
-		zinitix,gpio_ldo_en;
-		zinitix,regulator_avdd = "tsp_ldo_en";
-		zinitix,irq_type = <0x2008>;
-		zinitix,x_resolution = <1080>;
-		zinitix,y_resolution = <2400>;
-		zinitix,page_size = <128>;
-		zinitix,irq_gpio = <&tlmm 15 0x2008>;
-
-		/* This part is for firmware */
-		zinitix,chip_name = "ZT7650";
-		zinitix,firmware_name = "tsp_zinitix/zt7650_r8.bin";
+		tsp_avdd_ldo-supply = "tsp_ldo_en";
+		sec,irq_gpio = <&tlmm 15 0x2008>;
+		sec,max_coords = <1081 2401>;
 
 		/* feature */
-		zinitix,spay;
-		zinitix,aod;
-		zinitix,aot;
 		zinitix,mis_cal_check;
+		enable_settings_aot;
 		support_ear_detect_mode;
 		support_open_short_test;
 
+		sec,enable_sysinput_enabled;
+		not_support_io_ldo;
+
 		/* calibration */
-		zinitix,tclm_level = <2>;
-		zinitix,afe_base = <0x0018>;
-		zinitix,ss_touch_num = <1>;
+		sec,tclm_level = <2>;
+		sec,afe_base = <0x0018>;
+
+		/* This part is for firmware */
+		zinitix,chip_name = "ZT7650";
+		sec,firmware_name = "tsp_zinitix/zt7650_r8.bin";
+		sec,bringup = <0>;
 	};
 
 	tsp_stm: touchscreen@49 {
 				status = "ok";
-				compatible = "stm,fts_touch";
+				compatible = "stm,stm_ts";
 				reg = <0x49>;
 				pinctrl-names = "on_state", "off_state";
 				pinctrl-0 = <&attn_irq>;
-				pinctrl-1 = <&attn_irq>;
-				avdd-supply = <&tsp_ldo>;
-				stm,irq_gpio = <&tlmm 15 0x2008>;
-				stm,max_coords = <0xfff 0xfff>;
-				stm,firmware_name = "tsp_stm/fts5cu56a_r8.bin";
-				stm,tclm_level = <2>;
-				stm,afe_base = <0x5>;
-				stm,bringup = <0>;
-				stm,support_fod;
-				stm,enable_settings_aot;
-				support_ear_detect;
+				pinctrl-1 = <&attn_input>;
+//				tsp_io_ldo-supply = <&tsp_ldo>;
+				not_support_io_ldo;
+				tsp_avdd_ldo-supply = <&tsp_ldo>;
+				sec,project_name = "r8q", "r8q";
+				sec,bringup = <1>;
+				sec,ss_touch_num = <1>;
+				sec,tclm_level = <2>;
+				sec,afe_base = <5>;
+				sec,area-size = <133 266 341>;
+				sec,irq_gpio = <&tlmm 15 0x2008>;
+				sec,max_coords = <0x1000 0x1000>;
+
+				sec,firmware_name = "tsp_stm/fts5cu56a_r8.bin";
+				sec,regulator_boot_on;
+				sec,unuse_dvdd_power;
+
+				enable_settings_aot;
+				support_fod;
+				support_fod_lp_mode;
 				support_mis_calibration_test;
+				support_ear_detect_mode;
 				support_open_short_test;
-				support_sram_test;
-				stm,ss_touch_num = <1>;
 	};
 
 };

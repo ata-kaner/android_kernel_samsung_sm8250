@@ -23,6 +23,18 @@
 		};
 	};
 
+	attn_input: attn_input {
+		mux {
+			pins = "gpio15";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio15";
+			input-enable;
+			bias-pull-down;
+		};
+	};
+
 	/* SE 5 pin mappings */
 	qupv3_se5_tsp_i2c_pins: qupv3_se5_tsp_i2c_pins {
 		qupv3_se5_tsp_i2c_active: qupv3_se5_tsp_i2c_active {
