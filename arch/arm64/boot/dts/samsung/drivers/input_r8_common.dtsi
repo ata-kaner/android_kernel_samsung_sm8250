@@ -130,25 +130,33 @@
 
 	tsp_stm: touchscreen@49 {
 				status = "ok";
-				compatible = "stm,fts_touch";
+				compatible = "stm,stm_ts";
 				reg = <0x49>;
 				pinctrl-names = "on_state", "off_state";
 				pinctrl-0 = <&attn_irq>;
-				pinctrl-1 = <&attn_irq>;
-				avdd-supply = <&tsp_ldo>;
-				stm,irq_gpio = <&tlmm 15 0x2008>;
-				stm,max_coords = <0xfff 0xfff>;
-				stm,firmware_name = "tsp_stm/fts5cu56a_r8.bin";
-				stm,tclm_level = <2>;
-				stm,afe_base = <0x5>;
-				stm,bringup = <0>;
-				stm,support_fod;
-				stm,enable_settings_aot;
-				support_ear_detect;
+				pinctrl-1 = <&attn_input>;
+//				tsp_io_ldo-supply = <&tsp_ldo>;
+				not_support_io_ldo;
+				tsp_avdd_ldo-supply = <&tsp_ldo>;
+				sec,project_name = "r8q", "r8q";
+				sec,bringup = <1>;
+				sec,ss_touch_num = <1>;
+				sec,tclm_level = <2>;
+				sec,afe_base = <5>;
+				sec,area-size = <133 266 341>;
+				sec,irq_gpio = <&tlmm 15 0x2008>;
+				sec,max_coords = <0x1000 0x1000>;
+
+				sec,firmware_name = "tsp_stm/fts5cu56a_r8.bin";
+				sec,regulator_boot_on;
+				sec,unuse_dvdd_power;
+
+				enable_settings_aot;
+				support_fod;
+				support_fod_lp_mode;
 				support_mis_calibration_test;
+				support_ear_detect_mode;
 				support_open_short_test;
-				support_sram_test;
-				stm,ss_touch_num = <1>;
 	};
 
 };
