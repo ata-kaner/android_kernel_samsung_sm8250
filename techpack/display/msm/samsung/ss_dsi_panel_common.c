@@ -28,7 +28,11 @@ Copyright (C) 2020, Samsung Electronics. All rights reserved.
 #include "ss_dsi_panel_common.h"
 #include <linux/preempt.h>
 #include <linux/sec_param.h>
+#if IS_ENABLED(CONFIG_INPUT_SEC_INPUT_V2)
+#include "../../../../drivers/input/sec_input_v2/sec_input.h"
+#else
 #include <linux/input/sec_cmd.h>
+#endif
 
 static void ss_panel_recovery(struct samsung_display_driver_data *vdd);
 static void ss_event_osc_te_fitting(
@@ -854,7 +858,11 @@ static int ss_lfd_touch_notify_cb(struct notifier_block *nb,
 	struct lfd_info *lfd;
 	struct samsung_display_driver_data *vdd;
 	struct lfd_mngr *mngr;
+#if IS_ENABLED(CONFIG_INPUT_SEC_INPUT_V2)
+	enum sec_input_notify_t event = val;
+#else
 	sec_input_notify_t event = val;
+#endif
 	struct sec_input_notify_data *tsp_ndx = v;
 
 
