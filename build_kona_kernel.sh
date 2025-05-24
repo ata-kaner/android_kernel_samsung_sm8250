@@ -105,7 +105,6 @@ yes_no_prompt() {
 
 yes_no_prompt "USE_SDCLANG" "Would you like to use Snapdragon LLVM (proprietary)?"
 yes_no_prompt "INCLUDE_KSU" "Would you like to add SuperUser (KSU) support?"
-yes_no_prompt "INCLUDE_SDFS" "Current production build requires SDCardFS?"
 yes_no_prompt "PERMISSIVE" "Would you like to force Selinux to permissive?"
 
 
@@ -115,7 +114,6 @@ echo "Model: $model_choice"
 echo "Region: ${region_choice:-default}"
 echo "Snapdragon LLVM: $USE_SDCLANG"
 echo "SuperUser (KSU) Support: $INCLUDE_KSU"
-echo "SDCardFS Required: $INCLUDE_SDFS"
 echo "=============================================="
 
 # Build paths. Must be defined before anything else
@@ -153,10 +151,6 @@ if [ "$INCLUDE_KSU" = true ]; then
     KSU_DEFCONFIG="vendor/ksu.config"
 else
     KSU_DEFCONFIG="vendor/nonksu.config"
-fi
-
-if [ "$INCLUDE_SDFS" = true ]; then
-    SDFS_DEFCONFIG="vendor/sdcardfs.config"
 fi
 
 if [ "$PERMISSIVE" = true ]; then
@@ -211,7 +205,7 @@ FUNC_BUILD_KERNEL() {
     echo "Project: $PROJECT_NAME"
     echo "Common config: $KERNEL_DEFCONFIG"
     echo "Project config: $PROJECT_CONFIG"
-    echo "Extra included configs: "$KSU_DEFCONFIG $SDFS_DEFCONFIG ""
+    echo "Extra included configs: "$KSU_DEFCONFIG ""
     echo "Output directory: $PRODUCT_OUT"
     echo "=============================================="
     echo ""
@@ -225,8 +219,7 @@ FUNC_BUILD_KERNEL() {
             CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" \
             $KERNEL_DEFCONFIG \
             $PROJECT_CONFIG \
-            $KSU_DEFCONFIG \
-            $SDFS_DEFCONFIG
+            $KSU_DEFCONFIG
 
         make -C "$KERNEL_DIR" O="$KERNEL_OUT_DIR" -j"$BUILD_JOB_NUMBER" $KERNEL_MAKE_PARAM ARCH="$KERNEL_ARCH" \
             CROSS_COMPILE="$BUILD_CROSS_COMPILE" \
@@ -241,7 +234,6 @@ FUNC_BUILD_KERNEL() {
             $KERNEL_DEFCONFIG \
             $PROJECT_CONFIG \
             $KSU_DEFCONFIG \
-            $SDFS_DEFCONFIG \
             "vendor/lto.config"
 
         make -C "$KERNEL_DIR" O="$KERNEL_OUT_DIR" -j"$BUILD_JOB_NUMBER" $KERNEL_MAKE_PARAM ARCH="$KERNEL_ARCH" \
