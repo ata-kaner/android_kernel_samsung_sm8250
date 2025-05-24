@@ -154,7 +154,7 @@ else
 fi
 
 if [ "$PERMISSIVE" = true ]; then
-    SDFS_DEFCONFIG="vendor/permissive.config"
+    SLNX_DEFCONFIG="vendor/permissive.config"
 fi
 
 # Set toolchain and build environment
@@ -205,7 +205,7 @@ FUNC_BUILD_KERNEL() {
     echo "Project: $PROJECT_NAME"
     echo "Common config: $KERNEL_DEFCONFIG"
     echo "Project config: $PROJECT_CONFIG"
-    echo "Extra included configs: "$KSU_DEFCONFIG ""
+    echo "Extra included configs: "$KSU_DEFCONFIG $SLNX_DEFCONFIG""
     echo "Output directory: $PRODUCT_OUT"
     echo "=============================================="
     echo ""
@@ -219,7 +219,8 @@ FUNC_BUILD_KERNEL() {
             CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" \
             $KERNEL_DEFCONFIG \
             $PROJECT_CONFIG \
-            $KSU_DEFCONFIG
+            $KSU_DEFCONFIG \
+            $SLNX_DEFCONFIG
 
         make -C "$KERNEL_DIR" O="$KERNEL_OUT_DIR" -j"$BUILD_JOB_NUMBER" $KERNEL_MAKE_PARAM ARCH="$KERNEL_ARCH" \
             CROSS_COMPILE="$BUILD_CROSS_COMPILE" \
@@ -234,6 +235,7 @@ FUNC_BUILD_KERNEL() {
             $KERNEL_DEFCONFIG \
             $PROJECT_CONFIG \
             $KSU_DEFCONFIG \
+            $SLNX_DEFCONFIG \
             "vendor/lto.config"
 
         make -C "$KERNEL_DIR" O="$KERNEL_OUT_DIR" -j"$BUILD_JOB_NUMBER" $KERNEL_MAKE_PARAM ARCH="$KERNEL_ARCH" \
