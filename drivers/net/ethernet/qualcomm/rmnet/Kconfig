@@ -15,3 +15,6 @@ menuconfig RMNET
 	  for handling data in the multiplexing and aggregation protocol (MAP)
 	  format in the embedded data path. RMNET devices can be attached to
 	  any IP mode physical device.
+
+source "drivers/net/ethernet/qualcomm/rmnet/shs/Kconfig"
+source "drivers/net/ethernet/qualcomm/rmnet/perf/Kconfig"
