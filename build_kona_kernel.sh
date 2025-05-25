@@ -172,15 +172,15 @@ if [ "$USE_SDCLANG" = true ]; then
     CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
 else
     echo "Using AOSP LLVM"
-    if [ ! -d "/home/atakan/lineage/prebuilts/clang/host/linux-x86/clang-r536225/bin" ] || [ ! -d "/opt/aosp/gas" ]; then
+    if [ ! -d "/home/atakan/clang/clang-r547379/bin" ] || [ ! -d "/home/atakan/gas" ]; then
         echo "Error: AOSP toolchain directories not found. Exiting."
         exit 1
     fi
 
-    PATH="/home/atakan/lineage/prebuilts/clang/host/linux-x86/clang-r536225/bin:/opt/aosp/gas:${PATH}"
-    KERNEL_LLVM_BIN="/home/atakan/lineage/prebuilts/clang/host/linux-x86/clang-r536225/bin/clang"
-    GAS_CROSS_COMPILE="/opt/aosp/gas/aarch64-linux-gnu-"
-    GAS_CROSS_COMPILE_COMPAT="/opt/aosp/gas/arm-linux-gnueabi-"
+    PATH="/home/atakan/clang/clang-r547379/bin:/home/atakan/gas:${PATH}"
+    KERNEL_LLVM_BIN="/home/atakan/clang/clang-r547379/bin/clang"
+    GAS_CROSS_COMPILE="/home/atakan/gas/aarch64-linux-gnu-"
+    GAS_CROSS_COMPILE_COMPAT="/home/atakan/gas/arm-linux-gnueabi-"
 fi
 
 # Set kernel build environment variables
