@@ -2,7 +2,6 @@
 
 #include "fuse_i.h"
 
-#include <linux/file.h>
 #include <linux/fuse.h>
 #include <linux/idr.h>
 #include <linux/uio.h>
