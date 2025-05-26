@@ -1,7 +1,5 @@
 menu "Tech packages"
 
-source "techpack/data/Kconfig"
-
 menu "Samsung techpack packages"
 
 config TECHPACK_CAMERA_SAMSUNG
