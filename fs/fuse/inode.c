@@ -22,6 +22,7 @@
 #include <linux/exportfs.h>
 #include <linux/posix_acl.h>
 #include <linux/pid_namespace.h>
+#include <linux/version.h>
 
 MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
@@ -105,6 +106,7 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 	return &fi->inode;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 static void fuse_free_inode(struct inode *inode)
 {
 	struct fuse_inode *fi = get_fuse_inode(inode);
@@ -113,6 +115,23 @@ static void fuse_free_inode(struct inode *inode)
 	kfree(fi->forget);
 	kmem_cache_free(fuse_inode_cachep, fi);
 }
+#else
+static void fuse_i_callback(struct rcu_head *head)
+{
+	struct inode *inode = container_of(head, struct inode, i_rcu);
+	kmem_cache_free(fuse_inode_cachep, inode);
+}
+
+static void fuse_destroy_inode(struct inode *inode)
+{
+	struct fuse_inode *fi = get_fuse_inode(inode);
+	BUG_ON(!list_empty(&fi->write_files));
+	BUG_ON(!list_empty(&fi->queued_writes));
+	mutex_destroy(&fi->mutex);
+	kfree(fi->forget);
+	call_rcu(&inode->i_rcu, fuse_i_callback);
+}
+#endif
 
 static void fuse_evict_inode(struct inode *inode)
 {
@@ -829,7 +848,11 @@ static const struct export_operations fuse_export_operations = {
 
 static const struct super_operations fuse_super_operations = {
 	.alloc_inode    = fuse_alloc_inode,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 	.free_inode     = fuse_free_inode,
+#else
+	.destroy_inode  = fuse_destroy_inode,
+#endif
 	.evict_inode	= fuse_evict_inode,
 	.write_inode	= fuse_write_inode,
 	.drop_inode	= generic_delete_inode,
@@ -847,7 +870,7 @@ static void sanitize_global_limit(unsigned *limit)
 	 * 1/2^13 of the total memory, assuming 392 bytes per request.
 	 */
 	if (*limit == 0)
-		*limit = ((totalram_pages() << PAGE_SHIFT) >> 13) / 392;
+		*limit = ((totalram_pages << PAGE_SHIFT) >> 13) / 392;
 
 	if (*limit >= 1 << 16)
 		*limit = (1 << 16) - 1;
@@ -1070,7 +1093,7 @@ static int fuse_bdi_init(struct fuse_conn *fc, struct super_block *sb)
 	if (err)
 		return err;
 
-	sb->s_bdi->ra_pages = VM_READAHEAD_PAGES;
+	sb->s_bdi->ra_pages = (VM_MAX_READAHEAD * 1024) / PAGE_SIZE;
 	/* fuse does it's own writeback accounting */
 	sb->s_bdi->capabilities = BDI_CAP_NO_ACCT_WB | BDI_CAP_STRICTLIMIT;
 
