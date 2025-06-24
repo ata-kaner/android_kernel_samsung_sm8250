@@ -31,6 +31,7 @@ static struct apk_sign_key {
 	{EXPECTED_SIZE, EXPECTED_HASH}, // Official
 	{EXPECTED_SIZE_RSUNTK, EXPECTED_HASH_RSUNTK}, // RKSU
 	{EXPECTED_SIZE_5EC1CFF, EXPECTED_HASH_5EC1CFF}, // MKSU
+	{EXPECTED_SIZE_KSU_NEXT, EXPECTED_HASH_KSU_NEXT}, // KSU-NEXT
 };
 
 static struct sdesc *init_sdesc(struct crypto_shash *alg)
