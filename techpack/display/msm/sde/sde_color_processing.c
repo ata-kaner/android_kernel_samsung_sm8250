@@ -12,7 +12,6 @@
 #include "sde_color_processing.h"
 #include "sde_kms.h"
 #include "sde_crtc.h"
-#include "sde_plane.h"
 #include "sde_hw_dspp.h"
 #include "sde_hw_lm.h"
 #include "sde_ad4.h"
@@ -1435,10 +1434,6 @@ static void sde_cp_crtc_setfeature(struct sde_cp_node *prop_node,
 	int i = 0, ret = 0;
 	bool feature_enabled = false;
 	struct sde_mdss_cfg *catalog = NULL;
-	struct drm_crtc *drm_crtc = &sde_crtc->base;
-	struct sde_crtc_state *cstate = to_sde_crtc_state(drm_crtc->state);
-	struct drm_property_blob *blob;
-	struct drm_msm_pcc *pcc_cfg;
 
 	memset(&hw_cfg, 0, sizeof(hw_cfg));
 	sde_cp_get_hw_payload(prop_node, &hw_cfg, &feature_enabled);
@@ -1450,19 +1445,6 @@ static void sde_cp_crtc_setfeature(struct sde_cp_node *prop_node,
 		if (!hw_dspp || i >= DSPP_MAX)
 			continue;
 		hw_cfg.dspp[i] = hw_dspp;
-	}
-
-	if (prop_node->feature == SDE_CP_CRTC_DSPP_PCC) {
-		blob = prop_node->blob_ptr;
-		if (blob != NULL) {
-			pcc_cfg = blob->data;
-			if (pcc_cfg->r.c == 0 && pcc_cfg->b.c == 0 && pcc_cfg->g.c == 0) {
-				cstate->color_invert_on = false;
-				hw_cfg.payload = NULL;
-				hw_cfg.len = 0;
-			} else
-				cstate->color_invert_on = true;
-		}
 	}
 
 	if ((prop_node->feature >= SDE_CP_CRTC_MAX_FEATURES) ||
@@ -4019,25 +4001,4 @@ void sde_cp_crtc_disable(struct drm_crtc *drm_crtc)
 			CRTC_PROP_DSPP_INFO);
 	mutex_unlock(&crtc->crtc_cp_lock);
 	vfree(info);
-}
-
-const struct drm_msm_pcc *sde_cp_crtc_get_pcc_cfg(struct drm_crtc *drm_crtc)
-{
-	struct drm_property_blob *blob = NULL;
-	struct sde_cp_node *prop_node = NULL;
-	struct sde_crtc *crtc;
-
-	crtc = to_sde_crtc(drm_crtc);
-
-	mutex_lock(&crtc->crtc_cp_lock);
-	list_for_each_entry(prop_node, &crtc->feature_list, feature_list) {
-		if (prop_node->feature == SDE_CP_CRTC_DSPP_PCC) {
-			blob = prop_node->blob_ptr;
-			break;
-		}
-	}
-
-	mutex_unlock(&crtc->crtc_cp_lock);
-
-	return blob ? blob->data : NULL;
 }
