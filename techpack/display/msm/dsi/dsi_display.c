@@ -38,8 +38,6 @@
 #define DSI_CLOCK_BITRATE_RADIX 10
 #define MAX_TE_SOURCE_ID  2
 
-struct dsi_display *primary_display;
-
 #if defined(CONFIG_DISPLAY_SAMSUNG)
 char dsi_display_primary[MAX_CMDLINE_PARAM_LEN];
 char dsi_display_secondary[MAX_CMDLINE_PARAM_LEN];
@@ -6667,7 +6665,6 @@ int dsi_display_get_modes(struct dsi_display *display,
 exit:
 	*out_modes = display->modes;
 	rc = 0;
-	primary_display = display;
 
 error:
 	if (rc)
@@ -8381,10 +8378,6 @@ int dsi_display_unprepare(struct dsi_display *display)
 	LCD_ERR("--\n");
 #endif
 	return rc;
-}
-
-struct dsi_display *get_main_display(void) {
-	return primary_display;
 }
 
 static int __init dsi_display_register(void)
