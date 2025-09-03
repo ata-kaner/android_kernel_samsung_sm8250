@@ -110,6 +110,7 @@
 		samsung,support_factory_panel_swap;
 		samsung,support_gpara;
 		samsung,pll_ssc_disabled;
+		samsung,optical-hbm-brightess = <319>;
 
 		/* *************************************************************
 		 *  Tx

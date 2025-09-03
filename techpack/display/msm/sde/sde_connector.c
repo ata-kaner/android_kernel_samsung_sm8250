@@ -836,6 +836,7 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 			SDE_ERROR("[FINGER MASK]updated finger mask mode %d\n", finger_mask_state);
 			vdd->finger_mask_updated = true;
 			vdd->finger_mask = finger_mask_state;
+			sysfs_notify(&vdd->lcd_dev->dev.kobj, NULL, "finger_mask_state");
 		}
 	}
 #endif

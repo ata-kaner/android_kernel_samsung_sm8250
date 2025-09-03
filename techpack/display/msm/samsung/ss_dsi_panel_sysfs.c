@@ -4459,6 +4459,34 @@ static ssize_t ss_finger_hbm_updated_show(struct device *dev,
 	return strlen(buf);
 }
 
+static ssize_t ss_finger_hbm_brightness_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct samsung_display_driver_data *vdd =
+		(struct samsung_display_driver_data *)dev_get_drvdata(dev);
+
+	if(vdd->optical_hbm_brightness)
+		sprintf(buf, "%d\n", vdd->optical_hbm_brightness);
+
+	LCD_INFO("Optical HBM brightness value : %d\n", vdd->optical_hbm_brightness);
+
+	return strlen(buf);
+}
+
+static ssize_t ss_finger_mask_state_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct samsung_display_driver_data *vdd =
+		(struct samsung_display_driver_data *)dev_get_drvdata(dev);
+
+	if(vdd->finger_mask)
+		sprintf(buf, "%d\n", vdd->finger_mask);
+
+	LCD_INFO("Fingerprint mask state : %d\n", vdd->finger_mask);
+
+	return strlen(buf);
+}
+
 static ssize_t ss_ub_con_det_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -5218,6 +5246,8 @@ static DEVICE_ATTR(dia, S_IRUGO | S_IWUSR | S_IWGRP, NULL, ss_dia_store);
 /* SAMSUNG_FINGERPRINT */
 static DEVICE_ATTR(mask_brightness, S_IRUGO | S_IWUSR | S_IWGRP, NULL, ss_finger_hbm_store);
 static DEVICE_ATTR(actual_mask_brightness, S_IRUGO | S_IWUSR | S_IWGRP, ss_finger_hbm_updated_show, NULL);
+static DEVICE_ATTR(finger_mask_brightness, S_IRUGO | S_IWUSR | S_IWGRP, ss_finger_hbm_brightness_show, NULL);
+static DEVICE_ATTR(finger_mask_state, S_IRUGO | S_IWUSR | S_IWGRP, ss_finger_mask_state_show, NULL);
 
 static DEVICE_ATTR(conn_det, S_IRUGO | S_IWUSR | S_IWGRP, ss_ub_con_det_show, ss_ub_con_det_store);
 static DEVICE_ATTR(vrr, S_IRUGO|S_IWUSR|S_IWGRP, vrr_show, NULL);
@@ -5303,6 +5333,8 @@ static struct attribute *panel_sysfs_attributes[] = {
 	&dev_attr_partial_disp.attr,
 	&dev_attr_mask_brightness.attr,
 	&dev_attr_actual_mask_brightness.attr,
+	&dev_attr_finger_mask_brightness.attr,
+	&dev_attr_finger_mask_state.attr,
 	&dev_attr_conn_det.attr,
 	&dev_attr_dia.attr,
 	&dev_attr_vrr.attr,

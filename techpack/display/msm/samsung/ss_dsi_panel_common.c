@@ -4775,6 +4775,12 @@ static void ss_panel_parse_dt(struct samsung_display_driver_data *vdd)
 	LCD_ERR("support_optical_fingerprint %s\n",
 		vdd->support_optical_fingerprint ? "enabled" : "disabled");
 
+	data_32 = of_get_property(np, "samsung,optical-hbm-brightess", NULL);
+	if (data_32)
+		vdd->optical_hbm_brightness = (int)(be32_to_cpup(data_32));
+	else
+		vdd->optical_hbm_brightness = 319;
+
 	/* Power Control for LPM */
 	vdd->panel_lpm.lpm_pwr.support_lpm_pwr_ctrl = of_property_read_bool(np, "samsung,lpm-power-control");
 	LCD_INFO("lpm_power_control %s\n", vdd->panel_lpm.lpm_pwr.support_lpm_pwr_ctrl ? "enabled" : "disabled");

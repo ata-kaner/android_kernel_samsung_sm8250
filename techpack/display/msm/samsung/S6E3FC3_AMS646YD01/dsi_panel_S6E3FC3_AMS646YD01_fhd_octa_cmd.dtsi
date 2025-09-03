@@ -94,6 +94,7 @@
 		samsung,rsc_4_frame_idle;
 		samsung,support_factory_panel_swap;
 		samsung,support-optical-fingerprint;
+		samsung,optical-hbm-brightess = <319>;
 
 		samsung,support_vrr_based_bl; /* VRR Variable Refresh Rate */
 
