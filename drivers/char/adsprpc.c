@@ -416,6 +416,10 @@ struct fastrpc_mmap {
 	int uncached;
 	int secure;
 	uintptr_t attr;
+	bool is_filemap; /* flag to indicate map used in process init */
+	unsigned int ctx_refs; /* Indicates reference count for context map */
+	/* Map in use for dma handle */
+	unsigned int dma_handle_refs;
 };
 
 enum fastrpc_perfkeys {
@@ -729,64 +733,43 @@ static void fastrpc_remote_buf_list_free(struct fastrpc_file *fl)
 	} while (free);
 }
 
+static void fastrpc_mmap_add_global(struct fastrpc_mmap *map)
+{
+	struct fastrpc_apps *me = &gfa;
+	unsigned long irq_flags = 0;
+
+	spin_lock_irqsave(&me->hlock, irq_flags);
+	hlist_add_head(&map->hn, &me->maps);
+	spin_unlock_irqrestore(&me->hlock, irq_flags);
+}
+
 static void fastrpc_mmap_add(struct fastrpc_mmap *map)
 {
-	if (map->flags == ADSP_MMAP_HEAP_ADDR ||
-				map->flags == ADSP_MMAP_REMOTE_HEAP_ADDR) {
-		struct fastrpc_apps *me = &gfa;
+	struct fastrpc_file *fl = map->fl;
 
-		spin_lock(&me->hlock);
-		hlist_add_head(&map->hn, &me->maps);
-		spin_unlock(&me->hlock);
-	} else {
-		struct fastrpc_file *fl = map->fl;
-
-		hlist_add_head(&map->hn, &fl->maps);
-	}
+	hlist_add_head(&map->hn, &fl->maps);
 }
 
 static int fastrpc_mmap_find(struct fastrpc_file *fl, int fd,
 		uintptr_t va, size_t len, int mflags, int refs,
 		struct fastrpc_mmap **ppmap)
 {
-	struct fastrpc_apps *me = &gfa;
 	struct fastrpc_mmap *match = NULL, *map = NULL;
 	struct hlist_node *n;
 
 	if ((va + len) < va)
 		return -EOVERFLOW;
-	if (mflags == ADSP_MMAP_HEAP_ADDR ||
-				 mflags == ADSP_MMAP_REMOTE_HEAP_ADDR) {
-		spin_lock(&me->hlock);
-		hlist_for_each_entry_safe(map, n, &me->maps, hn) {
-			if (va >= map->va &&
+	hlist_for_each_entry_safe(map, n, &fl->maps, hn) {
+		if (va >= map->va &&
 				va + len <= map->va + map->len &&
 				map->fd == fd) {
-				if (refs) {
-					if (map->refs + 1 == INT_MAX) {
-						spin_unlock(&me->hlock);
-						return -ETOOMANYREFS;
-					}
-					map->refs++;
-				}
-				match = map;
-				break;
+			if (refs) {
+				if (map->refs + 1 == INT_MAX)
+					return -ETOOMANYREFS;
+				map->refs++;
 			}
-		}
-		spin_unlock(&me->hlock);
-	} else {
-		hlist_for_each_entry_safe(map, n, &fl->maps, hn) {
-			if (va >= map->va &&
-				va + len <= map->va + map->len &&
-				map->fd == fd) {
-				if (refs) {
-					if (map->refs + 1 == INT_MAX)
-						return -ETOOMANYREFS;
-					map->refs++;
-				}
-				match = map;
-				break;
-			}
+			match = map;
+			break;
 		}
 	}
 	if (match) {
@@ -834,7 +817,9 @@ static int fastrpc_mmap_remove(struct fastrpc_file *fl, uintptr_t va,
 	hlist_for_each_entry_safe(map, n, &me->maps, hn) {
 		if (map->raddr == va &&
 			map->raddr + map->len == va + len &&
-			map->refs == 1) {
+			map->refs == 1 &&
+			/* Remove map if not used in process initialization*/
+			!map->is_filemap) {
 			match = map;
 			hlist_del_init(&map->hn);
 			break;
@@ -846,9 +831,14 @@ static int fastrpc_mmap_remove(struct fastrpc_file *fl, uintptr_t va,
 		return 0;
 	}
 	hlist_for_each_entry_safe(map, n, &fl->maps, hn) {
-		if (map->raddr == va &&
+		if (map->refs == 1 &&
+			!map->ctx_refs &&
+			map->raddr == va &&
 			map->raddr + map->len == va + len &&
-			map->refs == 1) {
+			/* Remove map only if it isn't being used by DSP */
+			!map->dma_handle_refs &&
+			/* Remove map if not used in process initialization*/
+			!map->is_filemap) {
 			match = map;
 			hlist_del_init(&map->hn);
 			break;
@@ -885,15 +875,23 @@ static void fastrpc_mmap_free(struct fastrpc_mmap *map, uint32_t flags)
 	if (map->flags == ADSP_MMAP_HEAP_ADDR ||
 				map->flags == ADSP_MMAP_REMOTE_HEAP_ADDR) {
 		spin_lock(&me->hlock);
-		map->refs--;
+		if (map->refs)
+			map->refs--;
 		if (!map->refs)
 			hlist_del_init(&map->hn);
-		spin_unlock(&me->hlock);
-		if (map->refs > 0)
+		if (map->refs > 0) {
+			spin_unlock(&me->hlock);
 			return;
+		}
+		spin_unlock(&me->hlock);
 	} else {
-		map->refs--;
-		if (!map->refs)
+		if (map->refs)
+			map->refs--;
+		/* flags is passed as 1 during fastrpc_file_free
+		 * (ie process exit), so that maps will be cleared
+		 * even though references are present.
+		 */
+		if (!map->refs && !map->ctx_refs && !map->dma_handle_refs)
 			hlist_del_init(&map->hn);
 		if (map->refs > 0 && !flags)
 			return;
@@ -984,6 +982,8 @@ static int fastrpc_mmap_create(struct fastrpc_file *fl, int fd,
 	map->fl = fl;
 	map->fd = fd;
 	map->attr = attr;
+	map->is_filemap = false;
+	map->ctx_refs = 0;
 	if (mflags == ADSP_MMAP_HEAP_ADDR ||
 				mflags == ADSP_MMAP_REMOTE_HEAP_ADDR) {
 		map->apps = me;
@@ -999,6 +999,11 @@ static int fastrpc_mmap_create(struct fastrpc_file *fl, int fd,
 		map->size = len;
 		map->va = (uintptr_t)region_vaddr;
 	} else if (mflags == FASTRPC_DMAHANDLE_NOMAP) {
+		if (map->attr & FASTRPC_ATTR_KEEP_MAP) {
+		    pr_err("Invalid attribute 0x%x for fd %d\n", map->attr, fd);
+			err = -EINVAL;
+			goto bail;
+		}
 		VERIFY(err, !IS_ERR_OR_NULL(map->buf = dma_buf_get(fd)));
 		if (err)
 			goto bail;
@@ -1141,7 +1146,9 @@ static int fastrpc_mmap_create(struct fastrpc_file *fl, int fd,
 	}
 	map->len = len;
 
-	fastrpc_mmap_add(map);
+	if ((mflags != ADSP_MMAP_HEAP_ADDR) &&
+			(mflags != ADSP_MMAP_REMOTE_HEAP_ADDR))
+		fastrpc_mmap_add(map);
 	*ppmap = map;
 
 bail:
@@ -1492,8 +1499,11 @@ static void context_free(struct smq_invoke_ctx *ctx)
 	spin_unlock(&ctx->fl->hlock);
 
 	mutex_lock(&ctx->fl->map_mutex);
-	for (i = 0; i < nbufs; ++i)
+	for (i = 0; i < nbufs; ++i) {
+		if (ctx->maps[i] && ctx->maps[i]->ctx_refs)
+			ctx->maps[i]->ctx_refs--;
 		fastrpc_mmap_free(ctx->maps[i], 0);
+	}
 	mutex_unlock(&ctx->fl->map_mutex);
 
 	fastrpc_buf_free(ctx->buf, 1);
@@ -1689,7 +1699,7 @@ static int get_args(uint32_t kernel, struct smq_invoke_ctx *ctx)
 	uintptr_t args;
 	size_t rlen = 0, copylen = 0, metalen = 0, lrpralen = 0;
 	int i, oix;
-	int err = 0;
+	int err = 0, j = 0;
 	int mflags = 0;
 	uint64_t *fdlist;
 	uint32_t *crclist;
@@ -1716,6 +1726,8 @@ static int get_args(uint32_t kernel, struct smq_invoke_ctx *ctx)
 			err = fastrpc_mmap_create(ctx->fl, ctx->fds[i],
 					ctx->attrs[i], buf, len,
 					mflags, &ctx->maps[i]);
+		if (ctx->maps[i])
+			ctx->maps[i]->ctx_refs++;
 		mutex_unlock(&ctx->fl->map_mutex);
 		if (err)
 			goto bail;
@@ -1733,7 +1745,16 @@ static int get_args(uint32_t kernel, struct smq_invoke_ctx *ctx)
 			err = fastrpc_mmap_create(ctx->fl, ctx->fds[i],
 					FASTRPC_ATTR_NOVA, 0, 0, dmaflags,
 					&ctx->maps[i]);
+		if (!err && ctx->maps[i])
+			ctx->maps[i]->dma_handle_refs++;
 		if (err) {
+ 			for (j = bufs; j < i; j++) {
+				if (ctx->maps[j] &&
+					ctx->maps[j]->dma_handle_refs) {
+					ctx->maps[j]->dma_handle_refs--;
+					fastrpc_mmap_free(ctx->maps[j], 0);
+				}
+			}
 			mutex_unlock(&ctx->fl->map_mutex);
 			goto bail;
 		}
@@ -1840,13 +1861,33 @@ static int get_args(uint32_t kernel, struct smq_invoke_ctx *ctx)
 		rpra[i].buf.pv = buf;
 	}
 	PERF_END);
+	/* Since we are not holidng map_mutex during get args whole time
+	 * it is possible that dma handle map may be removed by some invalid
+	 * fd passed by DSP. Inside the lock check if the map present or not
+	 */
+	mutex_lock(&ctx->fl->map_mutex);
 	for (i = bufs; i < bufs + handles; ++i) {
-		struct fastrpc_mmap *map = ctx->maps[i];
-		if (map) {
-			pages[i].addr = map->phys;
-			pages[i].size = map->size;
+		struct fastrpc_mmap *mmap = NULL;
+		/* check if map  was created */
+		if (ctx->maps[i]) {
+			/* check if map still exist */
+			if (!fastrpc_mmap_find(ctx->fl, ctx->fds[i], 0, 0,
+				0, 0, &mmap)) {
+				if (mmap) {
+					pages[i].addr = mmap->phys;
+					pages[i].size = mmap->size;
+				}
+
+			} else {
+				/* map already freed by some other call */
+				mutex_unlock(&ctx->fl->map_mutex);
+				pr_err("could not find map associated with dma handle fd %d\n",
+					ctx->fds[i]);
+				goto bail;
+			}
 		}
 	}
+	mutex_unlock(&ctx->fl->map_mutex);
 	fdlist = (uint64_t *)&pages[bufs + handles];
 	crclist = (uint32_t *)&fdlist[M_FDLIST];
 	/* reset fds, crc and early wakeup hint memory */
@@ -2015,6 +2056,8 @@ static int put_args(uint32_t kernel, struct smq_invoke_ctx *ctx,
 				goto bail;
 		} else {
 			mutex_lock(&ctx->fl->map_mutex);
+			if (ctx->maps[i]->ctx_refs)
+				ctx->maps[i]->ctx_refs--;
 			fastrpc_mmap_free(ctx->maps[i], 0);
 			mutex_unlock(&ctx->fl->map_mutex);
 			ctx->maps[i] = NULL;
@@ -2026,8 +2069,12 @@ static int put_args(uint32_t kernel, struct smq_invoke_ctx *ctx,
 			if (!fdlist[i])
 				break;
 			if (!fastrpc_mmap_find(ctx->fl, (int)fdlist[i], 0, 0,
-						0, 0, &mmap))
-				fastrpc_mmap_free(mmap, 0);
+						0, 0, &mmap)) {
+				if (mmap && mmap->dma_handle_refs) {
+					mmap->dma_handle_refs = 0;
+					fastrpc_mmap_free(mmap, 0);
+				}
+			}
 		}
 	}
 	mutex_unlock(&ctx->fl->map_mutex);
@@ -2590,6 +2637,8 @@ static int fastrpc_init_process(struct fastrpc_file *fl,
 			mutex_lock(&fl->map_mutex);
 			VERIFY(err, !fastrpc_mmap_create(fl, init->filefd, 0,
 				init->file, init->filelen, mflags, &file));
+			if (file)
+				file->is_filemap = true;
 			mutex_unlock(&fl->map_mutex);
 			if (err)
 				goto bail;
@@ -2706,6 +2755,8 @@ static int fastrpc_init_process(struct fastrpc_file *fl,
 			err = fastrpc_mmap_create(fl, -1, 0, init->mem,
 				 init->memlen, ADSP_MMAP_REMOTE_HEAP_ADDR,
 				 &mem);
+			if (mem)
+				mem->is_filemap = true;
 			mutex_unlock(&fl->map_mutex);
 			if (err)
 				goto bail;
@@ -3230,7 +3281,7 @@ static int fastrpc_mmap_remove_ssr(struct fastrpc_file *fl)
 	} while (match);
 bail:
 	if (err && match)
-		fastrpc_mmap_add(match);
+		fastrpc_mmap_add_global(match);
 	return err;
 }
 
@@ -3346,7 +3397,11 @@ static int fastrpc_internal_munmap(struct fastrpc_file *fl,
 bail:
 	if (err && map) {
 		mutex_lock(&fl->map_mutex);
-		fastrpc_mmap_add(map);
+		if ((map->flags == ADSP_MMAP_HEAP_ADDR) ||
+				(map->flags == ADSP_MMAP_REMOTE_HEAP_ADDR))
+			fastrpc_mmap_add_global(map);
+		else
+			fastrpc_mmap_add(map);
 		mutex_unlock(&fl->map_mutex);
 	}
 	mutex_unlock(&fl->internal_map_mutex);
@@ -3456,6 +3511,9 @@ static int fastrpc_internal_mmap(struct fastrpc_file *fl,
 		if (err)
 			goto bail;
 		map->raddr = raddr;
+		if (ud->flags == ADSP_MMAP_HEAP_ADDR ||
+				ud->flags == ADSP_MMAP_REMOTE_HEAP_ADDR)
+			fastrpc_mmap_add_global(map);
 	}
 	ud->vaddrout = raddr;
  bail:
