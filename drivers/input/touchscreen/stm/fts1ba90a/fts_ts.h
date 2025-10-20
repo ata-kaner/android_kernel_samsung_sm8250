@@ -2,8 +2,6 @@
 #define _LINUX_FTS_TS_H_
 
 #include <linux/device.h>
-#include <linux/input/sec_cmd.h>
-#include <linux/wakelock.h>
 #include <linux/vmalloc.h>
 #include <linux/proc_fs.h>
 #include <linux/kernel.h>
@@ -16,7 +14,6 @@
 #include <linux/uaccess.h>
 #include <linux/interrupt.h>
 #include <linux/gpio.h>
-#include <linux/spu-verify.h>
 #include <linux/init.h>
 #include <linux/errno.h>
 #include <linux/platform_device.h>
@@ -30,24 +27,32 @@
 #include <linux/regulator/consumer.h>
 #include <linux/of_gpio.h>
 #include <linux/input/mt.h>
-#ifdef CONFIG_SEC_SYSFS
-#include <linux/sec_sysfs.h>
+
+#include "../../../sec_input/sec_input.h"
+
+#if IS_ENABLED(CONFIG_SPU_VERIFY)
+#include <linux/spu-verify.h>
+#define SUPPORT_FW_SIGNED
 #endif
 
-#ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 #include <linux/pm_runtime.h>
 #include <linux/atomic.h>
-#include <linux/input/sec_secure_touch.h>
+#include "../../../sec_input/sec_secure_touch.h"
 #endif
 
-#ifdef CONFIG_VBUS_NOTIFIER
+#if IS_ENABLED(CONFIG_VBUS_NOTIFIER)
 #include <linux/vbus_notifier.h>
 #endif
 
 #define USE_OPEN_CLOSE
 
-#include <linux/input/sec_tclm_v2.h>
-#ifdef CONFIG_INPUT_TOUCHSCREEN_TCLMV2
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_DUMP_MODE)
+#include "../../../sec_input/sec_tsp_dumpkey.h"
+extern struct tsp_dump_callbacks dump_callbacks;
+#endif
+
+#if IS_ENABLED(CONFIG_INPUT_TOUCHSCREEN_TCLMV2)
 #define TCLM_CONCEPT
 #endif
 #include <linux/power_supply.h>
@@ -285,27 +290,10 @@
 #define FTS_MODE_PRESS					(1 << 4)
 #define FTS_MODE_DOUBLETAP_WAKEUP			(1 << 5)
 
-typedef enum {
-	SPONGE_EVENT_TYPE_SPAY			= 0x04,
-	SPONGE_EVENT_TYPE_SINGLE_TAP		= 0x08,
-	SPONGE_EVENT_TYPE_AOD_PRESS		= 0x09,
-	SPONGE_EVENT_TYPE_AOD_LONGPRESS		= 0x0A,
-	SPONGE_EVENT_TYPE_AOD_DOUBLETAB		= 0x0B,
-	SPONGE_EVENT_TYPE_FOD			= 0x0F,
-	SPONGE_EVENT_TYPE_FOD_RELEASE		= 0x10,
-	SPONGE_EVENT_TYPE_FOD_OUT		= 0x11,
-} SPONGE_EVENT_TYPE;
-
 #define FTS_MAX_X_RESOLUTION	1599
 #define FTS_MAX_Y_RESOLUTION	2559
 #define FTS_MAX_NUM_FORCE		53	/* Number of TX CH */
 #define FTS_MAX_NUM_SENSE		33	/* Number of RX CH */
-
-enum external_noise_mode {
-	EXT_NOISE_MODE_NONE		= 0,
-	EXT_NOISE_MODE_MONITOR		= 1,	/* for dex mode */
-	EXT_NOISE_MODE_MAX,			/* add new mode above this line */
-};
 
 enum fts_error_return {
 	FTS_NOT_ERROR = 0,
@@ -335,19 +323,6 @@ struct fts_sponge_information {
 	u16 sponge_model_name_size;
 	u8 sponge_model_name[32];
 } __packed;
-
-enum grip_write_mode {
-	G_NONE				= 0,
-	G_SET_EDGE_HANDLER		= 1,
-	G_SET_EDGE_ZONE			= 2,
-	G_SET_NORMAL_MODE		= 4,
-	G_SET_LANDSCAPE_MODE		= 8,
-	G_CLR_LANDSCAPE_MODE		= 16,
-};
-enum grip_set_data {
-	ONLY_EDGE_HANDLER		= 0,
-	GRIP_ALL_DATA			= 1,
-};
 
 /**
  * struct fts_finger - Represents fingers.
@@ -408,19 +383,6 @@ enum fts_config_value_feature {
 	FTS_CFG_NONE = 0,
 	FTS_CFG_APWR = 1,
 	FTS_CFG_AUTO_TUNE_PROTECTION = 2,
-};
-
-enum {
-	SPECIAL_EVENT_TYPE_SPAY					= 0x04,
-	SPECIAL_EVENT_TYPE_PRESSURE_TOUCHED			= 0x05,
-	SPECIAL_EVENT_TYPE_PRESSURE_RELEASED			= 0x06,
-	SPECIAL_EVENT_TYPE_AOD					= 0x08,
-	SPECIAL_EVENT_TYPE_AOD_PRESS				= 0x09,
-	SPECIAL_EVENT_TYPE_AOD_LONGPRESS			= 0x0A,
-	SPECIAL_EVENT_TYPE_AOD_DOUBLETAB			= 0x0B,
-	SPECIAL_EVENT_TYPE_AOD_HOMEKEY_PRESS			= 0x0C,
-	SPECIAL_EVENT_TYPE_AOD_HOMEKEY_RELEASE			= 0x0D,
-	SPECIAL_EVENT_TYPE_AOD_HOMEKEY_RELEASE_NO_HAPTIC	= 0x0E
 };
 
 enum fts_system_information_address {
@@ -485,21 +447,6 @@ struct fts_ts_test_result {
 #define TEST_OCTA_PASS		2
 
 #define SEC_OFFSET_SIGNATURE		0x59525446
-
-enum offset_fac_position {
-	OFFSET_FAC_NOSAVE		= 0,	// FW index 0
-	OFFSET_FAC_SUB			= 1,	// FW Index 2
-	OFFSET_FAC_MAIN			= 2,	// FW Index 3
-	OFFSET_FAC_SVC			= 3,	// FW Index 4
-};
-
-enum offset_fw_position {
-	OFFSET_FW_NOSAVE		= 0,
-	OFFSET_FW_SDC			= 1,
-	OFFSET_FW_SUB			= 2,
-	OFFSET_FW_MAIN			= 3,
-	OFFSET_FW_SVC			= 4,
-};
 
 #define FTS_ITO_RESULT_PRINT_SIZE	1024
 
@@ -610,65 +557,34 @@ struct FTS_SyncFrameHeader {
 	u32	  reserved2;  // 12~15
 } __packed;
 
-struct fts_i2c_platform_data {
-	bool support_mt_pressure;
-	bool support_dex;
-	bool enable_settings_aot;
-	bool sync_reportrate_120;
-	bool enable_vbus_noti;
-	bool support_fod;
-	bool disable_vsync_scan;
-	bool support_open_short_test;
-	bool support_mis_calibration_test;
-	int max_x;
-	int max_y;
-	int display_x;
-	int display_y;
-	const char *firmware_name;
-	const char *regulator_dvdd;
-	const char *regulator_avdd;
+struct stm_ts_snr_result_cmd {
+	s16	status;
+	s16	point;
+	s16	average;
+} __packed;
 
-	struct pinctrl *pinctrl;
-	struct pinctrl_state	*pins_default;
-	struct pinctrl_state	*pins_sleep;
+struct tsp_snr_result_of_point {
+	s16	max;
+	s16	min;
+	s16	average;
+	s16	nontouch_peak_noise;
+	s16	touch_peak_noise;
+	s16	snr1;
+	s16	snr2;
+} __packed;
 
-	int (*power)(void *data, bool on);
-	void (*register_cb)(void *);
-	void (*enable_sync)(bool on);
-	u8 (*get_ddi_type)(void);	/* to indentify ddi type */
-
-	int tsp_icid;	/* IC Vendor */
-	int tsp_id;	/* Panel Vendor */
-	int device_id;	/* Device id */
-
-	int irq_gpio;	/* Interrupt GPIO */
-	unsigned int irq_type;
-
-	int gpio_scl;
-	int gpio_sda;
-
-	int bringup;
-
-	bool chip_on_board;
-	u32 area_indicator;
-	u32 area_navigation;
-	u32 area_edge;
-#ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
-	int ss_touch_num;
-#endif
-};
+struct stm_ts_snr_result {
+	s16	status;
+	s16	reserved[6];
+	struct tsp_snr_result_of_point result[9];
+} __packed;
 
 struct fts_ts_info {
 	struct i2c_client *client;
-	struct input_dev *input_dev;
-	struct input_dev *input_dev_pad;
-	struct input_dev *input_dev_touch;
-
 	int irq;
-	int irq_type;
 	bool irq_enabled;
-	struct fts_i2c_platform_data *board;
-#ifdef CONFIG_VBUS_NOTIFIER
+	struct sec_ts_plat_data *board;
+#if IS_ENABLED(CONFIG_VBUS_NOTIFIER)
 	struct notifier_block vbus_nb;
 #endif
 	struct mutex lock;
@@ -718,7 +634,7 @@ struct fts_ts_info {
 	volatile int fts_power_state;
 	int wakeful_edge_side;
 	struct completion resume_done;
-	struct wake_lock wakelock;
+	struct wakeup_source *wakelock;
 
 	unsigned int noise_count;		/* noise mode count */
 
@@ -759,6 +675,7 @@ struct fts_ts_info {
 	bool rawdata_read_lock;
 	volatile bool reset_is_on_going;
 	volatile bool shutdown_is_on_going;
+	atomic_t fw_update_is_running;
 
 	unsigned int scrub_id;
 	unsigned int scrub_x;
@@ -768,7 +685,7 @@ struct fts_ts_info {
 	int fod_y;
 	int fod_vi_size;
 
-#if defined(CONFIG_INPUT_SEC_SECURE_TOUCH)
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	atomic_t st_enabled;
 	atomic_t st_pending_irqs;
 	struct completion st_powerdown;
@@ -827,6 +744,8 @@ struct fts_ts_info {
 	bool fix_active_mode;
 	bool touch_aging_mode;
 
+	int lpmode_change_delay;
+
 	int rawcap_max;
 	int rawcap_max_tx;
 	int rawcap_max_rx;
@@ -840,8 +759,9 @@ struct fts_ts_info {
 	u8 tsp_temp_data;
 	bool tsp_temp_data_skip;
 
+#if IS_ENABLED(CONFIG_INPUT_SEC_NOTIFIER)
 	struct notifier_block fts_input_nb;
-
+#endif
 	int (*stop_device)(struct fts_ts_info *info, bool lpmode);
 	int (*start_device)(struct fts_ts_info *info);
 
@@ -849,7 +769,7 @@ struct fts_ts_info {
 	int (*fts_read_reg)(struct fts_ts_info *info, u8 *reg, int cnum, u8 *buf, int num);
 	int (*fts_systemreset)(struct fts_ts_info *info, unsigned int msec);
 	int (*fts_wait_for_ready)(struct fts_ts_info *info);
-	void (*fts_command)(struct fts_ts_info *info, u8 cmd, bool checkEcho);
+	int (*fts_command)(struct fts_ts_info *info, u8 cmd, bool checkEcho);
 	int (*fts_get_version_info)(struct fts_ts_info *info);
 	int (*fts_get_sysinfo_data)(struct fts_ts_info *info, u8 sysinfo_addr, u8 read_cnt, u8 *data);
 
@@ -865,12 +785,12 @@ int fts_fw_wait_for_echo_event(struct fts_ts_info *info, u8 *cmd, u8 cmd_cnt, in
 int fts_get_tsp_test_result(struct fts_ts_info *info);
 void fts_interrupt_set(struct fts_ts_info *info, int enable);
 void fts_release_all_finger(struct fts_ts_info *info);
-void fts_delay(unsigned int ms);
 int fts_set_opmode(struct fts_ts_info *info, u8 mode);
 int fts_set_scanmode(struct fts_ts_info *info, u8 scan_mode);
 int fts_osc_trim_recovery(struct fts_ts_info *info);
 int fts_get_miscal_data(struct fts_ts_info *info, short *min, short *max);
 void fts_set_grip_data_to_ic(struct fts_ts_info *info, u8 flag);
+int fts_get_hf_data(struct fts_ts_info *info);
 
 #ifdef TCLM_CONCEPT
 int fts_tclm_data_read(struct i2c_client *client, int address);
@@ -884,21 +804,14 @@ int fts_panel_ito_test(struct fts_ts_info *info, int testmode);
 int fts_set_external_noise_mode(struct fts_ts_info *info, u8 mode);
 int fts_fix_active_mode(struct fts_ts_info *info, bool enable);
 
-#ifndef CONFIG_SEC_SYSFS
-extern struct class *sec_class;
-#endif
-#ifdef CONFIG_BATTERY_SAMSUNG
+#if IS_ENABLED(CONFIG_BATTERY_SAMSUNG)
 extern unsigned int lpcharge;
 #endif
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
 extern int get_lcd_attached(char *mode);
 #endif
-#if defined(CONFIG_EXYNOS_DECON_FB)
+#if IS_ENABLED(CONFIG_EXYNOS_DECON_FB)
 extern int get_lcd_info(char *arg);
-#endif
-
-#ifdef CONFIG_TOUCHSCREEN_DUMP_MODE
-extern struct tsp_dump_callbacks dump_callbacks;
 #endif
 
 #endif /* _LINUX_FTS_TS_H_ */

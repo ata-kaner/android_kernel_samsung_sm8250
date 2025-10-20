@@ -1,6 +1,3 @@
-
-#define BUFFER_MAX			((256 * 1024) - 16)
-
 enum {
 	TYPE_RAW_DATA = 0x31,
 	TYPE_BASELINE_DATA = 0x32,
@@ -71,6 +68,7 @@ static void get_chip_vendor(void *device_data);
 static void get_chip_name(void *device_data);
 static void run_jitter_test(void *device_data);
 static void run_factory_miscalibration(void *device_data);
+static void run_factory_miscalibration_read_all(void *device_data);
 static void run_miscalibration(void *device_data);
 static void get_wet_mode(void *device_data);
 static void get_x_num(void *device_data);
@@ -102,6 +100,9 @@ static void get_cx_all_data(void *device_data);
 static void run_cx_gap_data_x_all(void *device_data);
 static void run_cx_gap_data_y_all(void *device_data);
 static void get_strength_all_data(void *device_data);
+static void run_high_frequency_rawcap_read_all(void *device_data);
+static void run_snr_non_touched(void *device_data);
+static void run_snr_touched(void *device_data);
 
 static void set_tsp_test_result(void *device_data);
 static void get_tsp_test_result(void *device_data);
@@ -115,7 +116,6 @@ static void report_rate(void *device_data);
 static void set_wirelesscharger_mode(void *device_data);
 static void set_grip_data(void *device_data);
 static void dead_zone_enable(void *device_data);
-static void drawing_test_enable(void *device_data);
 static void spay_enable(void *device_data);
 static void aot_enable(void *device_data);
 static void aod_enable(void *device_data);
@@ -126,7 +126,6 @@ static void fod_enable(void *device_data);
 static void set_fod_rect(void *device_data);
 static void singletap_enable(void *device_data);
 static void external_noise_mode(void *device_data);
-static void brush_enable(void *device_data);
 static void set_touchable_area(void *device_data);
 static void delay(void *device_data);
 static void debug(void *device_data);
@@ -159,6 +158,7 @@ struct sec_cmd ft_commands[] = {
 	{SEC_CMD("get_chip_name", get_chip_name),},
 	{SEC_CMD("run_jitter_test", run_jitter_test),},
 	{SEC_CMD("run_factory_miscalibration", run_factory_miscalibration),},
+	{SEC_CMD("run_factory_miscalibration_read_all", run_factory_miscalibration_read_all),},
 	{SEC_CMD("run_miscalibration", run_miscalibration),},
 	{SEC_CMD("get_wet_mode", get_wet_mode),},
 	{SEC_CMD("get_module_vendor", not_support_cmd),},
@@ -194,6 +194,9 @@ struct sec_cmd ft_commands[] = {
 	{SEC_CMD("run_cx_gap_data_x_all", run_cx_gap_data_x_all),},
 	{SEC_CMD("run_cx_gap_data_y_all", run_cx_gap_data_y_all),},
 	{SEC_CMD("get_strength_all_data", get_strength_all_data),},
+	{SEC_CMD("run_high_frequency_rawcap_read_all", run_high_frequency_rawcap_read_all),},
+	{SEC_CMD("run_snr_non_touched", run_snr_non_touched),},
+	{SEC_CMD("run_snr_touched", run_snr_touched),},
 	{SEC_CMD("set_tsp_test_result", set_tsp_test_result),},
 	{SEC_CMD("get_tsp_test_result", get_tsp_test_result),},
 	{SEC_CMD("increase_disassemble_count", increase_disassemble_count),},
@@ -204,7 +207,6 @@ struct sec_cmd ft_commands[] = {
 	{SEC_CMD("set_wirelesscharger_mode", set_wirelesscharger_mode),},
 	{SEC_CMD("set_grip_data", set_grip_data),},
 	{SEC_CMD("dead_zone_enable", dead_zone_enable),},
-	{SEC_CMD("drawing_test_enable", drawing_test_enable),},
 	{SEC_CMD_H("spay_enable", spay_enable),},
 	{SEC_CMD_H("aot_enable", aot_enable),},
 	{SEC_CMD_H("aod_enable", aod_enable),},
@@ -215,7 +217,6 @@ struct sec_cmd ft_commands[] = {
 	{SEC_CMD("set_fod_rect", set_fod_rect),},
 	{SEC_CMD_H("singletap_enable", singletap_enable),},
 	{SEC_CMD_H("external_noise_mode", external_noise_mode),},
-	{SEC_CMD_H("brush_enable", brush_enable),},
 	{SEC_CMD_H("set_touchable_area", set_touchable_area),},
 	{SEC_CMD_H("delay", delay),},
 	{SEC_CMD("debug", debug),},
@@ -409,7 +410,7 @@ static ssize_t read_vendor_show(struct device *dev,
 	if (info->board->firmware_name)
 		snprintf(buffer, 9, "%s", info->board->firmware_name + 8);
 	else
-		snprintf(buffer, 9, "FTS");
+		snprintf(buffer, 9, "FST");
 
 	return snprintf(buf, SEC_CMD_BUF_SIZE, "STM_%s", buffer);
 }
@@ -523,7 +524,7 @@ static ssize_t sensitivity_mode_store(struct device *dev,
 		return ret;
 	}
 
-	fts_delay(30);
+	sec_delay(30);
 
 	input_info(true, &info->client->dev, "%s: %lu\n", __func__, value);
 	return count;
@@ -589,8 +590,16 @@ static ssize_t read_support_feature(struct device *dev,
 	if (info->board->support_mis_calibration_test)
 		feature |= INPUT_FEATURE_SUPPORT_MIS_CALIBRATION_TEST;
 
+	if (info->board->enable_sysinput_enabled)
+		feature |= INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED;
+
 	snprintf(buff, sizeof(buff), "%d", feature);
-	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
+	input_info(true, &info->client->dev, "%s: %s%s%s%s%s%s\n", __func__, buff,
+		feature & INPUT_FEATURE_ENABLE_SETTINGS_AOT ? " AOT" : "",
+		feature & INPUT_FEATURE_ENABLE_SYNC_RR120 ? " RR120hz" : "",
+		feature & INPUT_FEATURE_SUPPORT_OPEN_SHORT_TEST ? " openshort" : "",
+		feature & INPUT_FEATURE_SUPPORT_MIS_CALIBRATION_TEST ? " miscal" : "",
+		feature & INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED ? " SE" : "");
 
 	return snprintf(buf, SEC_CMD_BUF_SIZE, "%s", buff);
 }
@@ -735,7 +744,7 @@ static ssize_t fts_fod_info_show(struct device *dev,
 
 	if (!info->board->support_fod) {
 		input_err(true, &info->client->dev, "%s: fod is not supported\n", __func__);
-		return snprintf(buf, SEC_CMD_BUF_SIZE, "NG");
+		return snprintf(buf, SEC_CMD_BUF_SIZE, "NA");
 	}
 
 	input_info(true, &info->client->dev, "%s: x:%d/%d y:%d/%d size:%d\n",
@@ -758,7 +767,7 @@ static ssize_t fts_fod_position_show(struct device *dev,
 
 	if (!info->board->support_fod) {
 		input_err(true, &info->client->dev, "%s: fod is not supported\n", __func__);
-		return snprintf(buf, SEC_CMD_BUF_SIZE, "NG");
+		return snprintf(buf, SEC_CMD_BUF_SIZE, "NA");
 	}
 
 	if (!info->fod_vi_size) {
@@ -780,6 +789,78 @@ static ssize_t fts_fod_position_show(struct device *dev,
 	return strlen(buf);
 }
 
+static ssize_t enabled_show(struct device *dev, struct device_attribute *attr,
+					char *buf)
+{
+	struct sec_cmd_data *sec = dev_get_drvdata(dev);
+	struct fts_ts_info *ts = container_of(sec, struct fts_ts_info, sec);
+
+	if (!ts->board->enable_sysinput_enabled)
+		return -EINVAL;
+
+	input_info(true, &ts->client->dev, "%s: %d\n", __func__, ts->board->enabled);
+
+	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", ts->board->enabled);
+}
+
+static ssize_t enabled_store(struct device *dev, struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct sec_cmd_data *sec = dev_get_drvdata(dev);
+	struct fts_ts_info *ts = container_of(sec, struct fts_ts_info, sec);
+	struct input_dev *input_dev = ts->board->input_dev;
+	int buff[2];
+	int ret;
+
+	if (!ts->board->enable_sysinput_enabled)
+		return -EINVAL;
+
+	ret = sscanf(buf, "%d,%d", &buff[0], &buff[1]);
+	if (ret != 2) {
+		input_err(true, &ts->client->dev,
+				"%s: failed read params [%d]\n", __func__, ret);
+		return -EINVAL;
+	}
+
+	if (buff[0] == DISPLAY_STATE_ON && buff[1] == DISPLAY_EVENT_LATE) {
+		if (ts->board->enabled) {
+			input_err(true, &ts->client->dev, "%s: device already enabled\n", __func__);
+			goto out;
+		}
+
+		ret = sec_input_enable_device(input_dev);
+	} else if (buff[0] == DISPLAY_STATE_OFF && buff[1] == DISPLAY_EVENT_EARLY) {
+		if (!ts->board->enabled) {
+			input_err(true, &ts->client->dev, "%s: device already disabled\n", __func__);
+			goto out;
+		}
+
+		ret = sec_input_disable_device(input_dev);
+	} else if (buff[0] == DISPLAY_STATE_FORCE_ON) {
+		if (ts->board->enabled) {
+			input_err(true, &ts->client->dev, "%s: device already enabled\n", __func__);
+			goto out;
+		}
+
+		ret = sec_input_enable_device(input_dev);
+		input_info(true, &ts->client->dev,"%s: DISPLAY_STATE_FORCE_ON(%d)\n", __func__, ret);
+	} else if (buff[0] == DISPLAY_STATE_FORCE_OFF) {
+		if (!ts->board->enabled) {
+			input_err(true, &ts->client->dev, "%s: device already disabled\n", __func__);
+			goto out;
+		}
+
+		ret = sec_input_disable_device(input_dev);
+		input_info(true, &ts->client->dev,"%s: DISPLAY_STATE_FORCE_OFF(%d)\n", __func__, ret);
+	}
+
+	if (ret)
+		return ret;
+
+out:
+	return count;
+}
+
 static DEVICE_ATTR(ito_check, 0444, read_ito_check_show, NULL);
 static DEVICE_ATTR(raw_check, 0444, read_raw_check_show, NULL);
 static DEVICE_ATTR(multi_count, 0644, read_multi_count_show, clear_multi_count_store);
@@ -798,6 +879,7 @@ static DEVICE_ATTR(get_lp_dump, 0444, get_lp_dump, NULL);
 static DEVICE_ATTR(prox_power_off, 0664, prox_power_off_show, prox_power_off_store);
 static DEVICE_ATTR(fod_info, 0444, fts_fod_info_show, NULL);
 static DEVICE_ATTR(fod_pos, 0444, fts_fod_position_show, NULL);
+static DEVICE_ATTR(enabled, 0664, enabled_show, enabled_store);
 
 static struct attribute *sec_touch_facotry_attributes[] = {
 	&dev_attr_scrub_pos.attr,
@@ -818,6 +900,7 @@ static struct attribute *sec_touch_facotry_attributes[] = {
 	&dev_attr_prox_power_off.attr,
 	&dev_attr_fod_info.attr,
 	&dev_attr_fod_pos.attr,
+	&dev_attr_enabled.attr,
 	NULL,
 };
 
@@ -942,7 +1025,7 @@ static void enter_factory_mode(struct fts_ts_info *info, bool fac_mode)
 		// Auto-Tune without saving
 		fts_execute_autotune(info, false);
 
-		fts_delay(50);
+		sec_delay(50);
 	}
 
 	fts_set_scanmode(info, info->scan_mode);
@@ -1189,40 +1272,41 @@ void fts_print_frame(struct fts_ts_info *info, short *min, short *max)
 	int j = 0;
 	u8 *pStr = NULL;
 	u8 pTmp[16] = { 0 };
+	int lsize = 6 * (info->SenseChannelLength + 1);
 
-	pStr = kzalloc(BUFFER_MAX, GFP_KERNEL);
+	pStr = kzalloc(lsize, GFP_KERNEL);
 	if (pStr == NULL)
 		return;
 
-	snprintf(pTmp, 5, "    ");
-	strlcat(pStr, pTmp, BUFFER_MAX);
+	snprintf(pTmp, 4, "    ");
+	strlcat(pStr, pTmp, lsize);
 
 	for (i = 0; i < info->SenseChannelLength; i++) {
-		snprintf(pTmp, 7, "Rx%02d  ", i);
-		strlcat(pStr, pTmp, BUFFER_MAX);
+		snprintf(pTmp, 6, "Rx%02d  ", i);
+		strlcat(pStr, pTmp, lsize);
 	}
 
 	input_raw_info(true, &info->client->dev, "%s\n", pStr);
 
-	memset(pStr, 0x0, 6 * (info->SenseChannelLength + 1));
-	snprintf(pTmp, 3, " +");
-	strlcat(pStr, pTmp, BUFFER_MAX);
+	memset(pStr, 0x0, lsize);
+	snprintf(pTmp, 2, " +");
+	strlcat(pStr, pTmp, lsize);
 
 	for (i = 0; i < info->SenseChannelLength; i++) {
-		snprintf(pTmp, 7, "------");
-		strlcat(pStr, pTmp, BUFFER_MAX);
+		snprintf(pTmp, 6, "------");
+		strlcat(pStr, pTmp, lsize);
 	}
 
 	input_raw_info(true, &info->client->dev, "%s\n", pStr);
 
 	for (i = 0; i < info->ForceChannelLength; i++) {
-		memset(pStr, 0x0, 6 * (info->SenseChannelLength + 1));
-		snprintf(pTmp, 8, "Tx%02d | ", i);
-		strlcat(pStr, pTmp, BUFFER_MAX);
+		memset(pStr, 0x0, lsize);
+		snprintf(pTmp, 7, "Tx%02d | ", i);
+		strlcat(pStr, pTmp, lsize);
 
 		for (j = 0; j < info->SenseChannelLength; j++) {
-			snprintf(pTmp, 7, "%5d ", info->pFrame[(i * info->SenseChannelLength) + j]);
-			strlcat(pStr, pTmp, BUFFER_MAX);
+			snprintf(pTmp, 6, "%5d ", info->pFrame[(i * info->SenseChannelLength) + j]);
+			strlcat(pStr, pTmp, lsize);
 
 			if (i > 0) {
 				if (info->pFrame[(i * info->SenseChannelLength) + j] < *min) {
@@ -1251,14 +1335,16 @@ void fts_print_frame(struct fts_ts_info *info, short *min, short *max)
 int fts_read_frame(struct fts_ts_info *info, u8 type, short *min, short *max)
 {
 	struct FTS_SyncFrameHeader *pSyncFrameHeader;
-
 	u8 regAdd[8] = { 0 };
-
 	unsigned int totalbytes = 0;
-	u8 pRead[info->ForceChannelLength * info->SenseChannelLength * 3 + 1];
+	u8 *pRead;
 	int ret;
 	int i = 0;
 	int retry = 10;
+
+	pRead = kzalloc(info->ForceChannelLength * info->SenseChannelLength * 3 + 1, GFP_KERNEL);
+	if (!pRead)
+		return -ENOMEM;
 
 	/* Request Data Type */
 	regAdd[0] = 0xA4;
@@ -1267,10 +1353,11 @@ int fts_read_frame(struct fts_ts_info *info, u8 type, short *min, short *max)
 	ret = info->fts_write_reg(info, &regAdd[0], 3);
 	if (ret < 0) {
 		input_err(true, &info->client->dev, "%s: failed to request data\n", __func__);
+		kfree(pRead);
 		return ret;
 	}
 
-	fts_delay(50);
+	sec_delay(50);
 
 	do {
 		regAdd[0] = 0xA6;
@@ -1279,6 +1366,7 @@ int fts_read_frame(struct fts_ts_info *info, u8 type, short *min, short *max)
 		ret = info->fts_read_reg(info, &regAdd[0], 3, &pRead[0], FTS_COMP_DATA_HEADER_SIZE);
 		if (ret < 0) {
 			input_err(true, &info->client->dev, "%s: read failed rc = %d\n", __func__, ret);
+			kfree(pRead);
 			return ret;
 		}
 
@@ -1287,13 +1375,14 @@ int fts_read_frame(struct fts_ts_info *info, u8 type, short *min, short *max)
 		if ((pSyncFrameHeader->header == 0xA5) && (pSyncFrameHeader->host_data_mem_id == type))
 			break;
 
-		fts_delay(100);
+		sec_delay(100);
 	} while (retry--);
 
 	if (retry == 0) {
 		input_err(true, &info->client->dev,
 				"%s: didn't match header or id. header = %02X, id = %02X\n",
 				__func__, pSyncFrameHeader->header, pSyncFrameHeader->host_data_mem_id);
+		kfree(pRead);
 		return -EIO;
 	}
 
@@ -1305,6 +1394,7 @@ int fts_read_frame(struct fts_ts_info *info, u8 type, short *min, short *max)
 	ret = info->fts_read_reg(info, &regAdd[0], 3, &pRead[0], totalbytes);
 	if (ret < 0) {
 		input_err(true, &info->client->dev, "%s: read failed rc = %d\n", __func__, ret);
+		kfree(pRead);
 		return ret;
 	}
 
@@ -1324,6 +1414,7 @@ int fts_read_frame(struct fts_ts_info *info, u8 type, short *min, short *max)
 	}
 
 	fts_print_frame(info, min, max);
+	kfree(pRead);
 	return 0;
 }
 
@@ -1522,7 +1613,7 @@ int fts_fw_wait_for_jitter_result(struct fts_ts_info *info, u8 *reg, u8 count, s
 				__func__, data[0], data[1], data[2], data[3], data[4], data[5]);
 			break;
 		}
-		fts_delay(20);
+		sec_delay(20);
 	}
 
 	mutex_unlock(&info->wait_for);
@@ -1633,6 +1724,55 @@ static void run_factory_miscalibration(void *device_data)
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 }
 
+static void run_factory_miscalibration_read_all(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct fts_ts_info *info = container_of(sec, struct fts_ts_info, sec);
+	char buff[SEC_CMD_STR_LEN];
+	int i, j, ret;
+	short min = 0x7FFF, max = 0x8000;
+	char *all_strbuff;
+
+	sec_cmd_set_default_result(sec);
+	if (info->fts_power_state == FTS_POWER_STATE_POWERDOWN) {
+		input_err(true, &info->client->dev, "%s: [ERROR] Touch is stopped\n",
+				__func__);
+		goto NG;
+	}
+
+	all_strbuff = kzalloc(info->ForceChannelLength * info->SenseChannelLength * 7 + 1, GFP_KERNEL);
+	if (!all_strbuff) {
+		input_err(true, &info->client->dev, "%s: alloc failed\n", __func__);
+		goto NG;
+	}
+
+	input_raw_info(true, &info->client->dev, "%s\n", __func__);
+
+	ret = fts_get_miscal_data(info, &min, &max);
+	if (ret < 0) {
+		input_err(true, &info->client->dev, "%s: failed to get miscal data\n", __func__);
+		kfree(all_strbuff);
+		goto NG;
+	}
+
+	for (j = 0; j < info->ForceChannelLength; j++) {
+		for (i = 0; i < info->SenseChannelLength; i++) {
+			snprintf(buff, sizeof(buff), "%d,", info->pFrame[j * info->SenseChannelLength + i]);
+			strlcat(all_strbuff, buff, info->ForceChannelLength * info->SenseChannelLength * 7);
+		}
+	}
+
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	sec_cmd_set_cmd_result(sec, all_strbuff, strlen(all_strbuff));
+	input_info(true, &info->client->dev, "%s: %ld\n", __func__, strlen(all_strbuff));
+	kfree(all_strbuff);
+	return;
+NG:
+	snprintf(buff, sizeof(buff), "NG");
+	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec->cmd_state = SEC_CMD_STATUS_FAIL;
+}
+
 static void run_miscalibration(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -1678,7 +1818,7 @@ static void run_miscalibration(void *device_data)
 			input_info(true, &info->client->dev, "%s: %02X %02X %02X %02X %02X %02X %02X %02X\n",
 					__func__, data[0], data[1], data[2], data[3],
 					data[4], data[5], data[6], data[7]);
-		fts_delay(10);
+		sec_delay(10);
 
 		if (data[0] == FTS_EVENT_PASS_REPORT || data[0] == FTS_EVENT_ERROR_REPORT) {
 			max = data[3] << 8 | data[2];
@@ -1756,7 +1896,7 @@ int fts_panel_ito_test(struct fts_ts_info *info, int testmode)
 		goto out;
 	}
 
-	fts_delay(100);
+	sec_delay(100);
 
 	memset(info->ito_test, 0x0, 4);
 
@@ -1848,7 +1988,7 @@ int fts_panel_ito_test(struct fts_ts_info *info, int testmode)
 			input_err(true, &info->client->dev, "%s: Time over - wait for result of ITO test\n", __func__);
 			break;
 		}
-		fts_delay(20);
+		sec_delay(20);
 	}
 
 	mutex_unlock(&info->wait_for);
@@ -1861,11 +2001,11 @@ out:
 
 	fts_set_cover_type(info, info->flip_enable);
 
-	fts_delay(10);
+	sec_delay(10);
 
 	if (info->charger_mode) {
 		fts_charger_mode(info);
-		fts_delay(10);
+		sec_delay(10);
 	}
 
 	if (!info->flip_enable)
@@ -1986,7 +2126,7 @@ static void get_threshold(void *device_data)
 		goto NG;
 	}
 
-	fts_delay(50);
+	sec_delay(50);
 
 	regAdd[0] = FTS_CMD_SET_GET_TOUCH_THRESHOLD;
 	rc = info->fts_read_reg(info, &regAdd[0], 1, data, 2);
@@ -2041,7 +2181,7 @@ static void module_on_master(void *device_data)
 
 	ret = fts_start_device(info);
 
-	if (info->input_dev->disabled)
+	if (!info->board->enabled)
 		fts_stop_device(info, info->lowpower_flag || info->fod_lp_mode);
 
 	if (ret == 0)
@@ -2082,7 +2222,7 @@ static void get_chip_name(void *device_data)
 	if (info->firmware_name)
 		memcpy(buff, info->firmware_name + 8, 9);
 	else
-		snprintf(buff, 10, "FTS");
+		snprintf(buff, 10, "FST");
 
 	sec_cmd_set_default_result(sec);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
@@ -2203,7 +2343,7 @@ static void check_fw_corruption(void *device_data)
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct fts_ts_info *info = container_of(sec, struct fts_ts_info, sec);
 	char buff[16] = { 0 };
-	int rc;
+	int rc = 0;
 
 	sec_cmd_set_default_result(sec);
 
@@ -2217,7 +2357,10 @@ static void check_fw_corruption(void *device_data)
 	input_err(true, &info->client->dev,
 			"%s: do autotune and retry check corruption\n", __func__);
 
-	fts_execute_autotune(info, true);
+	if (fts_execute_autotune(info, true) < 0) {
+		if (rc == FTS_ERROR_FW_CORRUPTION)
+			goto out;
+	}
 
 	rc = fts_fw_corruption_check(info);
 out:
@@ -2569,14 +2712,14 @@ static void fts_read_ix_data(struct fts_ts_info *info, bool allnode)
 	u16 max_rx_ix_sum = 0;
 	u16 min_rx_ix_sum = 0xFFFF;
 
-	u8 data[(info->ForceChannelLength + info->SenseChannelLength) * 2 + 1];
+	u8 *data;
 
 	u8 regAdd[FTS_EVENT_SIZE];
 
 	u8 dataID;
 
-	u16 force_ix_data[info->ForceChannelLength];
-	u16 sense_ix_data[info->SenseChannelLength];
+	u16 *force_ix_data;
+	u16 *sense_ix_data;
 
 	int buff_size, j;
 	char *mbuff = NULL;
@@ -2593,7 +2736,31 @@ static void fts_read_ix_data(struct fts_ts_info *info, bool allnode)
 				__func__);
 		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		goto out;
+		goto out_alloc_failed;
+	}
+
+	data = kzalloc((info->ForceChannelLength + info->SenseChannelLength) * 2 + 1, GFP_KERNEL);
+	if (!data) {
+		snprintf(buff, sizeof(buff), "NG");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		goto out_alloc_failed;
+	}
+
+	force_ix_data = kzalloc(info->ForceChannelLength, GFP_KERNEL);
+	if (!force_ix_data) {
+		snprintf(buff, sizeof(buff), "NG");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		kfree(data);
+		goto out_alloc_failed;
+	}
+
+	sense_ix_data = kzalloc(info->SenseChannelLength, GFP_KERNEL);
+	if (!sense_ix_data) {
+		snprintf(buff, sizeof(buff), "NG");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		kfree(force_ix_data);
+		kfree(data);
+		goto out_alloc_failed;
 	}
 
 	info->fts_command(info, FTS_CMD_CLEAR_ALL_EVENT, true); // Clear FIFO
@@ -2739,6 +2906,9 @@ static void fts_read_ix_data(struct fts_ts_info *info, bool allnode)
 		sec_cmd_set_cmd_result(sec, mbuff, buff_size);
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 		kfree(mbuff);
+		kfree(sense_ix_data);
+		kfree(force_ix_data);
+		kfree(data);
 		return;
 	}
 
@@ -2752,6 +2922,11 @@ static void fts_read_ix_data(struct fts_ts_info *info, bool allnode)
 	}
 
 out:
+	kfree(sense_ix_data);
+	kfree(force_ix_data);
+	kfree(data);
+
+out_alloc_failed:
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
 		char ret_buff[SEC_CMD_STR_LEN] = { 0 };
 
@@ -2795,10 +2970,10 @@ static void fts_read_self_raw_frame(struct fts_ts_info *info, bool allnode)
 
 	u8 regAdd[FTS_EVENT_SIZE] = {0};
 
-	u8 data[(info->ForceChannelLength + info->SenseChannelLength) * 2 + 1];
+	u8 *data;
 
-	s16 self_force_raw_data[info->ForceChannelLength];
-	s16 self_sense_raw_data[info->SenseChannelLength];
+	s16 *self_force_raw_data;
+	s16 *self_sense_raw_data;
 
 	int Offset = 0;
 	u8 count = 0;
@@ -2811,6 +2986,30 @@ static void fts_read_self_raw_frame(struct fts_ts_info *info, bool allnode)
 	s16 max_tx_self_raw_data = S16_MIN;
 	s16 min_rx_self_raw_data = S16_MAX;
 	s16 max_rx_self_raw_data = S16_MIN;
+
+	data = kzalloc((info->ForceChannelLength + info->SenseChannelLength) * 2 + 1, GFP_KERNEL);
+	if (!data) {
+		snprintf(buff, sizeof(buff), "NG");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		goto out_alloc_failed;
+	}
+
+	self_force_raw_data = kzalloc(info->ForceChannelLength, GFP_KERNEL);
+	if (!self_force_raw_data) {
+		snprintf(buff, sizeof(buff), "NG");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		kfree(data);
+		goto out_alloc_failed;
+	}
+
+	self_sense_raw_data = kzalloc(info->SenseChannelLength, GFP_KERNEL);
+	if (!self_sense_raw_data) {
+		snprintf(buff, sizeof(buff), "NG");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		kfree(data);
+		kfree(self_force_raw_data);
+		goto out_alloc_failed;
+	}
 
 	// Request Data Type
 	regAdd[0] = 0xA4;
@@ -2841,7 +3040,7 @@ static void fts_read_self_raw_frame(struct fts_ts_info *info, bool allnode)
 		if ((pSyncFrameHeader->header == 0xA5) && (pSyncFrameHeader->host_data_mem_id == TYPE_RAW_DATA))
 			break;
 
-		fts_delay(100);
+		sec_delay(100);
 	} while (retry--);
 
 	if (retry == 0) {
@@ -2899,21 +3098,32 @@ static void fts_read_self_raw_frame(struct fts_ts_info *info, bool allnode)
 			__func__, (s16)min_rx_self_raw_data, (s16)max_rx_self_raw_data);
 
 	if (allnode == true) {
-		char mbuff[(info->ForceChannelLength + info->SenseChannelLength + 2) * 10];
+		char *mbuff;
+		int buffsize = (info->ForceChannelLength + info->SenseChannelLength + 2) * 10;
 		char temp[10] = { 0 };
 
-		memset(mbuff, 0x0, sizeof(mbuff));
+		mbuff = kzalloc(buffsize, GFP_KERNEL);
+		if (!mbuff) {
+			snprintf(buff, sizeof(buff), "NG");
+			sec->cmd_state = SEC_CMD_STATUS_FAIL;
+			goto out;
+		}
+
 		for (i = 0; i < (info->ForceChannelLength); i++) {
 			snprintf(temp, sizeof(temp), "%d,", (s16)self_force_raw_data[i]);
-			strlcat(mbuff, temp, sizeof(mbuff));
+			strlcat(mbuff, temp, buffsize);
 		}
 		for (i = 0; i < (info->SenseChannelLength); i++) {
 			snprintf(temp, sizeof(temp), "%d,", (s16)self_sense_raw_data[i]);
-			strlcat(mbuff, temp, sizeof(mbuff));
+			strlcat(mbuff, temp, buffsize);
 		}
 
-		sec_cmd_set_cmd_result(sec, mbuff, sizeof(mbuff));
+		sec_cmd_set_cmd_result(sec, mbuff, buffsize);
 		sec->cmd_state = SEC_CMD_STATUS_OK;
+		kfree(mbuff);
+		kfree(data);
+		kfree(self_force_raw_data);
+		kfree(self_sense_raw_data);
 		return;
 	}
 
@@ -2921,7 +3131,13 @@ static void fts_read_self_raw_frame(struct fts_ts_info *info, bool allnode)
 			(s16)min_tx_self_raw_data, (s16)max_tx_self_raw_data,
 			(s16)min_rx_self_raw_data, (s16)max_rx_self_raw_data);
 	sec->cmd_state = SEC_CMD_STATUS_OK;
+
 out:
+	kfree(data);
+	kfree(self_force_raw_data);
+	kfree(self_sense_raw_data);
+
+out_alloc_failed:
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
 		char ret_buff[SEC_CMD_STR_LEN] = { 0 };
 
@@ -3055,7 +3271,7 @@ static void get_cx_data(void *device_data)
 
 static int read_ms_cx_data(struct fts_ts_info *info, u8 *cx_min, u8 *cx_max)
 {
-	u8 rdata[info->ForceChannelLength * info->SenseChannelLength];
+	u8 *rdata;
 	u8 regAdd[FTS_EVENT_SIZE] = { 0 };
 	u8 dataID;
 	u16 comp_start_addr;
@@ -3067,12 +3283,18 @@ static int read_ms_cx_data(struct fts_ts_info *info, u8 *cx_min, u8 *cx_max)
 	if (pStr == NULL)
 		return -ENOMEM;
 
+	rdata = kzalloc(info->ForceChannelLength * info->SenseChannelLength, GFP_KERNEL);
+	if (!rdata) {
+		kfree(pStr);
+		return -ENOMEM;
+	}
+
 	info->fts_command(info, FTS_CMD_CLEAR_ALL_EVENT, true); // Clear FIFO
 	fts_release_all_finger(info);
 
 	fts_interrupt_set(info, INT_DISABLE);
 
-	fts_delay(20);
+	sec_delay(20);
 
 	// Request compensation data type
 	dataID = 0x11;  // MS - LP
@@ -3138,6 +3360,7 @@ static int read_ms_cx_data(struct fts_ts_info *info, u8 *cx_min, u8 *cx_max)
 		memcpy(&info->cx_data[0], &rdata[0], info->ForceChannelLength * info->SenseChannelLength);
 
 out:
+	kfree(rdata);
 	kfree(pStr);
 	return ret;
 }
@@ -3333,6 +3556,53 @@ static void run_cx_gap_data_y_all(void *device_data)
 	kfree(buff);
 }
 
+static void run_high_frequency_rawcap_read_all(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct fts_ts_info *info = container_of(sec, struct fts_ts_info, sec);
+	char buff[SEC_CMD_STR_LEN] = { 0 };
+	char *all_strbuff;
+	int i, j, ret;
+
+	sec_cmd_set_default_result(sec);
+	if (info->fts_power_state == FTS_POWER_STATE_POWERDOWN) {
+		input_err(true, &info->client->dev, "%s: [ERROR] Touch is stopped\n",
+				__func__);
+		goto NG;
+	}
+
+	all_strbuff = kzalloc(info->ForceChannelLength * info->SenseChannelLength * 7 + 1, GFP_KERNEL);
+	if (!all_strbuff) {
+		input_err(true, &info->client->dev, "%s: alloc failed\n", __func__);
+		goto NG;
+	}
+
+	input_raw_info(true, &info->client->dev, "%s\n", __func__);
+
+	ret = fts_get_hf_data(info);
+	if (ret < 0) {
+		kfree(all_strbuff);
+		goto NG;
+	}
+
+	for (j = 0; j < info->ForceChannelLength; j++) {
+		for (i = 0; i < info->SenseChannelLength; i++) {
+			snprintf(buff, sizeof(buff), "%d,", info->pFrame[j * info->SenseChannelLength + i]);
+			strlcat(all_strbuff, buff, info->ForceChannelLength * info->SenseChannelLength * 7);
+		}
+	}
+
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	sec_cmd_set_cmd_result(sec, all_strbuff, strlen(all_strbuff));
+	input_info(true, &info->client->dev, "%s: %ld\n", __func__, strlen(all_strbuff));
+	kfree(all_strbuff);
+	return;
+NG:
+	snprintf(buff, sizeof(buff), "NG");
+	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec->cmd_state = SEC_CMD_STATUS_FAIL;
+}
+
 static void factory_cmd_result_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -3370,6 +3640,8 @@ static void factory_cmd_result_all(void *device_data)
 	run_cx_data_read(sec);
 	get_cx_gap_data(sec);
 	run_ix_data_read(sec);
+
+	get_wet_mode(sec);
 
 	/* do not systemreset in COB type */
 	if (info->board->chip_on_board)
@@ -3419,6 +3691,220 @@ NG:
 	snprintf(buff, sizeof(buff), "NG");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+}
+
+static void run_snr_non_touched(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct fts_ts_info *info = container_of(sec, struct fts_ts_info, sec);
+	char buff[SEC_CMD_STR_LEN] = { 0 };
+	u8 address[5] = { 0 };
+	u16 status;
+	int ret = 0;
+	int wait_time = 0;
+	int retry_cnt = 0;
+
+	input_info(true, &info->client->dev, "%s\n", __func__);
+
+	sec_cmd_set_default_result(sec);
+
+	if (info->fts_power_state == FTS_POWER_STATE_POWERDOWN) {
+		input_err(true, &info->client->dev, "%s: [ERROR] Touch is stopped\n",
+				__func__);
+		goto out_init;
+	}
+
+	if (sec->cmd_param[0] < 1 || sec->cmd_param[0] > 1000) {
+		input_err(true, &info->client->dev, "%s: strange value frame:%d\n",
+				__func__, sec->cmd_param[0]);
+		goto out_init;
+	}
+
+	fts_fix_active_mode(info, true);
+
+	/* enter SNR mode */
+	address[0] = 0x70;
+	address[1] = 0x25;
+	ret = info->fts_write_reg(info, &address[0], 2);
+	if (ret < 0) {
+		input_err(true, &info->client->dev, "%s: i2c_write failed\n", __func__);
+		goto out;
+	}
+
+	/* start Non-touched Peak Noise */
+	address[0] = 0xC7;
+	address[1] = 0x0B;
+	address[2] = 0x01;
+	address[3] = (u8)(sec->cmd_param[0] & 0xff);
+	address[4] = (u8)(sec->cmd_param[0] >> 8);
+	ret = info->fts_write_reg(info, &address[0], 5);
+	if (ret < 0) {
+		input_err(true, &info->client->dev, "%s: i2c_write failed\n", __func__);
+		goto out;
+	}
+
+
+	wait_time = (sec->cmd_param[0] * 1000) / 120 + (sec->cmd_param[0] * 1000) % 120;
+
+	sec_delay(wait_time);
+
+	retry_cnt = 50;
+	address[0] = 0x72;
+	while ((info->fts_read_reg(info, &address[0], 1, (u8 *)&status, 2) > 0) && (retry_cnt-- > 0)) {
+		if (status == 1)
+			break;
+		sec_delay(20);
+	}
+
+	if (status == 0) {
+		input_err(true, &info->client->dev, "%s: failed non-touched status:%d\n",
+				__func__, status);
+		goto out;
+	}
+
+	snprintf(buff, sizeof(buff), "OK");
+	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+
+	/* EXIT SNR mode */
+	address[0] = 0x70;
+	address[1] = 0x00;
+	info->fts_write_reg(info, &address[0], 2);
+	fts_fix_active_mode(info, false);
+	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
+
+	return;
+
+out:
+	address[0] = 0x70;
+	address[1] = 0x00;
+	info->fts_write_reg(info, &address[0], 2);
+	fts_fix_active_mode(info, false);
+
+out_init:
+	snprintf(buff, sizeof(buff), "NG");
+	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec->cmd_state = SEC_CMD_STATUS_FAIL;
+
+	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
+}
+
+static void run_snr_touched(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct fts_ts_info *info = container_of(sec, struct fts_ts_info, sec);
+	struct stm_ts_snr_result_cmd snr_cmd_result;
+	struct stm_ts_snr_result snr_result;
+	char buff[SEC_CMD_STR_LEN] = { 0 };
+	char tbuff[SEC_CMD_STR_LEN] = { 0 };
+	u8 address[5] = { 0 };
+	int ret = 0;
+	int wait_time = 0;
+	int retry_cnt = 0;
+	int i = 0;
+
+	input_info(true, &info->client->dev, "%s\n", __func__);
+
+	sec_cmd_set_default_result(sec);
+	memset(&snr_result, 0, sizeof(struct stm_ts_snr_result));
+	memset(&snr_cmd_result, 0, sizeof(struct stm_ts_snr_result_cmd));
+
+	if (info->fts_power_state == FTS_POWER_STATE_POWERDOWN) {
+		input_err(true, &info->client->dev, "%s: [ERROR] Touch is stopped\n",
+				__func__);
+		goto out_init;
+	}
+
+	if (sec->cmd_param[0] < 1 || sec->cmd_param[0] > 1000) {
+		input_err(true, &info->client->dev, "%s: strange value frame:%d\n",
+				__func__, sec->cmd_param[0]);
+		goto out_init;
+	}
+
+	fts_fix_active_mode(info, true);
+
+	/* enter SNR mode */
+	address[0] = 0x70;
+	address[1] = 0x25;
+	ret = info->fts_write_reg(info, &address[0], 2);
+	if (ret < 0) {
+		input_err(true, &info->client->dev, "%s: i2c_write failed\n", __func__);
+		goto out;
+	}
+
+	/* start touched Peak Noise */
+	address[0] = 0xC7;
+	address[1] = 0x0B;
+	address[2] = 0x02;
+	address[3] = (u8)(sec->cmd_param[0] & 0xff);
+	address[4] = (u8)(sec->cmd_param[0] >> 8);
+	ret = info->fts_write_reg(info, &address[0], 5);
+	if (ret < 0) {
+		input_err(true, &info->client->dev, "%s: i2c_write failed\n", __func__);
+		goto out;
+	}
+
+	wait_time = (sec->cmd_param[0] * 1000) / 120 + (sec->cmd_param[0] * 1000) % 120;
+
+	sec_delay(wait_time);
+
+	retry_cnt = 50;
+	address[0] = 0x72;
+	while ((info->fts_read_reg(info, &address[0], 1, (u8 *)&snr_cmd_result, 6) > 0) && (retry_cnt-- > 0)) {
+		if (snr_cmd_result.status == 1)
+			break;
+		sec_delay(20);
+	}
+
+	if (snr_cmd_result.status == 0) {
+		input_err(true, &info->client->dev, "%s: failed non-touched status:%d\n",
+				__func__, snr_cmd_result.status);
+		goto out;
+	} else {
+		input_info(true, &info->client->dev, "%s: status:%d, point:%d, average:%d\n", __func__,
+			snr_cmd_result.status, snr_cmd_result.point, snr_cmd_result.average);
+	}
+
+	address[0] = 0x72;
+	ret = info->fts_read_reg(info, &address[0], 1, (u8 *)&snr_result, sizeof(struct stm_ts_snr_result));
+	if (ret < 0) {
+		input_err(true, &info->client->dev, "%s: i2c_write failed size:%ld\n",
+				__func__, sizeof(struct stm_ts_snr_result));
+		goto out;
+	}
+
+	for (i = 0; i < 9; i++) {
+		input_info(true, &info->client->dev, "%s: average:%d, snr1:%d, snr2:%d\n", __func__,
+			snr_result.result[i].average, snr_result.result[i].snr1, snr_result.result[i].snr2);
+		snprintf(tbuff, sizeof(tbuff), "%d,%d,%d,",
+			snr_result.result[i].average,
+			snr_result.result[i].snr1,
+			snr_result.result[i].snr2);
+		strlcat(buff, tbuff, sizeof(buff));
+	}
+
+	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+
+	/* EXIT SNR mode */
+	address[0] = 0x70;
+	address[1] = 0x00;
+	info->fts_write_reg(info, &address[0], 2);
+	fts_fix_active_mode(info, false);
+	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
+
+	return;
+out:
+	address[0] = 0x70;
+	address[1] = 0x00;
+	info->fts_write_reg(info, &address[0], 2);
+	fts_fix_active_mode(info, false);
+out_init:
+	snprintf(buff, sizeof(buff), "NG");
+	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec->cmd_state = SEC_CMD_STATUS_FAIL;
+
+	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
 }
 
 int fts_get_tsp_test_result(struct fts_ts_info *info)
@@ -4086,6 +4572,11 @@ void fts_set_grip_data_to_ic(struct fts_ts_info *info, u8 flag)
 	u8 data[4] = { 0 };
 	u8 regAdd[11] = {FTS_CMD_SET_FUNCTION_ONOFF, };
 
+	if (info->fts_power_state == FTS_POWER_STATE_POWERDOWN) {
+		input_err(true, &info->client->dev, "%s: ic power is off\n", __func__);
+		return;
+	}
+
 	input_info(true, &info->client->dev, "%s: flag: %02X (clr,lan,nor,edg,han)\n", __func__, flag);
 
 	memset(&regAdd[1], 0x00, 10); 
@@ -4342,23 +4833,6 @@ static void dead_zone_enable(void *device_data)
 	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
 }
 
-static void drawing_test_enable(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct fts_ts_info *info = container_of(sec, struct fts_ts_info, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
-
-	snprintf(buff, sizeof(buff), "NA");
-	sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
-}
-
 static void spay_enable(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -4603,18 +5077,24 @@ static void fod_enable(void *device_data)
 			__func__, sec->cmd_param[0] ? "on" : "off",
 			info->press_prop, info->lowpower_flag);
 
-	ret = info->fts_write_to_sponge(info, FTS_CMD_SPONGE_OFFSET_MODE,
-			&info->lowpower_flag, sizeof(info->lowpower_flag));
-	if (ret < 0) {
-		input_err(true, &info->client->dev,
-				"%s: failed. ret: %d\n", __func__, ret);
-		snprintf(buff, sizeof(buff), "%s", "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		goto out;
-	}
+	if (!info->board->enabled && !info->lowpower_flag && !info->fod_lp_mode) {
+		if (device_may_wakeup(&info->client->dev) && (info->fts_power_state == FTS_POWER_STATE_LOWPOWER))
+			disable_irq_wake(info->irq);
+		fts_stop_device(info, 0);
+	} else {
+		ret = info->fts_write_to_sponge(info, FTS_CMD_SPONGE_OFFSET_MODE,
+				&info->lowpower_flag, sizeof(info->lowpower_flag));
+		if (ret < 0) {
+			input_err(true, &info->client->dev,
+					"%s: failed. ret: %d\n", __func__, ret);
+			snprintf(buff, sizeof(buff), "%s", "NG");
+			sec->cmd_state = SEC_CMD_STATUS_FAIL;
+			goto out;
+		}
 
-	fts_set_press_property(info);
-	fts_set_fod_finger_merge(info);
+		fts_set_press_property(info);
+		fts_set_fod_finger_merge(info);
+	}
 
 	snprintf(buff, sizeof(buff), "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -4657,11 +5137,11 @@ static void set_fod_rect(void *device_data)
 	int i, ret;
 
 	sec_cmd_set_default_result(sec);
-
-	if (sec->cmd_param[0] > info->board->display_x
+	if ((info->board->display_x > 0 && info->board->display_y > 0)
+		&& (sec->cmd_param[0] > info->board->display_x
 			|| sec->cmd_param[1] > info->board->display_y
 			|| sec->cmd_param[2] > info->board->display_x
-			|| sec->cmd_param[3] > info->board->display_y) {
+			|| sec->cmd_param[3] > info->board->display_y)) {
 		input_err(true, &info->client->dev, "%s: Abnormal fod_rect data\n", __func__);
 		goto NG;
 	}
@@ -4838,50 +5318,6 @@ NG:
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec_cmd_set_cmd_exit(sec);
-}
-
-static void brush_enable(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct fts_ts_info *info = container_of(sec, struct fts_ts_info, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	u8 regAdd[3] = {FTS_CMD_SET_FUNCTION_ONOFF, FTS_FUNCTION_ENABLE_BRUSH_MODE, 0x00};
-	int ret;
-
-	sec_cmd_set_default_result(sec);
-
-	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		goto out;
-	}
-
-	info->brush_mode = sec->cmd_param[0];
-	input_info(true, &info->client->dev,
-			"%s: set brush mode %s\n", __func__, info->brush_mode ? "enable" : "disable");
-
-	if (info->brush_mode == 0)
-		regAdd[2] = 0x00;	/* 0: Disable Artcanvas min phi mode */
-	else
-		regAdd[2] = 0x01;	/* 1: Enable Artcanvas min phi mode  */
-
-	ret = info->fts_write_reg(info, &regAdd[0], 3);
-	if (ret < 0) {
-		input_err(true, &info->client->dev,
-				"%s: failed to set brush mode\n", __func__);
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-		goto out;
-	}
-
-	snprintf(buff, sizeof(buff), "OK");
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-out:
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
 }
 
 static void set_touchable_area(void *device_data)
@@ -5147,7 +5583,7 @@ static void run_sram_test(void *device_data)
 		goto error;
 	}
 
-	fts_delay(300);
+	sec_delay(300);
 
 	memset(data, 0x0, FTS_EVENT_SIZE);
 	rc = -EIO;
@@ -5174,7 +5610,7 @@ static void run_sram_test(void *device_data)
 					data[4], data[5], data[6], data[7]);
 			break;
 		}
-		fts_delay(20);
+		sec_delay(20);
 	}
 
 error:
