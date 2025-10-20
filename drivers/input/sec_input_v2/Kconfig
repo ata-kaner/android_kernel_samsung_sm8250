@@ -45,3 +45,4 @@ config SEC_INPUT_CMD_TEST
 	help
 	  TODO: Describe config fully.
 
+source "drivers/input/sec_input_v2/stm/Kconfig"

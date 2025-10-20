@@ -29,3 +29,5 @@ GCOV_PROFILE_sec_common_fn.o := $(CONFIG_SEC_KUNIT)
 
 subdir-ccflags-$(CONFIG_SEC_KUNIT) += \
 	-Wno-format-zero-length
+
+obj-y += stm/
