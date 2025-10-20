@@ -92,38 +92,6 @@ static int fts_resume(struct i2c_client *client);
 #endif
 int fts_systemreset(struct fts_ts_info *info, unsigned int msec);
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-static int fts_panel_state_notifier(struct notifier_block *nb,
-	unsigned long val, void *data)
-{
-    struct panel_state_data *evdata = (struct panel_state_data *)data;
-    struct fts_ts_info *info = container_of(nb, struct fts_ts_info, panel_notif);
-    unsigned int panel_state;
-
-    if (val != PANEL_EVENT_STATE_CHANGED)
-    	return 0;
-
-    if(evdata)
-    	panel_state = evdata->state;
-    else
-        return 0;
-
-    switch (panel_state) {
-    case PANEL_ON:
-        fts_set_lowpowermode(info, TO_TOUCH_MODE);
-        break;
-    case PANEL_OFF:
-    case PANEL_LPM:
-        fts_set_lowpowermode(info, TO_LOWPOWER_MODE);
-        break;
-    default:
-        break;
-    }
-
-	return NOTIFY_OK;
-}
-#endif
-
 #if defined(CONFIG_INPUT_SEC_SECURE_TOUCH)
 static irqreturn_t fts_filter_interrupt(struct fts_ts_info *info);
 
@@ -1839,15 +1807,10 @@ static u8 fts_event_handler_type_b(struct fts_ts_info *info)
 			if (p_event_status->stype == FTS_EVENT_STATUSTYPE_VENDORINFO) {
 				if (info->board->support_ear_detect) {
 					if (p_event_status->status_id == 0x6A) {
-						if (info->fts_power_state == FTS_POWER_STATE_LOWPOWER || !info->touch_count) {
-							// Report actual range when the area around the sensor is touched,
-							// when panel is in LPM state or when the screen isn't touched
-							p_event_status->status_data_1 = p_event_status->status_data_1 == 5 || !p_event_status->status_data_1;
-							info->hover_event = p_event_status->status_data_1;
-							input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, p_event_status->status_data_1);
-							input_sync(info->input_dev_proximity);
-							input_info(true, &info->client->dev, "%s: proximity: %d\n", __func__, p_event_status->status_data_1);
-						}
+						info->hover_event = p_event_status->status_data_1;
+						input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, p_event_status->status_data_1);
+						input_sync(info->input_dev_proximity);
+						input_info(true, &info->client->dev, "%s: proximity: %d\n", __func__, p_event_status->status_data_1);
 					}
 				}
 			}
@@ -2145,16 +2108,13 @@ static u8 fts_event_handler_type_b(struct fts_ts_info *info)
 					if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_LONG ||
 							p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_NORMAL) {
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD;
-						sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 						input_info(true, &info->client->dev, "%s: FOD %sPRESS\n",
 								__func__, p_gesture_status->gesture_id ? "" : "LONG");
 					} else if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_RELEASE) {
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD_RELEASE;
-						sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 						input_info(true, &info->client->dev, "%s: FOD RELEASE\n", __func__);
 					} else if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_OUT) {
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD_OUT;
-						sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 						input_info(true, &info->client->dev, "%s: FOD OUT\n", __func__);
 					} else if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_VI) {
 						if (info->lowpower_flag & FTS_MODE_PRESS) {
@@ -2175,6 +2135,9 @@ static u8 fts_event_handler_type_b(struct fts_ts_info *info)
 								__func__, p_gesture_status->gesture_id);
 						break;
 					}
+					input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
+					input_sync(info->input_dev);
+					input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
 					break;
 				}
 			}
@@ -3237,10 +3200,6 @@ static int fts_probe(struct i2c_client *client, const struct i2c_device_id *idp)
 	info->ss_drv = sec_secure_touch_register(info, info->board->ss_touch_num, &info->input_dev->dev.kobj);
 #endif
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	info->panel_notif.notifier_call = fts_panel_state_notifier;
-	ss_panel_notifier_register(&info->panel_notif);
-#endif
 	info->psy = power_supply_get_by_name("battery");
 	if (!info->psy)
 		input_err(true, &info->client->dev, "%s: Cannot find power supply\n", __func__);
@@ -3277,9 +3236,6 @@ err_register_input_dev_proximity:
 		info->input_dev_pad = NULL;
 	}
 err_register_input_pad:
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	ss_panel_notifier_unregister(&info->panel_notif);
-#endif
 	input_unregister_device(info->input_dev);
 	info->input_dev = NULL;
 	info->input_dev_touch = NULL;
@@ -3384,9 +3340,6 @@ static int fts_remove(struct i2c_client *client)
 
 	info->input_dev = info->input_dev_touch;
 	input_mt_destroy_slots(info->input_dev);
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	ss_panel_notifier_unregister(&info->panel_notif);
-#endif
 	input_unregister_device(info->input_dev);
 	info->input_dev = NULL;
 	info->input_dev_touch = NULL;

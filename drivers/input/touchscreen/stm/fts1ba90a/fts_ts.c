@@ -2090,22 +2090,22 @@ static u8 fts_event_handler_type_b(struct fts_ts_info *info)
 					if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_LONG ||
 							p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_NORMAL) {
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD;
-						sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 						input_info(true, &info->client->dev, "%s: FOD %sPRESS\n",
 								__func__, p_gesture_status->gesture_id ? "" : "LONG");
 					} else if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_RELEASE) {
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD_RELEASE;
-						sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 						input_info(true, &info->client->dev, "%s: FOD RELEASE\n", __func__);
 					} else if (p_gesture_status->gesture_id == FTS_SPONGE_EVENT_GESTURE_ID_FOD_OUT) {
 						info->scrub_id = SPONGE_EVENT_TYPE_FOD_OUT;
-						sysfs_notify(&info->sec.fac_dev->kobj, NULL, "scrub_pos");
 						input_info(true, &info->client->dev, "%s: FOD OUT\n", __func__);
 					} else {
 						input_info(true, &info->client->dev, "%s: invalid id %d\n",
 								__func__, p_gesture_status->gesture_id);
 						break;
 					}
+					input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
+					input_sync(info->input_dev);
+					input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
 					break;
 				}
 			}

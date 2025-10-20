@@ -1247,7 +1247,6 @@ static ssize_t fts_scrub_position(struct device *dev,
 			__func__, info->scrub_id, info->scrub_x, info->scrub_y);
 	snprintf(buff, sizeof(buff), "%d %d %d", info->scrub_id, info->scrub_x, info->scrub_y);
 
-	info->scrub_id = 0;
 	info->scrub_x = 0;
 	info->scrub_y = 0;
 
@@ -7446,10 +7445,7 @@ static void ear_detect_enable(void *device_data)
 		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		if (info->fts_power_state == FTS_POWER_STATE_LOWPOWER)
-			info->ed_enable = sec->cmd_param[0];
-		else
-			info->ed_enable = sec->cmd_param[0] != 0 ? 3 : 0;
+		info->ed_enable = sec->cmd_param[0];
 		snprintf(buff, sizeof(buff), "OK");
 
 		data[0] = FTS_CMD_SET_EAR_DETECT;
