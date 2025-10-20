@@ -1,16 +1,13 @@
 
 #include "fts_ts.h"
 
-#define FTS_DEFAULT_UMS_FW "/sdcard/Firmware/TSP/tsp.bin"
-#define FTS_UMS_FW_SIGNED "/sdcard/Firmware/TSP/tsp_signed.bin"
-#define FTS_SPU_FW_SIGNED "/spu/TSP/ffu_tsp.bin"
 #define FTSFILE_SIGNATURE 0xAA55AA55
 
 enum {
 	BUILT_IN = 0,
 	UMS,
 	NONE,
-	FFU,
+	SPU,
 };
 
 /**
@@ -66,7 +63,7 @@ int FTS_Check_DMA_StartAndDone(struct fts_ts_info *info)
 		return ret;
 	}
 
-	fts_delay(10);
+	sec_delay(10);
 
 	do {
 		ret = info->fts_read_reg(info, &regAdd[0], 5, (u8 *)val, 1);
@@ -78,7 +75,7 @@ int FTS_Check_DMA_StartAndDone(struct fts_ts_info *info)
 		if ((val[0] & 0x80) != 0x80)
 			break;
 
-		fts_delay(50);
+		sec_delay(50);
 		timeout--;
 	} while (timeout != 0);
 
@@ -107,7 +104,7 @@ static int FTS_Check_Erase_Done(struct fts_ts_info *info)
 		if ((val[0] & 0x80) != 0x80)
 			break;
 
-		fts_delay(50);
+		sec_delay(50);
 		timeout--;
 	} while (timeout != 0);
 
@@ -178,7 +175,7 @@ int fts_fw_fillFlash(struct fts_ts_info *info, u32 address, u8 *data, int size)
 						__func__, rc);
 				return rc;
 			}
-			fts_delay(5);
+			sec_delay(5);
 
 			addr += toWrite;
 			data += toWrite;
@@ -212,7 +209,7 @@ int fts_fw_fillFlash(struct fts_ts_info *info, u32 address, u8 *data, int size)
 					__func__, rc);
 			return rc;
 		}
-		fts_delay(10);
+		sec_delay(10);
 
 		rc = FTS_Check_DMA_StartAndDone(info);
 		if (rc < 0)
@@ -249,7 +246,7 @@ static int fts_fw_burn(struct fts_ts_info *info, u8 *fw_data)
 	rc = info->fts_write_reg(info, &regAdd[0], 6);
 	if (rc < 0)
 		return rc;
-	fts_delay(200);
+	sec_delay(200);
 
 	// Change application mode
 	regAdd[0] = 0xFA;	regAdd[1] = 0x20;	regAdd[2] = 0x00;
@@ -257,7 +254,7 @@ static int fts_fw_burn(struct fts_ts_info *info, u8 *fw_data)
 	rc = info->fts_write_reg(info, &regAdd[0], 6);
 	if (rc < 0)
 		return rc;
-	fts_delay(200);
+	sec_delay(200);
 
 	// Unlock Flash
 	regAdd[0] = 0xFA;	regAdd[1] = 0x20;	regAdd[2] = 0x00;
@@ -265,7 +262,7 @@ static int fts_fw_burn(struct fts_ts_info *info, u8 *fw_data)
 	rc = info->fts_write_reg(info, &regAdd[0], 6);
 	if (rc < 0)
 		return rc;
-	fts_delay(200);
+	sec_delay(200);
 
 	//==================== Erase Partial Flash ====================
 	input_info(true, &info->client->dev, "%s: Start Flash(Main Block) Erasing\n", __func__);
@@ -275,7 +272,7 @@ static int fts_fw_burn(struct fts_ts_info *info, u8 *fw_data)
 		rc = info->fts_write_reg(info, &regAdd[0], 6);
 		if (rc < 0)
 			return rc;
-		fts_delay(50);
+		sec_delay(50);
 
 		regAdd[0] = 0xFA; regAdd[1] = 0x20; regAdd[2] = 0x00;
 		regAdd[3] = 0x00; regAdd[4] = 0x6A;
@@ -294,7 +291,7 @@ static int fts_fw_burn(struct fts_ts_info *info, u8 *fw_data)
 	rc = info->fts_write_reg(info, &regAdd[0], 6);
 	if (rc < 0)
 		return rc;
-	fts_delay(50);
+	sec_delay(50);
 
 	regAdd[0] = 0xFA; regAdd[1] = 0x20; regAdd[2] = 0x00;
 	regAdd[3] = 0x00; regAdd[4] = 0x6A;
@@ -347,7 +344,7 @@ static int fts_fw_burn(struct fts_ts_info *info, u8 *fw_data)
 	rc = info->fts_write_reg(info, &regAdd[0], 6);
 	if (rc < 0)
 		return rc;
-	fts_delay(200);
+	sec_delay(200);
 
 	// System Reset
 	info->fts_systemreset(info, 0);
@@ -374,7 +371,7 @@ int fts_fw_wait_for_echo_event(struct fts_ts_info *info, u8 *cmd, u8 cmd_cnt, in
 	}
 
 	if (delay)
-		fts_delay(delay);
+		sec_delay(delay);
 
 	memset(data, 0x0, FTS_EVENT_SIZE);
 
@@ -418,12 +415,12 @@ int fts_fw_wait_for_echo_event(struct fts_ts_info *info, u8 *cmd, u8 cmd_cnt, in
 				break;
 		}
 
-		if (retry++ > FTS_RETRY_COUNT * 50) {
+		if (retry++ > FTS_RETRY_COUNT * 25) {
 			input_err(true, &info->client->dev, "%s: Time Over (%02X,%02X,%02X,%02X,%02X,%02X)\n",
 				__func__, data[0], data[1], data[2], data[3], data[4], data[5]);
 			break;
 		}
-		fts_delay(20);
+		sec_delay(20);
 	}
 
 	mutex_unlock(&info->wait_for);
@@ -497,7 +494,11 @@ int fts_execute_autotune(struct fts_ts_info *info, bool IsSaving)
 
 	input_info(true, &info->client->dev, "%s: start\n", __func__);
 
-	info->fts_command(info, FTS_CMD_CLEAR_ALL_EVENT, true);
+	rc = info->fts_command(info, FTS_CMD_CLEAR_ALL_EVENT, true);
+	if (rc < 0) {
+		info->factory_position = OFFSET_FAC_NOSAVE;
+		return rc;
+	}
 
 	fts_interrupt_set(info, INT_DISABLE);
 
@@ -562,6 +563,8 @@ static const int fts_fw_updater(struct fts_ts_info *info, u8 *fw_data)
 		return -ENODEV;
 	}
 
+	atomic_set(&info->fw_update_is_running, 1);
+
 	header = (struct fts_header *)fw_data;
 	fw_main_version = (u16)header->ext_release_ver;
 
@@ -607,6 +610,8 @@ static const int fts_fw_updater(struct fts_ts_info *info, u8 *fw_data)
 		}
 	}
 	fts_interrupt_set(info, INT_ENABLE);
+
+	atomic_set(&info->fw_update_is_running, 0);
 
 	return retval;
 }
@@ -692,6 +697,15 @@ int fts_fw_update_on_probe(struct fts_ts_info *info)
 		retval = FTS_NEED_FW_UPDATE;
 	else
 		retval = FTS_NOT_ERROR;
+
+	if ((info->board->bringup == 3) &&
+			((info->fw_main_version_of_ic != info->fw_main_version_of_bin)
+			|| (info->config_version_of_ic != info->config_version_of_bin)
+			|| (info->fw_version_of_ic != info->fw_version_of_bin))) {
+		input_info(true, &info->client->dev,
+				"%s: bringup 3, force update because version is different\n", __func__);
+		retval = FTS_NEED_FW_UPDATE;
+	}
 
 	/* ic fw ver > bin fw ver && force is false */
 	if (retval != FTS_NEED_FW_UPDATE) {
@@ -799,11 +813,8 @@ done:
 
 static int fts_load_fw(struct fts_ts_info *info, int update_type)
 {
-	struct file *fp;
-	mm_segment_t old_fs;
-	long fw_size, nread;
+	const struct firmware *fw_entry;
 	int error = 0;
-	u8 *fw_data;
 	const struct fts_header *header;
 	const char *file_path;
 	bool is_fw_signed = false;
@@ -811,60 +822,37 @@ static int fts_load_fw(struct fts_ts_info *info, int update_type)
 	switch (update_type) {
 	case UMS:
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
-		file_path = FTS_DEFAULT_UMS_FW;
+		file_path = TSP_EXTERNAL_FW;
 #else
-		file_path = FTS_UMS_FW_SIGNED;
+		file_path = TSP_EXTERNAL_FW_SIGNED;
 		is_fw_signed = true;
 #endif
 		break;
-	case FFU:
-		file_path = FTS_SPU_FW_SIGNED;
+	case SPU:
+		file_path = TSP_SPU_FW_SIGNED;
 		is_fw_signed = true;
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
+	error = request_firmware(&fw_entry, file_path, &info->client->dev);
+	if (error) {
+		input_err(true, &info->client->dev, "%s: firmware is not available %d\n", __func__, error);
+		return -ENOENT;
+	}
 
-	fp = filp_open(file_path, O_RDONLY, 0400);
-	if (IS_ERR(fp)) {
-		input_err(true, &info->client->dev, "%s: failed to open %s\n", __func__, file_path);
+	if (fw_entry->size <= 0) {
+		input_err(true, &info->client->dev, "%s: fw size error %ld\n", __func__, fw_entry->size);
 		error = -ENOENT;
-		goto open_err;
-	}
-
-	fw_size = fp->f_path.dentry->d_inode->i_size;
-	if (fw_size <= 0) {
-		input_err(true, &info->client->dev, "%s: fw size error %ld\n", __func__, fw_size);
-		error = -ENOENT;
-		goto alloc_err;
-	}
-
-	fw_data = vzalloc(fw_size);
-	if (!fw_data) {
-		input_err(true, &info->client->dev, "%s: failed to alloc fw data\n", __func__);
-		error = -ENOMEM;
-		goto alloc_err;
-	}
-
-	nread = vfs_read(fp, (char __user *)fw_data,
-			fw_size, &fp->f_pos);
-
-	input_info(true, &info->client->dev,
-			"%s: start, file path %s, size %ld Bytes\n",
-			__func__, file_path, fw_size);
-
-	if (nread != fw_size) {
-		input_err(true, &info->client->dev,
-				"%s: failed to read firmware file, nread %ld Bytes\n",
-				__func__, nread);
-		error = -EIO;
 		goto done;
 	}
 
-	header = (struct fts_header *)fw_data;
+	input_info(true, &info->client->dev,
+			"%s: start, file path %s, size %ld Bytes\n",
+			__func__, file_path, fw_entry->size);
+
+	header = (struct fts_header *)fw_entry->data;
 	if (header->signature != FTSFILE_SIGNATURE) {
 		error = -EIO;
 		input_err(true, &info->client->dev,
@@ -880,10 +868,11 @@ static int fts_load_fw(struct fts_ts_info *info, int update_type)
 			(u16)header->fw_ver, (u16)header->ext_release_ver,
 			header->ic_name, header->project_id, header->module_ver);
 
+#ifdef SUPPORT_FW_SIGNED
 	if (is_fw_signed) {
 		long spu_ret = 0, org_size = 0;
 
-		if (update_type == FFU && info->ic_name_of_ic == header->ic_name
+		if (update_type == SPU && info->ic_name_of_ic == header->ic_name
 				&& info->project_id_of_ic == header->project_id
 				&& info->module_version_of_ic == header->module_ver) {
 			if (info->fw_version_of_ic >= header->fw_ver) {
@@ -903,8 +892,8 @@ static int fts_load_fw(struct fts_ts_info *info, int update_type)
 		}
 
 		/* digest 32, signature 512, TSP tag 3 */
-		org_size = fw_size - SPU_METADATA_SIZE(TSP);
-		spu_ret = spu_firmware_signature_verify("TSP", fw_data, fw_size);
+		org_size = fw_entry->size - SPU_METADATA_SIZE(TSP);
+		spu_ret = spu_firmware_signature_verify("TSP", fw_entry->data, fw_entry->size);
 		if (spu_ret != org_size) {
 			input_err(true, &info->client->dev,
 					"%s: signature verify failed, %ld/%ld\n",
@@ -913,6 +902,7 @@ static int fts_load_fw(struct fts_ts_info *info, int update_type)
 			goto done;
 		}
 	}
+#endif
 
 	info->fts_systemreset(info, 0);
 
@@ -920,7 +910,7 @@ static int fts_load_fw(struct fts_ts_info *info, int update_type)
 	sec_tclm_root_of_cal(info->tdata, CALPOSITION_TESTMODE);
 #endif
 
-	error = fts_fw_updater(info, fw_data);
+	error = fts_fw_updater(info, (u8 *)fw_entry->data);
 
 #ifdef TCLM_CONCEPT
 	input_info(true, &info->client->dev, "%s: RUN OFFSET CALIBRATION\n", __func__);
@@ -935,13 +925,7 @@ done:
 		input_err(true, &info->client->dev, "%s: failed update firmware\n",
 				__func__);
 
-	vfree(fw_data);
-
-alloc_err:
-	filp_close(fp, NULL);
-
-open_err:
-	set_fs(old_fs);
+	release_firmware(fw_entry);
 	return error;
 }
 
@@ -955,7 +939,7 @@ int fts_fw_update_on_hidden_menu(struct fts_ts_info *info, int update_type)
 	 * 0 : [BUILT_IN] Getting firmware which is for user.
 	 * 1 : [UMS] Getting firmware from sd card.
 	 * 2 : none
-	 * 3 : [FFU] Getting firmware from apk.
+	 * 3 : [SPU] Getting firmware from apk.
 	 */
 	switch (update_type) {
 	case BUILT_IN:
@@ -963,7 +947,7 @@ int fts_fw_update_on_hidden_menu(struct fts_ts_info *info, int update_type)
 		break;
 
 	case UMS:
-	case FFU:
+	case SPU:
 		retval = fts_load_fw(info, update_type);
 		break;
 
