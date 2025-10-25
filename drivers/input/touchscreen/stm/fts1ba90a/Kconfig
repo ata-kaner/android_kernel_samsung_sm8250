@@ -5,6 +5,7 @@
 config TOUCHSCREEN_STM_FTS1BA90A
 	tristate "STMicroelectronics i2c multitouch touchscreen with FingerTipS"
 	depends on I2C
+	select INPUT_SEC_INPUT_V2
 	help
 		Say Y here to enable STMicroelectronics touchscreen support.
 		If unsure, say N.

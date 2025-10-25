@@ -4,7 +4,8 @@
 #
 
 config INPUT_SEC_INPUT_V2
-	tristate "Support for SEC input layer"
+	tristate "Support for SEC input layer V2"
+	default n
 	help
 	  Say Y here if you want to use sec cmd.
 

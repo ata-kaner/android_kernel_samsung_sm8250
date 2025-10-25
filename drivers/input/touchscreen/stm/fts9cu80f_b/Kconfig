@@ -5,6 +5,7 @@
 config TOUCHSCREEN_FTS9CU80F_B
 	tristate "STMicroelectronics i2c multitouch touchscreen with FingerTipS"
 	depends on I2C
+	select INPUT_SEC_INPUT
 	help
 		Say Y here to enable STMicroelectronics touchscreen support.
 		If unsure, say N.
