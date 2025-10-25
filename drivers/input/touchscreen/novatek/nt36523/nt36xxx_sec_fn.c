@@ -53,6 +53,7 @@ typedef enum {
 	SET_TOUCH_DEBOUNCE = 5,
 	SET_GAME_MODE = 6,
 	SET_HIGH_SENSITIVITY_MODE = 7,
+	SET_SPEN_MODE = 0x0C,
 } EXTENDED_CUSTOMIZED_CMD_TYPE;
 
 typedef enum {
@@ -154,6 +155,122 @@ int nvt_ts_nt36523_ics_i2c_write(struct nvt_ts_data *ts, u32 address, u8 *data, 
 static void nvt_ts_set_grip_exception_zone(struct nvt_ts_data *ts, int *cmd_param);
 static void nvt_ts_set_grip_portrait_mode(struct nvt_ts_data *ts, int *cmd_param);
 static void nvt_ts_set_grip_landscape_mode(struct nvt_ts_data *ts, int *cmd_param);
+
+int nvt_ts_mode_read(struct nvt_ts_data *ts)
+{
+	u8 buf[3] = {0};
+	int mode_masked;
+
+	//---set xdata index to EVENT BUF ADDR---
+	buf[0] = 0xFF;
+	buf[1] = (ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
+	buf[2] = (ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
+	nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 3);
+
+	//---read cmd status---
+	buf[0] = EVENT_MAP_FUNCT_STATE;
+	nvt_ts_i2c_read(ts, I2C_FW_Address, buf, 3);
+
+	mode_masked = (buf[2] << 8 | buf[1]) & FUNCT_ALL_MASK;
+
+	input_info(true, &ts->client->dev, "%s: 0x%02X%02X, masked:0x%04X\n",
+			__func__, buf[2], buf[1], mode_masked);
+
+	ts->noise_mode = (mode_masked & NOISE_MASK) ? 1 : 0;
+
+	return mode_masked;
+}
+
+
+static int nvt_ts_mode_switch_extended(struct nvt_ts_data *ts, u8 *cmd, u8 len, bool stored)
+{
+	int i, retry = 5;
+	u8 buf[4] = { 0 };
+
+//	input_info(true, &ts->client->dev, "0x%02X - 0x%02X - 0x%02X, %d\n", cmd[0], cmd[1], cmd[2], len);
+
+	//---set xdata index to EVENT BUF ADDR---
+	buf[0] = 0xFF;
+	buf[1] = ((ts->mmap->EVENT_BUF_ADDR | cmd[0]) >> 16) & 0xFF;
+	buf[2] = ((ts->mmap->EVENT_BUF_ADDR | cmd[0]) >> 8) & 0xFF;
+	nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 3);
+
+	for (i = 0; i < retry; i++) {
+		//---set cmd---
+		nvt_ts_i2c_write(ts, I2C_FW_Address, cmd, len);
+
+		usleep_range(15000, 16000);
+
+		//---read cmd status---
+		buf[0] = cmd[0];
+		nvt_ts_i2c_read(ts, I2C_FW_Address, buf, 2);
+
+		if (buf[1] == 0x00)
+			break;
+		else
+			input_err(true, &ts->client->dev, "%s, retry:%d, buf[1]:0x%x\n", __func__, i, buf[1]);
+	}
+
+	if (unlikely(i == retry)) {
+		input_err(true, &ts->client->dev, "failed to switch mode - 0x%02X 0x%02X\n", cmd[0], cmd[1]);
+		return -EIO;
+	}
+
+	if (stored) {
+		msleep(20);
+		ts->sec_function = nvt_ts_mode_read(ts);
+	}
+
+	input_err(true, &ts->client->dev, "%s: 0x%02X 0x%02X\n", __func__, cmd[0], cmd[1]);
+	return 0;
+}
+
+/*	for spen mode 
+	byte[0]: Setting for the SPEN Mode
+		- 0: SPEN out range
+		- 1: SPEN in range
+*/
+int nvt_ts_set_spen_mode(struct nvt_ts_data *ts, u8 mode)
+{
+	int ret = 0;
+	u8 buf[4] = { 0 };
+
+	if (ts->power_status == POWER_OFF_STATUS) {
+		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+		return EBUSY;
+	}
+
+	if (mode < SPEN_MODE_DISABLE || mode > SPEN_MODE_ENABLE) {
+		input_err(true, &ts->client->dev, "%s: invalid parameter %d\n",
+			__func__, mode);
+		return EINVAL;
+	}
+
+	if (mutex_lock_interruptible(&ts->lock)) {
+		input_err(true, &ts->client->dev, "%s: another task is running\n",
+			__func__);
+		return EBUSY;
+	}
+
+	input_info(true, &ts->client->dev, "%s: %s\n",
+			__func__, mode ? "enable" : "disable");
+
+	buf[0] = EVENT_MAP_HOST_CMD;
+	buf[1] = EXTENDED_CUSTOMIZED_CMD;
+	buf[2] = SET_SPEN_MODE;
+	buf[3] = mode;
+	ret = nvt_ts_mode_switch_extended(ts, buf, 4, false);
+	if (ret < 0) {
+		input_err(true, &ts->client->dev, "%s: %s i2c error(%d)\n",
+			__func__, mode ? "enable" : "disable", ret);
+		mutex_unlock(&ts->lock);
+		return ret;
+	}
+
+	mutex_unlock(&ts->lock);
+
+	return ret;
+}
 
 static int nvt_ts_set_touchable_area(struct nvt_ts_data *ts)
 {
@@ -725,6 +842,169 @@ static int nvt_ts_noise_read(struct nvt_ts_data *ts, int *min_buff, int *max_buf
 
 	//---Leave Test Mode---
 	nvt_ts_change_mode(ts, NORMAL_MODE);
+
+	input_raw_info(true, &ts->client->dev, "%s\n", __func__);
+
+	return 0;
+}
+
+static int nvt_ts_enter_digital_test(struct nvt_ts_data *ts, bool enter_digital_test)
+{
+	u8 buf[8] = { 0 };
+	int i = 0, retry = 70, ret;
+
+	//---set mode---
+	if (enter_digital_test == true) {
+		buf[0] = EVENT_MAP_HOST_CMD;
+		buf[1] = 0x32;
+		buf[2] = 0x01;
+		buf[3] = 0x08;
+		buf[4] = 0x01;
+		ret = nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 5);
+	} else {
+		buf[0] = EVENT_MAP_HOST_CMD;
+		buf[1] = 0x32;
+		buf[2] = 0x00;
+		buf[3] = 0x07;
+		ret = nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 4);
+	}
+
+	if (ret < 0) {
+		input_err(true, &ts->client->dev, "%s: failed to set %s mode\n",
+			__func__, enter_digital_test == true ? "enter" : "exit");
+		return ret;
+	}
+
+	//---poling fw handshake
+	for (i = 0; i < retry; i++) {
+		//---read fw status---
+		buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
+		buf[1] = 0x00;
+		nvt_ts_i2c_read(ts, I2C_FW_Address, buf, 2);
+
+		if (buf[1] == 0xAA)
+			break;
+
+		msleep(20);
+	}
+
+	if (i >= retry) {
+		input_err(true, &ts->client->dev, "%s: failed to hand shake status, buf[1]=0x%02X\n",
+			__func__, buf[1]);
+
+		// Read back 5 bytes from offset EVENT_MAP_HOST_CMD for debug check
+		buf[0] = 0xFF;
+		buf[1] = (ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
+		buf[2] = (ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
+		nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 3);
+
+		buf[0] = EVENT_MAP_HOST_CMD;
+		nvt_ts_i2c_read(ts, I2C_FW_Address, buf, 6);
+		input_err(true, &ts->client->dev, "%s: read back 5 bytes from offset EVENT_MAP_HOST_CMD: "
+			"0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
+			__func__, buf[1], buf[2], buf[3], buf[4], buf[5]);
+
+		return -EIO;
+	} else {
+		buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
+		buf[1] = 0xCC;
+		nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 2);
+	}
+
+	msleep(20);
+
+	return 0;
+}
+
+static int nvt_ts_digital_noise_read(struct nvt_ts_data *ts, int *min_buff, int *max_buff)
+{
+	u8 buf[8] = { 0 };
+	int frame_num;
+	u32 x, y;
+	int offset;
+	int ret;
+	int *rawdata_buf;
+
+	ret = nvt_ts_check_fw_reset_state(ts, RESET_STATE_NORMAL_RUN);
+	if (ret)
+		return ret;
+
+	ret = nvt_ts_switch_freqhops(ts, FREQ_HOP_DISABLE);
+	if (ret)
+		return ret;
+
+	ret = nvt_ts_check_fw_reset_state(ts, RESET_STATE_NORMAL_RUN);
+	if (ret)
+		return ret;
+
+	msleep(100);
+
+	//---Enter Digital Test Mode---
+	ret = nvt_ts_enter_digital_test(ts, true);
+	if (ret)
+		return ret;
+	
+	ret = nvt_ts_clear_fw_status(ts);
+	if (ret)
+		return ret;
+
+	frame_num = ts->platdata->diff_test_frame / 10;
+	if (frame_num <= 0)
+		frame_num = 1;
+
+	input_raw_info(true, &ts->client->dev, "%s: frame_num %d\n", __func__, frame_num);
+
+	//---set xdata index to EVENT BUF ADDR---
+	buf[0] = 0xFF;
+	buf[1] = (ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
+	buf[2] = (ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
+	ret = nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 3);
+	if (ret < 0)
+		return ret;
+
+	//---enable noise collect---
+	buf[0] = EVENT_MAP_HOST_CMD;
+	buf[1] = 0x47;
+	buf[2] = 0xAA;
+	buf[3] = frame_num;
+	buf[4] = 0x00;
+	ret = nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 5);
+	if (ret < 0)
+		return ret;
+
+	// need wait PS_Config_Diff_Test_Frame * 8.3ms
+	msleep(frame_num * 83);
+
+	ret = nvt_ts_hand_shake_status(ts);
+	if (ret)
+		return ret;
+
+	rawdata_buf = kzalloc(ts->platdata->x_num * ts->platdata->y_num * 2 * sizeof(int), GFP_KERNEL);
+	if (!rawdata_buf)
+		return -ENOMEM;
+
+	if (!nvt_ts_get_fw_pipe(ts))
+		nvt_ts_read_mdata(ts, rawdata_buf, ts->mmap->DIFF_PIPE0_ADDR, ts->mmap->DIFF_BTN_PIPE0_ADDR);
+	else
+		nvt_ts_read_mdata(ts, rawdata_buf, ts->mmap->DIFF_PIPE1_ADDR, ts->mmap->DIFF_BTN_PIPE1_ADDR);
+
+	for (y = 0; y < ts->platdata->y_num; y++) {
+		for (x = 0; x < ts->platdata->x_num; x++) {
+			offset = y * ts->platdata->x_num + x;
+			max_buff[offset] = (s8)((rawdata_buf[offset] >> 8) & 0xFF);
+			min_buff[offset] = (s8)(rawdata_buf[offset] & 0xFF);
+		}
+	}
+
+	kfree(rawdata_buf);
+
+	//---Leave Test Mode---
+	nvt_ts_change_mode(ts, NORMAL_MODE);
+
+//---Exit Digital Test Mode---
+//	ret = nvt_ts_enter_digital_test(ts, false);
+//	if (ret)
+//		return ret;
 
 	input_raw_info(true, &ts->client->dev, "%s\n", __func__);
 
@@ -1307,31 +1587,6 @@ out:
 	return result;
 }
 
-int nvt_ts_mode_read(struct nvt_ts_data *ts)
-{
-	u8 buf[3] = {0};
-	int mode_masked;
-
-	//---set xdata index to EVENT BUF ADDR---
-	buf[0] = 0xFF;
-	buf[1] = (ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
-	buf[2] = (ts->mmap->EVENT_BUF_ADDR>> 8) & 0xFF;
-	nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 3);
-
-	//---read cmd status---
-	buf[0] = EVENT_MAP_FUNCT_STATE;
-	nvt_ts_i2c_read(ts, I2C_FW_Address, buf, 3);
-
-	mode_masked = (buf[2] << 8 | buf[1]) & FUNCT_ALL_MASK;
-
-	input_info(true, &ts->client->dev, "%s: 0x%02X%02X, masked:0x%04X\n",
-			__func__, buf[2], buf[1], mode_masked);
-
-	ts->noise_mode = (mode_masked & NOISE_MASK) ? 1 : 0;
-
-	return mode_masked;
-}
-
 static int nvt_ts_mode_switch(struct nvt_ts_data *ts, u8 cmd, bool stored)
 {
 	int i, retry = 5;
@@ -1374,49 +1629,6 @@ static int nvt_ts_mode_switch(struct nvt_ts_data *ts, u8 cmd, bool stored)
 	return 0;
 }
 
-static int nvt_ts_mode_switch_extended(struct nvt_ts_data *ts, u8 *cmd, u8 len, bool stored)
-{
-	int i, retry = 5;
-	u8 buf[4] = { 0 };
-
-//	input_info(true, &ts->client->dev, "0x%02X - 0x%02X - 0x%02X, %d\n", cmd[0], cmd[1], cmd[2], len);
-
-	//---set xdata index to EVENT BUF ADDR---
-	buf[0] = 0xFF;
-	buf[1] = ((ts->mmap->EVENT_BUF_ADDR | cmd[0]) >> 16) & 0xFF;
-	buf[2] = ((ts->mmap->EVENT_BUF_ADDR | cmd[0]) >> 8) & 0xFF;
-	nvt_ts_i2c_write(ts, I2C_FW_Address, buf, 3);
-
-	for (i = 0; i < retry; i++) {
-		//---set cmd---
-		nvt_ts_i2c_write(ts, I2C_FW_Address, cmd, len);
-
-		usleep_range(15000, 16000);
-
-		//---read cmd status---
-		buf[0] = cmd[0];
-		nvt_ts_i2c_read(ts, I2C_FW_Address, buf, 2);
-
-		if (buf[1] == 0x00)
-			break;
-		else
-			input_err(true, &ts->client->dev, "%s, retry:%d, buf[1]:0x%x\n", __func__, i, buf[1]);
-	}
-
-	if (unlikely(i == retry)) {
-		input_err(true, &ts->client->dev, "failed to switch mode - 0x%02X 0x%02X\n", cmd[0], cmd[1]);
-		return -EIO;
-	}
-
-	if (stored) {
-		msleep(20);
-		ts->sec_function = nvt_ts_mode_read(ts);
-	}
-
-	input_err(true, &ts->client->dev, "%s: 0x%02X 0x%02X\n", __func__, cmd[0], cmd[1]);
-	return 0;
-}
-
 int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 {
 	u16 func_need_switch;
@@ -1426,6 +1638,8 @@ int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 	int ret = 0;
 
 	func_need_switch = ts->sec_function ^ nvt_ts_mode_read(ts);
+	input_info(true, &ts->client->dev, "%s: function to be restored 0x%X(backup:0x%X current:0x%X)\n",
+			__func__, func_need_switch, ts->sec_function, nvt_ts_mode_read(ts));
 
 	if (!func_need_switch)
 		goto out;
@@ -1546,7 +1760,6 @@ int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 				ts->grip_edgehandler_restore_data[3]);
 		nvt_ts_set_grip_exception_zone(ts, ts->grip_edgehandler_restore_data);
 	}
-
 out:
 	return ret;
 }
@@ -1558,6 +1771,11 @@ static void fw_update(void *device_data)
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int ret;
 
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
+		goto out;
+	}
+
 	sec_cmd_set_default_result(sec);
 
 	switch (sec->cmd_param[0]) {
@@ -1565,14 +1783,14 @@ static void fw_update(void *device_data)
 		ret = nvt_ts_fw_update_from_bin(ts);
 		break;
 	case UMS:
-#if defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
-		ret = nvt_ts_fw_update_from_external(ts, TSP_PATH_EXTERNAL_FW_SIGNED);
+#if IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
+		ret = nvt_ts_fw_update_from_external(ts, TSP_EXTERNAL_FW_SIGNED);
 #else
-		ret = nvt_ts_fw_update_from_external(ts, TSP_PATH_EXTERNAL_FW);
+		ret = nvt_ts_fw_update_from_external(ts, TSP_EXTERNAL_FW);
 #endif
 		break;
 	case SPU:
-		ret = nvt_ts_fw_update_from_external(ts, TSP_PATH_SPU_FW_SIGNED);
+		ret = nvt_ts_fw_update_from_external(ts, TSP_SPU_FW_SIGNED);
 		break;
 	default:
 		input_err(true, &ts->client->dev, "%s: Not support command[%d]\n",
@@ -1629,6 +1847,11 @@ static void get_fw_ver_ic(void *device_data)
 	char data[4] = { 0 };
 	char model[16] = { 0 };
 	int ret;
+
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
+		goto out;
+	}
 
 	sec_cmd_set_default_result(sec);
 
@@ -1744,8 +1967,8 @@ static void get_checksum_data(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -1799,8 +2022,8 @@ static void check_connection(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -1845,8 +2068,8 @@ static void high_sensitivity_mode(struct sec_cmd_data *sec)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -1869,7 +2092,7 @@ static void high_sensitivity_mode(struct sec_cmd_data *sec)
 	buf[1] = EXTENDED_CUSTOMIZED_CMD;
 	buf[2] = SET_HIGH_SENSITIVITY_MODE;
 	buf[3] = (u8)sec->cmd_param[0];
-	reti = nvt_ts_mode_switch_extended(ts, buf, 4, false);
+	reti = nvt_ts_mode_switch_extended(ts, buf, 4, true);
 	if (reti) {
 		input_err(true, &ts->client->dev, "%s failed to switch high sensitivity mode - 0x%02X\n", __func__, buf[3]);
 		mutex_unlock(&ts->lock);
@@ -1909,8 +2132,8 @@ static void nvt_ts_glove_mode(struct sec_cmd_data *sec)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -1976,8 +2199,8 @@ static void set_note_mode(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -1998,12 +2221,6 @@ static void set_note_mode(void *device_data)
 		goto out;
 	}
 
-	if (ts->display_state_in_progress) {
-		input_info(true, &ts->client->dev, "%s: display state is in progress. skip cmd\n",
-				__func__);
-		goto ok;
-	}
-
 	input_info(true, &ts->client->dev, "%s: change palm mode to %d\n", __func__, mode);
 
 	buf[0] = EVENT_MAP_HOST_CMD;
@@ -2016,7 +2233,6 @@ static void set_note_mode(void *device_data)
 		goto out;
 	}
 
-ok:
 	mutex_unlock(&ts->lock);
 
 	snprintf(buff, sizeof(buff), "%s", "OK");
@@ -2047,8 +2263,8 @@ static void set_sip_mode(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -2066,12 +2282,6 @@ static void set_sip_mode(void *device_data)
 		goto out;
 	}
 
-	if (ts->display_state_in_progress) {
-		input_info(true, &ts->client->dev, "%s: display state is in progress. skip cmd\n",
-				__func__);
-		goto ok;
-	}
-
 	input_info(true, &ts->client->dev, "%s: use %s touch debounce\n",
 			__func__, mode ? "lower" : "normal");
 
@@ -2085,7 +2295,6 @@ static void set_sip_mode(void *device_data)
 		goto out;
 	}
 
-ok:
 	mutex_unlock(&ts->lock);
 
 	snprintf(buff, sizeof(buff), "%s", "OK");
@@ -2121,8 +2330,8 @@ static void set_game_mode(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -2182,8 +2391,8 @@ static void dead_zone_enable(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -2289,8 +2498,8 @@ static void set_touchable_area(void *device_data)
 	input_err(true, &ts->client->dev, "%s: temp block until tuning\n", __func__);
 	goto out;
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -2592,8 +2801,8 @@ static void set_grip_data(void *device_data)
 					__func__, sec->cmd_param[0]);
 	}
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -2601,12 +2810,6 @@ static void set_grip_data(void *device_data)
 		input_err(true, &ts->client->dev, "%s: another task is running\n",
 			__func__);
 		goto out;
-	}
-
-	if (ts->display_state_in_progress) {
-		input_info(true, &ts->client->dev, "%s: display state is in progress. skip cmd\n",
-				__func__);
-		goto ok;
 	}
 
 	// print parameters (debug use)
@@ -2629,7 +2832,6 @@ static void set_grip_data(void *device_data)
 			goto err;
 	}
 
-ok:
 	mutex_unlock(&ts->lock);
 
 	snprintf(buff, sizeof(buff), "%s", "OK");
@@ -2821,8 +3023,8 @@ static void run_self_open_raw_read(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
+	if (ts->power_status != POWER_ON_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now lcd off status!\n", __func__);
 		goto out;
 	}
 
@@ -3355,13 +3557,13 @@ out:
 	input_raw_info(true, &ts->client->dev, "%s: %s", __func__, buff);
 }
 
-static void run_self_noise_max_read(void *device_data)
+static void run_self_noise_read(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct nvt_ts_data *ts = container_of(sec, struct nvt_ts_data, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int *raw_min, *raw_max;
-	int min, max;
+	int min_of_rawmax, max_of_rawmax, min_of_rawmin, max_of_rawmin;
 
 	sec_cmd_set_default_result(sec);
 
@@ -3370,8 +3572,10 @@ static void run_self_noise_max_read(void *device_data)
 		goto out;
 	}
 
-	min = 0x7FFFFFFF;
-	max = 0x80000000;
+	min_of_rawmax = 0x7FFFFFFF;
+	max_of_rawmax = 0x80000000;
+	min_of_rawmin = 0x7FFFFFFF;
+	max_of_rawmin = 0x80000000;
 
 	if (mutex_lock_interruptible(&ts->lock)) {
 		input_err(true, &ts->client->dev, "%s: another task is running\n",
@@ -3381,15 +3585,17 @@ static void run_self_noise_max_read(void *device_data)
 
 	raw_min = kzalloc(ts->platdata->x_num * ts->platdata->y_num * sizeof(int), GFP_KERNEL);
 	raw_max = kzalloc(ts->platdata->x_num * ts->platdata->y_num * sizeof(int), GFP_KERNEL);
-	if (!raw_min || !raw_max) {
-		mutex_unlock(&ts->lock);
+	if (!raw_min || !raw_max)
 		goto err_alloc_mem;
-	}
 
 	if (nvt_ts_noise_read(ts, raw_min, raw_max))
 		goto err;
 
-	nvt_ts_print_buff(ts, raw_max, &min, &max);
+	input_raw_info(true, &ts->client->dev, "%s: noise max", __func__);
+	nvt_ts_print_buff(ts, raw_max, &min_of_rawmax, &max_of_rawmax);
+
+	input_raw_info(true, &ts->client->dev, "%s: noise min", __func__);
+	nvt_ts_print_buff(ts, raw_min, &min_of_rawmin, &max_of_rawmin);
 
 	//---Reset IC---
 	nvt_ts_bootloader_reset(ts);
@@ -3399,14 +3605,17 @@ static void run_self_noise_max_read(void *device_data)
 
 	mutex_unlock(&ts->lock);
 
-	snprintf(buff, sizeof(buff), "%d,%d", min, max);
+	snprintf(buff, sizeof(buff), "%d,%d,%d,%d", min_of_rawmax, max_of_rawmax, min_of_rawmin, max_of_rawmin);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "NOISE_MAX");
-
 	input_raw_info(true, &ts->client->dev, "%s: %s", __func__, buff);
+
+	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
+		snprintf(buff, sizeof(buff), "%d,%d", min_of_rawmax, max_of_rawmax);
+		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "NOISE_MAX");
+		snprintf(buff, sizeof(buff), "%d,%d", min_of_rawmin, max_of_rawmin);
+		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "NOISE_MIN");
+	}
 
 	return;
 
@@ -3426,19 +3635,21 @@ out:
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
+	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
 		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "NOISE_MAX");
+		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "NOISE_MIN");
+	}
 
 	input_raw_info(true, &ts->client->dev, "%s: %s", __func__, buff);
 }
 
-static void run_self_noise_min_read(void *device_data)
+static void run_self_digital_noise_read(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct nvt_ts_data *ts = container_of(sec, struct nvt_ts_data, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int *raw_min, *raw_max;
-	int min, max;
+	int min_of_rawmax, max_of_rawmax, min_of_rawmin, max_of_rawmin;
 
 	sec_cmd_set_default_result(sec);
 
@@ -3447,8 +3658,10 @@ static void run_self_noise_min_read(void *device_data)
 		goto out;
 	}
 
-	min = 0x7FFFFFFF;
-	max = 0x80000000;
+	min_of_rawmax = 0x7FFFFFFF;
+	max_of_rawmax = 0x80000000;
+	min_of_rawmin = 0x7FFFFFFF;
+	max_of_rawmin = 0x80000000;
 
 	if (mutex_lock_interruptible(&ts->lock)) {
 		input_err(true, &ts->client->dev, "%s: another task is running\n",
@@ -3458,15 +3671,17 @@ static void run_self_noise_min_read(void *device_data)
 
 	raw_min = kzalloc(ts->platdata->x_num * ts->platdata->y_num * sizeof(int), GFP_KERNEL);
 	raw_max = kzalloc(ts->platdata->x_num * ts->platdata->y_num * sizeof(int), GFP_KERNEL);
-	if (!raw_min || !raw_max) {
-		mutex_unlock(&ts->lock);
+	if (!raw_min || !raw_max)
 		goto err_alloc_mem;
-	}
 
-	if (nvt_ts_noise_read(ts, raw_min, raw_max))
+	if (nvt_ts_digital_noise_read(ts, raw_min, raw_max))
 		goto err;
 
-	nvt_ts_print_buff(ts, raw_min, &min, &max);
+	input_raw_info(true, &ts->client->dev, "%s: raw max", __func__);
+	nvt_ts_print_buff(ts, raw_max, &min_of_rawmax, &max_of_rawmax);
+
+	input_raw_info(true, &ts->client->dev, "%s: raw min", __func__);
+	nvt_ts_print_buff(ts, raw_min, &min_of_rawmin, &max_of_rawmin);
 
 	//---Reset IC---
 	nvt_ts_bootloader_reset(ts);
@@ -3476,16 +3691,20 @@ static void run_self_noise_min_read(void *device_data)
 
 	mutex_unlock(&ts->lock);
 
-	snprintf(buff, sizeof(buff), "%d,%d", min, max);
+	snprintf(buff, sizeof(buff), "%d,%d,%d,%d", min_of_rawmax, max_of_rawmax, min_of_rawmin, max_of_rawmin);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "NOISE_MIN");
-
 	input_raw_info(true, &ts->client->dev, "%s: %s", __func__, buff);
 
+	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
+		snprintf(buff, sizeof(buff), "%d,%d", min_of_rawmax, max_of_rawmax);
+		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "DIGITAL_NOISE_MAX");
+		snprintf(buff, sizeof(buff), "%d,%d", min_of_rawmin, max_of_rawmin);
+		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "DIGITAL_NOISE_MIN");
+	}
+
 	return;
+
 err:
 	//---Reset IC---
 	nvt_ts_bootloader_reset(ts);
@@ -3502,9 +3721,10 @@ out:
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "NOISE_MIN");
-
+	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
+		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "DIGITAL_NOISE_MAX");
+		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "DIGITAL_NOISE_MIN");
+	}
 	input_raw_info(true, &ts->client->dev, "%s: %s", __func__, buff);
 }
 
@@ -3572,8 +3792,8 @@ static void factory_cmd_result_all(void *device_data)
 	run_self_rawdata_read(sec);
 	run_self_ccdata_read(sec);
 	run_self_short_read(sec);
-	run_self_noise_max_read(sec);
-	run_self_noise_min_read(sec);
+	run_self_noise_read(sec);
+	run_self_digital_noise_read(sec);
 	run_sram_test(sec);
 
 	sec->cmd_all_factory_state = SEC_CMD_STATUS_OK;
@@ -3724,11 +3944,14 @@ static void clear_cover_mode(void *device_data)
 		goto out;
 	}
 
+	if (ts->power_status == POWER_OFF_STATUS) {
+		input_err(true, &ts->client->dev, "%s: Now power off status!\n", __func__);
+		goto out;
+	}
+
 	if (mutex_lock_interruptible(&ts->lock)) {
 		input_err(true, &ts->client->dev, "%s: another task is running\n",
 			__func__);
-		snprintf(buff, sizeof(buff), "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		goto out;
 	}
 
@@ -3739,23 +3962,15 @@ static void clear_cover_mode(void *device_data)
 	else
 		ts->flip_enable = false;
 
-	if (ts->display_state_in_progress) {
-		input_info(true, &ts->client->dev, "%s: display state is in progress. skip cmd\n",
-				__func__);
-		ret = 0;
-		goto out_unlock;
-	}
-
 	/* disable tsp scan when cover is closed (for Tablet) */
 	if (ts->platdata->scanoff_cover_close) {
 		if (ts->flip_enable) {
-			input_info(true, &ts->client->dev, "%s: keep record for cover on, and enter deep standby mode when screen off\n", __func__);
-//			input_info(true, &ts->client->dev, "%s: enter deep standby mode\n", __func__);
-//			wbuf[0] = EVENT_MAP_HOST_CMD;
-//			wbuf[1] = NVT_CMD_DEEP_SLEEP_MODE;
-//			ret = nvt_ts_i2c_write(ts, I2C_FW_Address, wbuf, 2);
-//
-//			nvt_ts_release_all_finger(ts);
+			input_info(true, &ts->client->dev, "%s: screen on:normal mode/screen off:deep standby mode at suspend\n", __func__);
+			//wbuf[0] = EVENT_MAP_HOST_CMD;
+			//wbuf[1] = NVT_CMD_DEEP_SLEEP_MODE;
+			//ret = nvt_ts_i2c_write(ts, I2C_FW_Address, wbuf, 2);
+
+			//nvt_ts_release_all_finger(ts);
 		} else {
 			input_info(true, &ts->client->dev, "%s: reset to normal mode\n", __func__);
 			nvt_ts_sw_reset_idle(ts);
@@ -3784,7 +3999,6 @@ static void clear_cover_mode(void *device_data)
 		}
 	}
 
-out_unlock:
 	mutex_unlock(&ts->lock);
 	if (ret < 0) {
 		snprintf(buff, sizeof(buff), "NG");
@@ -3861,8 +4075,8 @@ static struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("run_self_rawdata_read", run_self_rawdata_read),},
 	{SEC_CMD("run_self_ccdata_read", run_self_ccdata_read),},
 	{SEC_CMD("run_self_ccdata_read_all", run_self_ccdata_read_all),},
-	{SEC_CMD("run_self_noise_min_read", run_self_noise_min_read),},
-	{SEC_CMD("run_self_noise_max_read", run_self_noise_max_read),},
+	{SEC_CMD("run_self_noise_read", run_self_noise_read),},
+	{SEC_CMD("run_self_digital_noise_read", run_self_digital_noise_read),},
 	{SEC_CMD("factory_cmd_result_all", factory_cmd_result_all),},
 	{SEC_CMD("run_trx_short_test", run_trx_short_test),},
 	{SEC_CMD("run_sram_test", run_sram_test),},
@@ -4096,6 +4310,7 @@ static ssize_t read_support_feature(struct device *dev,
 
 	if (ts->platdata->enable_settings_aot)
 		feature |= INPUT_FEATURE_ENABLE_SETTINGS_AOT;
+
 	if (ts->platdata->enable_sysinput_enabled)
 		feature |= INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED;
 
@@ -4230,19 +4445,24 @@ static ssize_t enabled_store(struct device *dev, struct device_attribute *attr,
 
 	input_info(true, &ts->client->dev, "%s: %d %d\n", __func__, buff[0], buff[1]);
 
-	if (buff[1] == DISPLAY_EVENT_EARLY) {
-		mutex_lock(&ts->lock);
-		ts->display_state_in_progress = true;
-		mutex_unlock(&ts->lock);
-	} else {
-		mutex_lock(&ts->lock);
-		ts->display_state_in_progress = false;
-		mutex_unlock(&ts->lock);
+	/* handle same sequence : buff[0] = DISPLAY_STATE_ON, DISPLAY_STATE_DOZE, DISPLAY_STATE_DOZE_SUSPEND */
+	if (buff[0] == DISPLAY_STATE_DOZE || buff[0] == DISPLAY_STATE_DOZE_SUSPEND)
+		buff[0] = DISPLAY_STATE_ON;
+
+	if (buff[0] == DISPLAY_STATE_ON) {
+		if (buff[1] == DISPLAY_EVENT_EARLY)
+			nvt_ts_early_open(ts);
+		else if (buff[1] == DISPLAY_EVENT_LATE)
+			nvt_ts_open(ts);
+	} else if (buff[0] == DISPLAY_STATE_OFF) {
+		if (buff[1] == DISPLAY_EVENT_EARLY)
+			nvt_ts_close(ts);
+	} else if (buff[0] == DISPLAY_STATE_LPM_OFF) {
+		nvt_ts_close(ts);
 	}
 
 	return count;
 }
-
 
 static DEVICE_ATTR(multi_count, 0664, read_multi_count_show, clear_multi_count_store);
 static DEVICE_ATTR(comm_err_count, 0664, read_comm_err_count_show, clear_comm_err_count_store);
@@ -4429,7 +4649,7 @@ out:
 
 void nvt_ts_sec_fn_remove(struct nvt_ts_data *ts)
 {
-	sysfs_delete_link(&ts->sec.fac_dev->kobj, &ts->input_dev->dev.kobj, "input");
+	sysfs_remove_link(&ts->sec.fac_dev->kobj, "input");
 
 	sysfs_remove_group(&ts->sec.fac_dev->kobj, &cmd_attr_group);
 

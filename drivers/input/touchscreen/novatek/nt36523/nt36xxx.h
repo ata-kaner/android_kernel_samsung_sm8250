@@ -21,27 +21,16 @@
 #include <linux/input.h>
 #include <linux/workqueue.h>
 #include <linux/completion.h>
-#include <linux/wakelock.h>
 
-#ifdef CONFIG_SAMSUNG_TUI
+#if IS_ENABLED(CONFIG_SAMSUNG_TUI)
 #include "stui_inf.h"
 #endif
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-#include <linux/notifier.h>
-#endif
-#if defined(CONFIG_FB)
-#include <linux/fb.h>
-#endif
 #include <linux/mutex.h>
-#include <linux/input/sec_cmd.h>
+#include <../../../sec_input/sec_input.h>
 #include <linux/firmware.h>
 
 #include "nt36xxx_mem_map.h"
-
-#define TSP_PATH_EXTERNAL_FW		"/sdcard/firmware/tsp/tsp.bin"
-#define TSP_PATH_EXTERNAL_FW_SIGNED		"/sdcard/firmware/tsp/tsp_signed.bin"
-#define TSP_PATH_SPU_FW_SIGNED		"/spu/TSP/ffu_tsp.bin"
 
 //---I2C driver info.---
 #define NVT_I2C_NAME "nvt-ts"
@@ -137,8 +126,11 @@ struct nvt_ts_platdata {
 	bool support_dex;
 	bool enable_settings_aot;
 	bool scanoff_cover_close;
-	bool enable_glove_mode;
 	bool enable_sysinput_enabled;
+	bool enable_glove_mode;
+	const char *regulator_panel_ldo_en;
+	const char *regulator_panel_buck_en;
+	const char *regulator_panel_reset;
 };
 
 struct nvt_ts_data {
@@ -148,14 +140,9 @@ struct nvt_ts_data {
 	struct input_dev *input_dev_pad;
 	struct nvt_ts_coord coords[TOUCH_MAX_FINGER_NUM];
 	u8 touch_count;
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	struct notifier_block drm_notif;
-#endif
-#if defined(CONFIG_FB)
-	struct notifier_block fb_nb;
-#endif
+	unsigned int palm_flag;
 	struct completion resume_done;
-	struct wake_lock wakelock;
+	struct wakeup_source *tsp_ws;
 
 	u8 lowpower_mode;
 
@@ -174,7 +161,7 @@ struct nvt_ts_data {
 	u32 print_info_cnt_open;
 	u32 print_info_cnt_release;
 
-#ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	int ss_touch_num;
 	atomic_t secure_enabled;
 	atomic_t secure_pending_irqs;
@@ -198,7 +185,13 @@ struct nvt_ts_data {
 
 	int debug_flag;
 	bool flip_enable;
-	bool display_state_in_progress;
+
+#if IS_ENABLED(CONFIG_INPUT_SEC_NOTIFIER)
+	struct notifier_block nvt_input_nb;
+#endif
+	struct regulator *regulator_panel_ldo_en;
+	struct regulator *regulator_panel_buck_en;
+	struct regulator *regulator_panel_reset;
 
 	int grip_edgehandler_restore_data[SEC_CMD_PARAM_NUM];
 	int setgrip_restore_data[SEC_CMD_PARAM_NUM];
@@ -239,25 +232,15 @@ typedef enum {
 enum {
 	POWER_OFF_STATUS = 0,
 	POWER_LPM_STATUS,
-	POWER_ON_STATUS
+	POWER_ON_STATUS,
+	POWER_LPM_EXIT
 };
 
-enum display_state {
-	DISPLAY_STATE_SERVICE_SHUTDOWN = -1,
-	DISPLAY_STATE_NONE = 0,
-	DISPLAY_STATE_OFF,
-	DISPLAY_STATE_ON,
-	DISPLAY_STATE_DOZE,
-	DISPLAY_STATE_DOZE_SUSPEND,
-	DISPLAY_STATE_LPM_OFF = 20,
-	DISPLAY_STATE_FORCE_OFF,
-	DISPLAY_STATE_FORCE_ON,
-};
+typedef enum {
+	SPEN_MODE_DISABLE = 0,	// SPEN out range
+	SPEN_MODE_ENABLE = 1,	// SPEN in range
+} SPEN_MODE;
 
-enum display_event {
-	DISPLAY_EVENT_EARLY = 0,
-	DISPLAY_EVENT_LATE,
-};
 
 void nvt_ts_run_rawdata_all(struct nvt_ts_data *ts);
 void nvt_ts_bootloader_reset(struct nvt_ts_data *ts);
@@ -272,17 +255,20 @@ void nvt_ts_release_all_finger(struct nvt_ts_data *ts);
 int nvt_ts_check_fw_reset_state(struct nvt_ts_data *ts, RST_COMPLETE_STATE check_reset_state);
 void nvt_ts_sw_reset_idle(struct nvt_ts_data *ts);
 
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+int nvt_ts_early_open(struct nvt_ts_data *ts);
+int nvt_ts_open(struct nvt_ts_data *ts);
+void nvt_ts_close(struct nvt_ts_data *ts);
+
+int nvt_ts_set_spen_mode(struct nvt_ts_data *ts, u8 mode);
+int nvt_ts_lcd_reset_ctrl(struct nvt_ts_data *ts, bool on);
+int nvt_ts_lcd_power_ctrl(struct nvt_ts_data *ts, bool on);
+
+#if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
 void nvt_ts_flash_proc_init(struct nvt_ts_data *ts);
 void nvt_ts_flash_proc_remove(void);
 #endif
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-int msm_drm_register_notifier_client(struct notifier_block *nb);
-int msm_drm_unregister_notifier_client(struct notifier_block *nb);
-#endif
-
-#if defined(CONFIG_EXYNOS_DPU20)
+#if IS_ENABLED(CONFIG_EXYNOS_DPU20)
 extern unsigned int lcdtype;
 #endif
 #endif /* _LINUX_NVT_TOUCH_H */

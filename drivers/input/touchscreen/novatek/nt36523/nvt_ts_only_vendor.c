@@ -98,10 +98,7 @@ static ssize_t nvt_ts_flash_read(struct file *file, char __user *buff, size_t co
 	}
 }
 
-static const struct file_operations nvt_ts_flash_fops = {
-	.owner = THIS_MODULE,
-	.read = nvt_ts_flash_read,
-};
+static sec_input_proc_ops(THIS_MODULE, nvt_ts_flash_fops, nvt_ts_flash_read, NULL);
 
 void nvt_ts_flash_proc_init(struct nvt_ts_data *ts)
 {

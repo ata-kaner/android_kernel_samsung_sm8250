@@ -3,9 +3,15 @@
 #
 
 # Each configuration option enables a list of files.
+
+TARGET = novatek_ts_nt36523
+
 ifeq ($(CONFIG_SAMSUNG_PRODUCT_SHIP), y)
-	obj-$(CONFIG_TOUCHSCREEN_NOVATEK_NT36523) += nt36xxx.o nt36xxx_fw_update.o nt36xxx_sec_fn.o
+	$(TARGET)-objs	:= nt36xxx.o nt36xxx_fw_update.o nt36xxx_sec_fn.o
 else
-	obj-$(CONFIG_TOUCHSCREEN_NOVATEK_NT36523) += nt36xxx.o nt36xxx_fw_update.o nt36xxx_sec_fn.o nvt_ts_only_vendor.o
+	$(TARGET)-objs	:= nt36xxx.o nt36xxx_fw_update.o nt36xxx_sec_fn.o nvt_ts_only_vendor.o
 endif
+
+	obj-$(CONFIG_TOUCHSCREEN_NOVATEK_NT36523_TABLET_I2C) += $(TARGET).o
+
 ccflags-y += -Wformat

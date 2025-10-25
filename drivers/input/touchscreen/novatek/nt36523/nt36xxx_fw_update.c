@@ -21,7 +21,10 @@
 #include <linux/uaccess.h>
 #include <linux/interrupt.h>
 #include <linux/vmalloc.h>
+#if IS_ENABLED(CONFIG_SPU_VERIFY)
 #include <linux/spu-verify.h>
+#define SUPPORT_SIGNED_FW
+#endif
 
 #include "nt36xxx.h"
 
@@ -1107,106 +1110,80 @@ static int nvt_check_flash_end_flag(struct nvt_ts_data *ts)
 
 int nvt_ts_fw_update_from_external(struct nvt_ts_data *ts, const char *file_path)
 {
-	struct file *fp;
-	mm_segment_t old_fs;
-	long fw_size, nread, spu_ret;
-	int ret = 0;
-
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
+	const struct firmware *fw_entry;
+	int error = 0;
+#if defined(SUPPORT_SIGNED_FW)
+	long spu_ret = 0, org_size = 0;
+#endif
 
 	mutex_lock(&ts->lock);
-
-	fp = filp_open(file_path, O_RDONLY, S_IRUSR);
-	if (IS_ERR(fp)) {
-		input_err(true, &ts->client->dev, "%s: failed to open %s\n",
-			__func__, file_path);
-			mutex_unlock(&ts->lock);
-			set_fs(old_fs);
-			return PTR_ERR(fp);
+	error = request_firmware(&fw_entry, file_path, &ts->client->dev);
+	if (error) {
+		input_err(true, &ts->client->dev, "%s: firmware is not available %d\n", __func__, error);
+		mutex_unlock(&ts->lock);
+		return -ENOENT;
 	}
 
-	fw_size = fp->f_path.dentry->d_inode->i_size;
-	if (fw_size > 0) {
-		struct firmware fw_entry;
-		u8 *fw_data;
+	if (fw_entry->size <= 0) {
+		input_err(true, &ts->client->dev, "%s: fw size error %ld\n", __func__, fw_entry->size);
+		error = -ENOENT;
+		goto out;
+	}
 
-		fw_data = vzalloc(fw_size);
-		if (!fw_data) {
-			input_err(true, &ts->client->dev, "%s: failed to alloc mem\n", __func__);
-			ret = -ENOMEM;
+#if defined(SUPPORT_SIGNED_FW)
+	if (strncmp(file_path, TSP_SPU_FW_SIGNED, strlen(TSP_SPU_FW_SIGNED)) == 0
+			|| strncmp(file_path, TSP_EXTERNAL_FW_SIGNED, strlen(TSP_EXTERNAL_FW_SIGNED)) == 0) {
+		/* name 3, digest 32, signature 512 */
+		org_size = fw_entry->size - SPU_METADATA_SIZE(TSP);
+		spu_ret = spu_firmware_signature_verify("TSP", fw_entry->data, fw_entry->size);
+		input_info(true, &ts->client->dev, "%s: spu_ret : %ld, spu_fw_size:%ld\n", __func__, spu_ret, fw_entry->size);
+
+		if (spu_ret != org_size) {
+			input_err(true, &ts->client->dev, "%s: signature verify failed, %ld\n", __func__, spu_ret);
+			error = -EIO;
 			goto out;
 		}
+	}
+#endif
+	input_info(true, &ts->client->dev, "%s: start, file path %s, size %ld Bytes\n",
+		__func__, file_path, fw_entry->size);
 
-		nread = vfs_read(fp, (char __user *)fw_data, fw_size, &fp->f_pos);
-		if (nread != fw_size) {
-			input_err(true, &ts->client->dev, "%s: failed to read firmware file, nread %ld Bytes\n",
-				__func__, nread);
-			ret = -EIO;
+	input_info(true, &ts->client->dev, "%s: ic: project id %02X, firmware version %02X\n",
+		__func__, ts->fw_ver_ic[1], ts->fw_ver_ic[3]);
+	input_info(true, &ts->client->dev, "%s: fw: project id %02X, firmware version %02X\n",
+		__func__, fw_entry->data[FW_BIN_PROJECT_ID], fw_entry->data[FW_BIN_VER_OFFSET]);
 
-		} else {
-			if (strncmp(file_path, TSP_PATH_SPU_FW_SIGNED, strlen(TSP_PATH_SPU_FW_SIGNED)) == 0
-					|| strncmp(file_path, TSP_PATH_EXTERNAL_FW_SIGNED, strlen(TSP_PATH_EXTERNAL_FW_SIGNED)) == 0) {
-				spu_ret = spu_firmware_signature_verify("TSP", fw_data, fw_size);
-				input_info(true, &ts->client->dev, "%s: spu_ret : %ld, spu_fw_size:%ld\n", __func__, spu_ret, fw_size);
-
-				/* name 3, digest 32, signature 512 */
-				fw_size -= SPU_METADATA_SIZE(TSP);
-
-				if (spu_ret != fw_size) {
-					input_err(true, &ts->client->dev, "%s: signature verify failed, %ld\n", __func__, spu_ret);
-					vfree(fw_data);
-					ret = -EIO;
-					goto out;
-				}
-			}
-
-			input_info(true, &ts->client->dev, "%s: start, file path %s, size %ld Bytes\n",
-				__func__, file_path, fw_size);
-
-			input_info(true, &ts->client->dev, "%s: ic: project id %02X, firmware version %02X\n",
-				__func__, ts->fw_ver_ic[1], ts->fw_ver_ic[3]);
-			input_info(true, &ts->client->dev, "%s: fw: project id %02X, firmware version %02X\n",
-				__func__, fw_data[FW_BIN_PROJECT_ID], fw_data[FW_BIN_VER_OFFSET]);
-
-			if (strncmp(file_path, TSP_PATH_SPU_FW_SIGNED, strlen(TSP_PATH_SPU_FW_SIGNED)) == 0) {
-				if (ts->fw_ver_ic[3] >= fw_data[FW_BIN_VER_OFFSET]) {
-					input_info(true, &ts->client->dev, "%s: skip spu update\n", __func__);
-					goto out;
-				}
-			} else if (strncmp(file_path, TSP_PATH_EXTERNAL_FW_SIGNED, strlen(TSP_PATH_EXTERNAL_FW_SIGNED)) == 0) {
-				if (ts->fw_ver_ic[1] != fw_data[FW_BIN_PROJECT_ID]) {
-					input_info(true, &ts->client->dev, "%s: skip update, fw project id miss match\n", __func__);
-					goto out;
-				}
-			}
-
-			nvt_interrupt_set(ts, INT_DISABLE);
-
-			fw_entry.data = fw_data;
-			fw_entry.size = fw_size;
-
-			ts->fw_entry = &fw_entry;
-
-			nvt_ts_sw_reset_idle(ts);
-
-			ret = nvt_ts_update_firmware(ts);
-
-			ts->fw_entry = NULL;
-
-			nvt_interrupt_set(ts, INT_ENABLE);
+	if (strncmp(file_path, TSP_SPU_FW_SIGNED, strlen(TSP_SPU_FW_SIGNED)) == 0) {
+		if (ts->fw_ver_ic[3] >= fw_entry->data[FW_BIN_VER_OFFSET]) {
+			input_info(true, &ts->client->dev, "%s: skip spu update\n", __func__);
+			goto out;
 		}
-
-		vfree(fw_data);
+	} else if (strncmp(file_path, TSP_EXTERNAL_FW_SIGNED, strlen(TSP_EXTERNAL_FW_SIGNED)) == 0) {
+		if (ts->fw_ver_ic[1] != fw_entry->data[FW_BIN_PROJECT_ID]) {
+			input_info(true, &ts->client->dev, "%s: skip update, fw project id miss match\n", __func__);
+			goto out;
+		}
 	}
 
+	nvt_interrupt_set(ts, INT_DISABLE);
+
+	ts->fw_entry = fw_entry;
+
+	nvt_ts_sw_reset_idle(ts);
+
+	error = nvt_ts_update_firmware(ts);
+
+	ts->fw_entry = NULL;
+
+	nvt_interrupt_set(ts, INT_ENABLE);
 out:
+	if (error < 0)
+		input_err(true, &ts->client->dev, "%s: failed update firmware\n",
+				__func__);
+
+	release_firmware(fw_entry);
 	mutex_unlock(&ts->lock);
-
-	filp_close(fp, NULL);
-	set_fs(old_fs);
-
-	return ret;
+	return error;
 }
 
 int nvt_ts_fw_update_from_bin(struct nvt_ts_data *ts)

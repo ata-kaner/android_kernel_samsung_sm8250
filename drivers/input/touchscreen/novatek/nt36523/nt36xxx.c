@@ -21,12 +21,12 @@
 #include <linux/of_gpio.h>
 #include <linux/input/mt.h>
 
-#if defined(CONFIG_INPUT_SEC_SECURE_TOUCH)
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 #include <linux/completion.h>
 #include <linux/atomic.h>
 #include <linux/pm_runtime.h>
 #include <linux/clk.h>
-#include <linux/input/sec_secure_touch.h>
+#include <../sec_secure_touch.h>
 
 #define SECURE_TOUCH_ENABLED	1
 #define SECURE_TOUCH_DISABLED	0
@@ -38,16 +38,14 @@
 #define TOUCH_MAX_PRESSURE_NUM		1000
 
 
-#define FINGER_ENTER			0x01
-#define FINGER_MOVING			0x02
+#define FINGER_MOVING			0x00
+#define GLOVE_TOUCH			0x03
 #define PALM_TOUCH			0x05
-#define GLOVE_TOUCH			0x06
 
 #define NVT_TS_I2C_RETRY_CNT		5
 #define NVT_TS_LOCATION_DETECT_SIZE	6
 
 #define TOUCH_PRINT_INFO_DWORK_TIME	30000	/* 30s */
-
 
 int nvt_ts_sec_fn_init(struct nvt_ts_data *ts);
 void nvt_ts_sec_fn_remove(struct nvt_ts_data *ts);
@@ -59,17 +57,14 @@ int nvt_ts_mode_read(struct nvt_ts_data *ts);
 
 static int nvt_ts_check_chip_ver_trim(struct nvt_ts_data *ts, uint32_t chip_ver_trim_addr);
 
-
-#ifdef CONFIG_DISPLAY_SAMSUNG
-extern int get_lcd_attached(char *mode);
-#endif
-#ifdef CONFIG_SAMSUNG_TUI
+#if IS_ENABLED(CONFIG_SAMSUNG_TUI)
 struct nvt_ts_data *tsp_info;
 #endif
-#ifdef CONFIG_BATTERY_SAMSUNG
+/*
+#if IS_ENABLED(CONFIG_BATTERY_SAMSUNG)
 extern unsigned int lpcharge;
 #endif
-
+*/
 void nvt_interrupt_set(struct nvt_ts_data *ts, int enable)
 {
 	struct irq_desc *desc = irq_to_desc(ts->client->irq);
@@ -87,7 +82,7 @@ void nvt_interrupt_set(struct nvt_ts_data *ts, int enable)
 	mutex_unlock(&ts->irq_mutex);
 }
 
-#ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 static irqreturn_t secure_filter_interrupt(struct nvt_ts_data *ts)
 {
 	if (atomic_read(&ts->secure_enabled) == SECURE_TOUCH_ENABLED) {
@@ -267,14 +262,14 @@ int nvt_ts_i2c_read(struct nvt_ts_data *ts, u16 address, u8 *buf, u16 len)
 
 	memset(&buf[1], 0x00, len - 1);
 
-#ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	if (atomic_read(&ts->secure_enabled) == SECURE_TOUCH_ENABLED) {
 		input_err(true, &ts->client->dev,
 				"%s: TSP no accessible from Linux, TUI is enabled!\n", __func__);
 		return -EBUSY;
 	}
 #endif
-#ifdef CONFIG_SAMSUNG_TUI
+#if IS_ENABLED(CONFIG_SAMSUNG_TUI)
 	if (STUI_MODE_TOUCH_SEC & stui_get_mode())
 		return -EBUSY;
 #endif
@@ -341,14 +336,14 @@ int nvt_ts_i2c_write(struct nvt_ts_data *ts, u16 address, u8 *buf, u16 len)
 	int ret = -1;
 	int retries = 0;
 
-#ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	if (atomic_read(&ts->secure_enabled) == SECURE_TOUCH_ENABLED) {
 		input_err(true, &ts->client->dev,
 				"%s: TSP no accessible from Linux, TUI is enabled!\n", __func__);
 		return -EBUSY;
 	}
 #endif
-#ifdef CONFIG_SAMSUNG_TUI
+#if IS_ENABLED(CONFIG_SAMSUNG_TUI)
 	if (STUI_MODE_TOUCH_SEC & stui_get_mode())
 		return -EBUSY;
 #endif
@@ -631,7 +626,7 @@ int nvt_ts_check_fw_reset_state(struct nvt_ts_data *ts, RST_COMPLETE_STATE reset
 	int retry = 0;
 	int ret;
 
-	while (retry <= 100) {
+	while (retry <= 60) {
 		msleep(10);
 
 		//---read reset state---
@@ -645,7 +640,7 @@ int nvt_ts_check_fw_reset_state(struct nvt_ts_data *ts, RST_COMPLETE_STATE reset
 		retry++;
 	}
 
-	if (unlikely(retry > 100)) {
+	if (unlikely(retry > 60)) {
 		input_err(true, &ts->client->dev, "%s: Time over\n", __func__);
 		ret = -EPERM;
 	}
@@ -832,10 +827,10 @@ static void nvt_ts_print_info(struct nvt_ts_data *ts)
 		ts->print_info_cnt_release++;
 
 	input_info(true, &ts->client->dev,
-			"tc:%d v:%02X%02X%02X mode:%04X noise:%d lp:%02X iq:%d depth:%d // #%d %d\n",
-			ts->touch_count, ts->fw_ver_ic[1], ts->fw_ver_ic[2], ts->fw_ver_ic[3],
-			ts->sec_function, ts->noise_mode, ts->lowpower_mode,
+			"tc:%d mode:%04X noise:%d lp:%02X iq:%d depth:%d // v:NO%02X%02X%02X%02X  // #%d %d\n",
+			ts->touch_count, ts->sec_function, ts->noise_mode, ts->lowpower_mode,
 			gpio_get_value(ts->platdata->irq_gpio), desc->depth,
+			ts->fw_ver_ic[0], ts->fw_ver_ic[1], ts->fw_ver_ic[2], ts->fw_ver_ic[3],
 			ts->print_info_cnt_open, ts->print_info_cnt_release);
 }
 
@@ -850,13 +845,12 @@ void nvt_ts_release_all_finger(struct nvt_ts_data *ts)
 		input_mt_slot(ts->input_dev, i);
 		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
 		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MINOR, 0);
-		input_report_abs(ts->input_dev, ABS_MT_CUSTOM, 0);
 		input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, false);
 
 		if (ts->coords[i].p_press) {
 			ts->touch_count--;
 
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+#if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
 			input_info(true, &ts->client->dev,
 				"[RA] tId:%d loc:%s dd:%d,%d mc:%d tc:%d lx:%d ly:%d\n",
 				i, location, ts->coords[i].p_x - ts->coords[i].x,
@@ -876,7 +870,7 @@ void nvt_ts_release_all_finger(struct nvt_ts_data *ts)
 	}
 
 	input_mt_slot(ts->input_dev, 0);
-
+	input_report_key(ts->input_dev, BTN_PALM, false);
 	input_report_key(ts->input_dev, BTN_TOUCH, false);
 	input_report_key(ts->input_dev, BTN_TOOL_FINGER, false);
 
@@ -884,6 +878,7 @@ void nvt_ts_release_all_finger(struct nvt_ts_data *ts)
 
 	ts->check_multi = false;
 	ts->touch_count = 0;
+	ts->palm_flag = 0;
 }
 
 static void nvt_ts_print_coord(struct nvt_ts_data *ts)
@@ -893,12 +888,11 @@ static void nvt_ts_print_coord(struct nvt_ts_data *ts)
 
 	for (i = 0; i < TOUCH_MAX_FINGER_NUM; i++) {
 		location_detect(ts, location, ts->coords[i].x, ts->coords[i].y);
-
 		if (ts->coords[i].press && !ts->coords[i].p_press) {
 			ts->touch_count++;
 			ts->all_finger_count++;
 
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+#if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
 			input_info(true, &ts->client->dev,
 				"[P] tId:%d.%d x:%d y:%d p:%d major:%d minor:%d loc:%s tc:%d type:%X\n",
 				i, (ts->input_dev->mt->trkid - 1) & TRKID_MAX,
@@ -925,7 +919,7 @@ static void nvt_ts_print_coord(struct nvt_ts_data *ts)
 			if (!ts->touch_count)
 				ts->print_info_cnt_release = 0;
 
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+#if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
 			input_info(true, &ts->client->dev,
 				"[R] tId:%d loc:%s dd:%d,%d mc:%d tc:%d lx:%d ly:%d\n",
 				i, location, ts->coords[i].p_x - ts->coords[i].x,
@@ -941,18 +935,18 @@ static void nvt_ts_print_coord(struct nvt_ts_data *ts)
 #endif
 			ts->coords[i].p_press = false;
 		} else if (ts->coords[i].press) {
-			if (ts->coords[i].p_status && (ts->coords[i].status != ts->coords[i].p_status)) {
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+			if (ts->coords[i].status != ts->coords[i].p_status) {
+#if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
 				input_info(true, &ts->client->dev,
-					"[C] tId:%d x:%d y:%d p:%d major:%d minor:%d tc:%d type:%X\n",
+					"[C] tId:%d x:%d y:%d p:%d major:%d minor:%d tc:%d ttype(%x->%x)\n",
 					i, ts->coords[i].x, ts->coords[i].y, ts->coords[i].palm,
 					ts->coords[i].w_major, ts->coords[i].w_minor,
-					ts->touch_count, ts->coords[i].status);
+					ts->touch_count, ts->coords[i].p_status, ts->coords[i].status);
 #else
 				input_info(true, &ts->client->dev,
-					"[C] tId:%d p:%d major:%d minor:%d tc:%d type:%X\n",
+					"[C] tId:%d p:%d major:%d minor:%d tc:%d ttype(%x->%x)\n",
 					i, ts->coords[i].palm, ts->coords[i].w_major, ts->coords[i].w_minor,
-					ts->touch_count, ts->coords[i].status);
+					ts->touch_count, ts->coords[i].p_status, ts->coords[i].status);
 #endif
 			}
 
@@ -977,7 +971,7 @@ static void nvt_ts_event_handler(struct nvt_ts_data *ts)
 	int ret;
 
 	if (ts->power_status == POWER_LPM_STATUS) {
-		wake_lock_timeout(&ts->wakelock, msecs_to_jiffies(500));
+		__pm_wakeup_event(ts->tsp_ws, jiffies_to_msecs(500));
 		ret = wait_for_completion_interruptible_timeout(&ts->resume_done, msecs_to_jiffies(500));
 		if (ret == 0) {
 			input_err(true, &ts->client->dev, "%s: LPM: pm resume is not handled\n", __func__);
@@ -1018,7 +1012,7 @@ static void nvt_ts_event_handler(struct nvt_ts_data *ts)
 
 		id = id - 1;
 		status = (point_data[position] & 0x07);
-		if ((status == FINGER_ENTER) || (status == FINGER_MOVING) || (status == GLOVE_TOUCH) || (status == PALM_TOUCH)) {
+		if ((status == FINGER_MOVING) || (status == GLOVE_TOUCH) || (status == PALM_TOUCH)) {
 			ts->coords[id].status = status;
 			press_id[id] = ts->coords[id].press = true;
 			x = ts->coords[id].x = (u16)(point_data[position + 1] << 4) + (u16)(point_data[position + 3] >> 4);
@@ -1044,6 +1038,10 @@ static void nvt_ts_event_handler(struct nvt_ts_data *ts)
 			// palm
 			palm = (status == PALM_TOUCH) ? 1 : 0;
 			ts->coords[id].palm = palm;
+			if (ts->coords[id].palm)
+				ts->palm_flag |= (1 << id);
+			else
+				ts->palm_flag &= ~(1 << id);
 
 			// pressure
 			if (i < 2) {
@@ -1064,7 +1062,7 @@ static void nvt_ts_event_handler(struct nvt_ts_data *ts)
 			input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, y);
 			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, w_major);
 			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MINOR, w_minor);
-			input_report_abs(ts->input_dev, ABS_MT_CUSTOM, palm);
+			input_report_key(ts->input_dev, BTN_PALM, ts->palm_flag);
 			//input_report_abs(ts->input_dev, ABS_MT_PRESSURE, p);
 
 			finger_cnt++;
@@ -1078,7 +1076,8 @@ static void nvt_ts_event_handler(struct nvt_ts_data *ts)
 			input_mt_slot(ts->input_dev, i);
 			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
 			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MINOR, 0);
-			input_report_abs(ts->input_dev, ABS_MT_CUSTOM, 0);
+			ts->palm_flag &= ~(1 << i);
+			input_report_key(ts->input_dev, BTN_PALM, ts->palm_flag);
 			//input_report_abs(ts->input_dev, ABS_MT_PRESSURE, 0);
 			input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, false);
 		}
@@ -1103,7 +1102,7 @@ static irqreturn_t nvt_ts_irq_thread(int32_t irq, void *dev_id)
 {
 	struct nvt_ts_data *ts = (struct nvt_ts_data *)dev_id;
 
-#ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	if (IRQ_HANDLED == secure_filter_interrupt(ts)) {
 		wait_for_completion_interruptible_timeout(&ts->secure_interrupt,
 				msecs_to_jiffies(5 * MSEC_PER_SEC));
@@ -1263,6 +1262,31 @@ out:
 	return ret;
 }
 
+static int nvt_ts_input_early_open(struct input_dev *dev)
+{
+	struct nvt_ts_data *ts = input_get_drvdata(dev);
+
+	if (ts->power_status == POWER_ON_STATUS) {
+		input_dbg(true, &ts->client->dev, "%s: already power on\n", __func__);
+		return 0;
+	}
+
+	input_info(true, &ts->client->dev, "%s\n", __func__);
+
+	mutex_lock(&ts->lock);
+
+	if (ts->power_status == POWER_LPM_STATUS && device_may_wakeup(&ts->client->dev)) {
+		disable_irq_wake(ts->client->irq);
+		nvt_interrupt_set(ts, INT_DISABLE);
+		if (ts->platdata->enable_settings_aot) {
+			nvt_ts_lcd_reset_ctrl(ts, false);
+		}
+	}
+
+	mutex_unlock(&ts->lock);
+	return 0;
+}
+
 static int nvt_ts_input_open(struct input_dev *dev)
 {
 	struct nvt_ts_data *ts = input_get_drvdata(dev);
@@ -1274,16 +1298,17 @@ static int nvt_ts_input_open(struct input_dev *dev)
 
 	input_info(true, &ts->client->dev, "%s\n", __func__);
 
-#if defined(CONFIG_INPUT_SEC_SECURE_TOUCH)
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	secure_touch_stop(ts, 0);
 #endif
 
 	mutex_lock(&ts->lock);
 
-	if (ts->power_status == POWER_OFF_STATUS)
-		nvt_interrupt_set(ts, INT_ENABLE);
-	else if (ts->power_status == POWER_LPM_STATUS && device_may_wakeup(&ts->client->dev))
-		disable_irq_wake(ts->client->irq);
+	nvt_interrupt_set(ts, INT_ENABLE);
+
+	if (ts->power_status == POWER_LPM_STATUS && device_may_wakeup(&ts->client->dev)) {
+		nvt_ts_lcd_power_ctrl(ts, false);
+	}
 
 	ts->power_status = POWER_ON_STATUS;
 
@@ -1306,22 +1331,30 @@ static int nvt_ts_input_open(struct input_dev *dev)
 
 	return 0;
 }
-
-#if defined(CONFIG_SEC_FACTORY)
+/*
+#if IS_ENABLED(CONFIG_SEC_FACTORY)
 extern int ub_con_det_status(int index);
 #endif
-
-static int nvt_ts_open(struct nvt_ts_data *ts)
+*/
+int nvt_ts_early_open(struct nvt_ts_data *ts)
 {
 	input_dbg(false, &ts->client->dev, "%s\n", __func__);
 
-#if defined(CONFIG_SEC_FACTORY)
+	nvt_ts_input_early_open(ts->input_dev);
+
+	return 0;
+}
+int nvt_ts_open(struct nvt_ts_data *ts)
+{
+	input_dbg(false, &ts->client->dev, "%s\n", __func__);
+/*
+#if IS_ENABLED(CONFIG_SEC_FACTORY)
 	if (ub_con_det_status(0)) {
 		input_info(true, &ts->client->dev, "%s: lcd is not attached\n", __func__);
 		return 0;
 	}
 #endif
-
+*/
 	nvt_ts_input_open(ts->input_dev);
 
 	return 0;
@@ -1329,11 +1362,11 @@ static int nvt_ts_open(struct nvt_ts_data *ts)
 
 static void nvt_ts_set_utc_sponge(struct nvt_ts_data *ts)
 {
-	struct timeval current_time;
+	struct timespec64 current_time;
 	int ret;
 	u8 data[4] = { 0, };
 
-	do_gettimeofday(&current_time);
+	ktime_get_real_ts64(&current_time);
 	data[0] = (0xFF & (u8)((current_time.tv_sec) >> 0));
 	data[1] = (0xFF & (u8)((current_time.tv_sec) >> 8));
 	data[2] = (0xFF & (u8)((current_time.tv_sec) >> 16));
@@ -1345,19 +1378,19 @@ static void nvt_ts_set_utc_sponge(struct nvt_ts_data *ts)
 		input_err(true, &ts->client->dev, "%s: Failed to write sponge\n", __func__);
 }
 
-static void nvt_ts_close(struct nvt_ts_data *ts)
+void nvt_ts_close(struct nvt_ts_data *ts)
 {
 	u16 mode;
 	char buf[2];
 	int ret;
-
-#if defined(CONFIG_SEC_FACTORY)
+/*
+#if IS_ENABLED(CONFIG_SEC_FACTORY)
 	if (ub_con_det_status(0)) {
 		input_info(true, &ts->client->dev, "%s: lcd is not attached\n", __func__);
 		return ;
 	}
 #endif
-
+*/
 	if (!ts->lowpower_mode && ts->power_status == POWER_OFF_STATUS) {
 		input_err(true, &ts->client->dev, "%s: already power off\n", __func__);
 		return;
@@ -1369,10 +1402,10 @@ static void nvt_ts_close(struct nvt_ts_data *ts)
 	cancel_delayed_work(&ts->work_print_info);
 	nvt_ts_print_info(ts);
 
-#if defined(CONFIG_INPUT_SEC_SECURE_TOUCH)
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	secure_touch_stop(ts, 1);
 #endif
-#ifdef CONFIG_SAMSUNG_TUI
+#if IS_ENABLED(CONFIG_SAMSUNG_TUI)
 	stui_cancel_session();
 #endif
 	if (ts->lowpower_mode) {
@@ -1394,6 +1427,10 @@ static void nvt_ts_close(struct nvt_ts_data *ts)
 	}
 
 	if (ts->lowpower_mode) {
+		if (ts->platdata->enable_settings_aot) {
+			nvt_ts_lcd_power_ctrl(ts, true);
+			nvt_ts_lcd_reset_ctrl(ts, true);
+		}
 		//---write command to enter "wakeup gesture mode"---
 		buf[0] = EVENT_MAP_HOST_CMD;
 		buf[1] = NVT_CMD_GESTURE_MODE;
@@ -1451,8 +1488,7 @@ static void nvt_ts_set_input_value(struct nvt_ts_data *ts, struct input_dev *inp
 	input_set_abs_params(input_dev, ABS_MT_TOUCH_MINOR, 0, TOUCH_MAX_AREA_NUM, 0, 0);
 	//input_set_abs_params(input_dev, ABS_MT_PRESSURE, 0, TOUCH_MAX_PRESSURE_NUM, 0, 0);
 
-	input_set_abs_params(input_dev, ABS_MT_CUSTOM, 0, 1, 0, 0);
-
+	input_set_capability(input_dev, EV_KEY, BTN_PALM);
 	input_set_capability(input_dev, EV_KEY, BTN_TOUCH);
 	input_set_capability(input_dev, EV_KEY, BTN_TOOL_FINGER);
 
@@ -1463,50 +1499,6 @@ static void nvt_ts_set_input_value(struct nvt_ts_data *ts, struct input_dev *inp
 
 	input_set_drvdata(input_dev, ts);
 }
-
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-static int drm_notifier_callback(struct notifier_block *nb, unsigned long event, void *data)
-{
-	int *blank;
-	struct nvt_ts_data *ts = container_of(nb, struct nvt_ts_data, drm_notif);
-
-	if (event != FB_EVENT_BLANK)
-		return 0;
-
-	blank = data;
-	input_dbg(true, &ts->client->dev, "%s: 0x%02X\n", __func__, *blank);
-
-	if (*blank == FB_BLANK_POWERDOWN)
-		nvt_ts_close(ts);
-	else if (*blank == FB_BLANK_UNBLANK)
-		nvt_ts_open(ts);
-
-	return NOTIFY_OK;
-}
-#endif
-
-#if defined(CONFIG_FB)
-static int fb_notifier_cb(struct notifier_block *nb, unsigned long event, void *data)
-{
-	struct nvt_ts_data *ts = container_of(nb, struct nvt_ts_data, fb_nb);
-	struct fb_event *evdata = data;
-	int *blank;
-
-	if (!evdata || !evdata->data)
-		return 0;
-
-	blank = evdata->data;
-	if (event == FB_EARLY_EVENT_BLANK) {
-		if (*blank == FB_BLANK_POWERDOWN)
-			nvt_ts_close(ts);
-	} else if (event == FB_EVENT_BLANK) {
-		if (*blank == FB_BLANK_UNBLANK)
-			nvt_ts_open(ts);
-	}
-
-	return 0;
-}
-#endif
 
 static void nvt_ts_print_info_work(struct work_struct *work)
 {
@@ -1543,32 +1535,31 @@ static int nvt_ts_gpio_config(struct device *dev, struct nvt_ts_platdata *platda
 	return 0;
 }
 
-#ifdef CONFIG_OF
+#if IS_ENABLED(CONFIG_OF)
 static struct nvt_ts_platdata *nvt_ts_parse_dt(struct device *dev)
 {
 	struct nvt_ts_platdata *platdata;
 	struct device_node *np = dev->of_node;
 	int tmp[3];
 	int ret;
-#if !defined(CONFIG_EXYNOS_DPU20)
+	int count = 0, i = 0;
+#if !IS_ENABLED(CONFIG_EXYNOS_DPU20)
 	int lcdtype = 0;
 #endif
-#if defined(CONFIG_EXYNOS_DECON_FB)
+#if IS_ENABLED(CONFIG_EXYNOS_DECON_FB)
 	int connected;
 #endif
 
 	if (!np)
 		return ERR_PTR(-ENODEV);
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	lcdtype = get_lcd_attached("GET");
-	if (lcdtype == 0xFFFFFF) {
+	lcdtype = sec_input_get_lcd_id(dev);
+	if (lcdtype < 0) {
 		input_err(true, dev, "lcd is not attached\n");
 		return ERR_PTR(-ENODEV);
 	}
-#endif
 
-#if defined(CONFIG_EXYNOS_DECON_FB)
+#if IS_ENABLED(CONFIG_EXYNOS_DECON_FB)
 	connected = get_lcd_info("connected");
 	if (connected < 0) {
 		input_err(true, dev, "failed to get lcd connected info\n");
@@ -1587,7 +1578,7 @@ static struct nvt_ts_platdata *nvt_ts_parse_dt(struct device *dev)
 	}
 #endif
 
-#if defined(CONFIG_EXYNOS_DPU20)
+#if IS_ENABLED(CONFIG_EXYNOS_DPU20)
 	if (lcdtype == 0) {
 		input_err(true, dev, "lcd is not attached\n");
 		return ERR_PTR(-ENODEV);
@@ -1607,9 +1598,52 @@ static struct nvt_ts_platdata *nvt_ts_parse_dt(struct device *dev)
 		platdata->irq_flags = IRQF_TRIGGER_LOW | IRQF_ONESHOT;
 	}
 
-	ret = of_property_read_string(np, "novatek,firmware_name", &platdata->firmware_name);
-	if (ret)
+	if (of_property_read_u32(np, "novatek,bringup", &platdata->bringup) < 0)
+		platdata->bringup = 0;
+	platdata->check_fw_project_id = of_property_read_bool(np, "check_fw_project_id");
+
+	input_info(true, dev, "bringup:%d, check_fw_project_id: %d\n",
+		platdata->bringup, platdata->check_fw_project_id);
+
+	count = of_property_count_strings(np, "novatek,firmware_name");
+	if (count <= 0) {
 		platdata->firmware_name = NULL;
+	} else {
+		u8 lcd_id_num = of_property_count_u32_elems(np, "novatek,lcdtype");
+
+		if ((lcd_id_num != count) || (lcd_id_num <= 0)) {
+			of_property_read_string_index(np, "novatek,firmware_name", 0, &platdata->firmware_name);
+		} else {
+			u32 *lcd_id_t;
+
+			lcd_id_t = kcalloc(lcd_id_num, sizeof(u32), GFP_KERNEL);
+			if  (!lcd_id_t)
+				return ERR_PTR(-ENOMEM);
+
+			of_property_read_u32_array(np, "novatek,lcdtype", lcd_id_t, lcd_id_num);
+
+			for (i = 0; i < lcd_id_num; i++) {
+				if (lcd_id_t[i] == lcdtype) {
+					of_property_read_string_index(np, "novatek,firmware_name", i, &platdata->firmware_name);
+					break;
+				}
+			}
+
+			if (!platdata->firmware_name)
+				platdata->bringup = 1;
+
+			else if (strlen(platdata->firmware_name) == 0)
+				platdata->bringup = 1;
+
+			input_info(true, dev, "%s: count: %d, index:%d, lcd_id: 0x%X, firmware: %s\n",
+						__func__, count, i, lcd_id_t[i], platdata->firmware_name);
+
+			kfree(lcd_id_t);
+		}
+
+		if (platdata->bringup == 4)
+			platdata->bringup = 3;
+	}
 
 	ret = of_property_read_u32_array(np, "novatek,resolution", tmp, 2);
 	if (!ret) {
@@ -1636,15 +1670,11 @@ static struct nvt_ts_platdata *nvt_ts_parse_dt(struct device *dev)
 		platdata->area_edge = tmp[2];
 	}
 
-	platdata->support_dex = of_property_read_bool(np, "support_dex_mode");
-	platdata->enable_settings_aot = of_property_read_bool(np, "enable_settings_aot");
+	platdata->support_dex = of_property_read_bool(np, "novatek,support_dex_mode");
+	platdata->enable_settings_aot = of_property_read_bool(np, "novatek,enable_settings_aot");
 	platdata->scanoff_cover_close = of_property_read_bool(np, "novatek,scanoff_when_cover_closed");
+	platdata->enable_sysinput_enabled = of_property_read_bool(np, "novatek,enable_sysinput_enabled");
 	platdata->enable_glove_mode = of_property_read_bool(np, "novatek,enable_glove_mode");
-	platdata->enable_sysinput_enabled = of_property_read_bool(np, "enable_sysinput_enabled");
-
-	if (of_property_read_u32(np, "novatek,bringup", &platdata->bringup) < 0)
-		platdata->bringup = 0;
-	platdata->check_fw_project_id = of_property_read_bool(np, "check_fw_project_id");
 
 	input_info(true, dev, "zone's size - indicator:%d, navigation:%d, edge:%d\n",
 		platdata->area_indicator, platdata->area_navigation, platdata->area_edge);
@@ -1652,6 +1682,23 @@ static struct nvt_ts_platdata *nvt_ts_parse_dt(struct device *dev)
 	input_info(true, dev, "bringup:%d, resolution: (%d, %d), firware_name: %s\n",
 		platdata->bringup, platdata->abs_x_max, platdata->abs_y_max,
 		platdata->firmware_name);
+
+	if (platdata->enable_settings_aot) {
+		if (of_property_read_string(np, "novatek,regulator_panel_ldo_en", &platdata->regulator_panel_ldo_en)) {
+			input_err(true, dev, "%s: Failed to get regulator_panel_ldo_en name property\n", __func__);
+			return ERR_PTR(-EINVAL);
+		}
+
+		if (of_property_read_string(np, "novatek,regulator_panel_buck_en", &platdata->regulator_panel_buck_en)) {
+			input_err(true, dev, "%s: Failed to get regulator_panel_buck_en name property\n", __func__);
+			return ERR_PTR(-EINVAL);
+		}
+
+		if (of_property_read_string(np, "novatek,regulator_panel_reset", &platdata->regulator_panel_reset)) {
+			input_err(true, dev, "%s: Failed to get regulator_panel_reset name property\n", __func__);
+			return ERR_PTR(-EINVAL);
+		}
+	}
 
 	return platdata;
 }
@@ -1663,6 +1710,31 @@ static struct nvt_ts_platdata *nvt_ts_parse_dt(struct device *dev)
 	return ERR_PTR(-EINVAL);
 }
 #endif
+
+static int nvt_regulator_init(struct nvt_ts_data *ts)
+{
+	ts->regulator_panel_ldo_en = regulator_get(NULL, ts->platdata->regulator_panel_ldo_en);
+	if (IS_ERR(ts->regulator_panel_ldo_en)) {
+		input_err(true, &ts->client->dev, "%s: Failed to get %s regulator.\n",
+			 __func__, "panel_ldo_en");
+		return PTR_ERR(ts->regulator_panel_ldo_en);
+	}
+
+	ts->regulator_panel_buck_en = regulator_get(NULL, ts->platdata->regulator_panel_buck_en);
+	if (IS_ERR(ts->regulator_panel_buck_en)) {
+		input_err(true, &ts->client->dev, "%s: Failed to get %s regulator.\n",
+			 __func__, "panel_buck_en");
+		return PTR_ERR(ts->regulator_panel_buck_en);
+	}
+	
+	ts->regulator_panel_reset = regulator_get(NULL, ts->platdata->regulator_panel_reset);
+	if (IS_ERR(ts->regulator_panel_reset)) {
+		input_err(true, &ts->client->dev, "%s: Failed to get %s regulator.\n",
+			 __func__, "panel_reset");
+		return PTR_ERR(ts->regulator_panel_reset);
+	}
+	return 0;
+}
 
 int nvt_ts_read_from_sponge(struct nvt_ts_data *ts, u8 *data, int addr_offset, int len)
 {
@@ -1751,6 +1823,28 @@ int nvt_ts_write_to_sponge(struct nvt_ts_data *ts, u8 *data, int addr_offset, in
 	return ret;
 }
 
+
+#if IS_ENABLED(CONFIG_INPUT_SEC_NOTIFIER)
+static int nvt_ts_input_notify_call(struct notifier_block *n, unsigned long data, void *v)
+{
+	struct nvt_ts_data *ts = container_of(n, struct nvt_ts_data, nvt_input_nb);
+	int ret = 0;
+
+	switch (data) {
+	case NOTIFIER_WACOM_PEN_HOVER_IN:
+		ret = nvt_ts_set_spen_mode(ts, SPEN_MODE_ENABLE);
+		input_info(true, &ts->client->dev, "%s: pen hover in detect, ret=%d\n", __func__, ret);
+		break;
+	case NOTIFIER_WACOM_PEN_HOVER_OUT:
+		ret = nvt_ts_set_spen_mode(ts, SPEN_MODE_DISABLE);
+		input_info(true, &ts->client->dev, "%s: pen hover out detect, ret=%d\n", __func__, ret);
+		break;
+	default:
+		break;
+	}
+	return ret;
+}
+#endif
 static int nvt_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	struct nvt_ts_data *ts;
@@ -1795,8 +1889,7 @@ static int nvt_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 	mutex_init(&ts->lock);
 	mutex_init(&ts->i2c_mutex);
 	mutex_init(&ts->irq_mutex);
-
-	wake_lock_init(&ts->wakelock, WAKE_LOCK_SUSPEND, "tsp_wakelock");
+	ts->tsp_ws = wakeup_source_register(&ts->client->dev, "tsp_wakelock");
 
 	init_completion(&ts->resume_done);
 	complete_all(&ts->resume_done);
@@ -1860,31 +1953,13 @@ static int nvt_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 		goto err_regi_irq;
 	}
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	ts->drm_notif.notifier_call = drm_notifier_callback;
-	ret = msm_drm_register_notifier_client(&ts->drm_notif);
-	if (ret) {
-		input_err(true, &client->dev, "failed to register msm drm notifier ret=%d\n", ret);
-		goto err_regi_drm_notif;
-	}
-#endif
-
-#if defined(CONFIG_FB)
-	ts->fb_nb.notifier_call = fb_notifier_cb;
-	ret = fb_register_client(&ts->fb_nb);
-	if (ret) {
-		input_err(true, &client->dev, "failed to register fb notifier ret=%d\n", ret);
-		goto err_regi_fb_notif;
-	}
-#endif
-
 	ret = nvt_ts_sec_fn_init(ts);
 	if (ret) {
 		input_err(true, &client->dev, "failed to init for factory function\n");
 		goto err_init_sec_fn;
 	}
 
-#ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
+#if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	ts->ss_touch_num = 1;
 	if (sysfs_create_group(&ts->input_dev->dev.kobj, &secure_attr_group) >= 0)
 		sec_secure_touch_register(ts, ts->ss_touch_num, &ts->input_dev->dev.kobj);
@@ -1894,16 +1969,16 @@ static int nvt_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 	secure_touch_init(ts);
 #endif
 
-#ifdef CONFIG_SAMSUNG_TUI
+#if IS_ENABLED(CONFIG_SAMSUNG_TUI)
 	tsp_info = ts;
 #endif
 
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+#if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
 	nvt_ts_flash_proc_init(ts);
 #endif
 	device_init_wakeup(&client->dev, true);
-
-#ifdef CONFIG_BATTERY_SAMSUNG
+/*
+#if IS_ENABLED(CONFIG_BATTERY_SAMSUNG)
 	if (lpcharge) {
 		input_info(true, &client->dev, "%s: enter sleep mode in lpcharge %d\n",
 				__func__, lpcharge);
@@ -1914,27 +1989,29 @@ static int nvt_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 #else
 	schedule_delayed_work(&ts->work_read_info, msecs_to_jiffies(50));
 #endif
+*/
+
+#if IS_ENABLED(CONFIG_INPUT_SEC_NOTIFIER)
+	sec_input_register_notify(&ts->nvt_input_nb, nvt_ts_input_notify_call, 1);
+#endif
+
+	schedule_delayed_work(&ts->work_read_info, msecs_to_jiffies(50));
 
 	input_err(true, &client->dev, "initialization is done\n");
 
 	input_log_fix();
+	if (platdata->enable_settings_aot) {
+		nvt_regulator_init(ts);
+	}
 
 	return 0;
 
 err_init_sec_fn:
-#if defined(CONFIG_FB)
-	fb_unregister_client(&ts->fb_nb);
-err_regi_fb_notif:
-#endif
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	msm_drm_unregister_notifier_client(&ts->drm_notif);
-err_regi_drm_notif:
-#endif
 err_regi_irq:
 err_input_regi_dev:
 err_fw_update:
 err_check_trim:
-	wake_lock_destroy(&ts->wakelock);
+	wakeup_source_unregister(ts->tsp_ws);
 	mutex_destroy(&ts->lock);
 	mutex_destroy(&ts->i2c_mutex);
 	mutex_destroy(&ts->irq_mutex);
@@ -1946,7 +2023,7 @@ err_check_trim:
 	return ret;
 }
 
-#ifdef CONFIG_PM
+#if IS_ENABLED(CONFIG_PM)
 static int nvt_ts_suspend(struct device *dev)
 {
 	struct nvt_ts_data *ts = dev_get_drvdata(dev);
@@ -1970,20 +2047,17 @@ static void nvt_ts_shutdown(struct i2c_client *client)
 {
 	struct nvt_ts_data *ts = i2c_get_clientdata(client);
 
-#if defined(CONFIG_FB)
-	fb_unregister_client(&ts->fb_nb);
-#endif
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	msm_drm_unregister_notifier_client(&ts->drm_notif);
-#endif
-
 	if (client->irq)
 		free_irq(client->irq, ts);
+
+#if IS_ENABLED(CONFIG_INPUT_SEC_NOTIFIER)
+	sec_input_unregister_notify(&ts->nvt_input_nb);
+#endif
 
 	cancel_delayed_work_sync(&ts->work_read_info);
 	cancel_delayed_work_sync(&ts->work_print_info);
 
-	wake_lock_destroy(&ts->wakelock);
+	wakeup_source_unregister(ts->tsp_ws);
 	mutex_destroy(&ts->lock);
 	mutex_destroy(&ts->i2c_mutex);
 	mutex_destroy(&ts->irq_mutex);
@@ -1994,17 +2068,15 @@ static void nvt_ts_shutdown(struct i2c_client *client)
 static int nvt_ts_remove(struct i2c_client *client)
 {
 	struct nvt_ts_data *ts = i2c_get_clientdata(client);
-#if defined(CONFIG_FB)
-	fb_unregister_client(&ts->fb_nb);
-#endif
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	msm_drm_unregister_notifier_client(&ts->drm_notif);
+
+#if IS_ENABLED(CONFIG_INPUT_SEC_NOTIFIER)
+	sec_input_unregister_notify(&ts->nvt_input_nb);
 #endif
 
 	cancel_delayed_work_sync(&ts->work_read_info);
 	cancel_delayed_work_sync(&ts->work_print_info);
 
-	wake_lock_destroy(&ts->wakelock);
+	wakeup_source_unregister(ts->tsp_ws);
 	mutex_destroy(&ts->lock);
 	mutex_destroy(&ts->i2c_mutex);
 	mutex_destroy(&ts->irq_mutex);
@@ -2014,7 +2086,67 @@ static int nvt_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_SAMSUNG_TUI
+int nvt_ts_lcd_reset_ctrl(struct nvt_ts_data *ts, bool on)
+{
+	int retval;
+	static bool enabled;
+
+	if (enabled == on)
+		return 0;
+
+	if (on) {
+		retval = regulator_enable(ts->regulator_panel_reset);
+		if (retval) {
+			input_err(true, &ts->client->dev, "%s: Failed to enable regulator_panel_reset: %d\n", __func__, retval);
+			return retval;
+		}
+
+	} else {
+		regulator_disable(ts->regulator_panel_reset);
+	}
+
+	enabled = on;
+
+	input_info(true, &ts->client->dev, "%s %d done\n", __func__, on);
+
+	return 0;
+}
+
+int nvt_ts_lcd_power_ctrl(struct nvt_ts_data *ts, bool on)
+{
+	int retval;
+	static bool enabled;
+
+	if (enabled == on)
+		return 0;
+
+	if (on) {
+		retval = regulator_enable(ts->regulator_panel_ldo_en);
+		if (retval) {
+			input_err(true, &ts->client->dev, "%s: Failed to enable regulator_vdd: %d\n", __func__, retval);
+			return retval;
+		}
+
+		retval = regulator_enable(ts->regulator_panel_buck_en);
+		if (retval) {
+			input_err(true, &ts->client->dev, "%s: Failed to enable regulator_lcd_bl_en: %d\n", __func__, retval);
+			return retval;
+		}
+	} else {
+		regulator_disable(ts->regulator_panel_buck_en);
+		regulator_disable(ts->regulator_panel_ldo_en);
+	}
+
+	enabled = on;
+
+	input_info(true, &ts->client->dev, "%s %d done\n", __func__, on);
+
+	return 0;
+}
+
+
+
+#if IS_ENABLED(ONFIG_SAMSUNG_TUI)
 extern int stui_i2c_lock(struct i2c_adapter *adap);
 extern int stui_i2c_unlock(struct i2c_adapter *adap);
 
@@ -2059,7 +2191,7 @@ static const struct i2c_device_id nvt_ts_id[] = {
 	{ }
 };
 
-#ifdef CONFIG_OF
+#if IS_ENABLED(CONFIG_OF)
 static struct of_device_id nvt_match_table[] = {
 	{ .compatible = "novatek,nvt-ts",},
 	{ },
@@ -2070,7 +2202,7 @@ static struct i2c_driver nvt_i2c_driver = {
 	.driver = {
 		.name	= NVT_I2C_NAME,
 		.owner	= THIS_MODULE,
-#ifdef CONFIG_PM
+#if IS_ENABLED(CONFIG_PM)
 		.pm = &nvt_ts_dev_pm_ops,
 #endif
 		.of_match_table = of_match_ptr(nvt_match_table),
@@ -2097,7 +2229,7 @@ static void __exit nvt_ts_driver_exit(void)
 	i2c_del_driver(&nvt_i2c_driver);
 }
 
-late_initcall_sync(nvt_ts_driver_init);
+module_init(nvt_ts_driver_init);
 module_exit(nvt_ts_driver_exit);
 
 MODULE_DESCRIPTION("Novatek Touchscreen Driver");
