@@ -1749,11 +1749,12 @@ static bool upgrade_fw_full_download(struct zt_ts_info *info, const u8 *firmware
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_ZINITIX_ZT7650)
 	unsigned short int erase_info[2];
 #endif
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_ZINITIX_ZT7650M)
 	// change erase/program time
 	u32	icNvmDelayRegister = 0x001E002C;
 	u32	icNvmDelayTime = 0x00004FC2;
 	u8 cData[8];
-
+#endif
 	nmemsz = info->fw_info_size + info->fw_core_size + info->fw_cust_size + info->fw_regi_size;
 	if (nmemsz % nrdsectorsize > 0)
 		nmemsz = (nmemsz / nrdsectorsize) * nrdsectorsize + nrdsectorsize;
@@ -2929,7 +2930,7 @@ static int  zt_ts_open(struct device *dev)
 
 	input_info(true, &info->client->dev, "%s, %d \n", __func__, __LINE__);
 
-	atomic_set(&info->plat_data->enabled, 1);
+	info->plat_data->enabled = true;
 
 #if 0 //IS_ENABLED(CONFIG_TRUSTONIC_TRUSTED_UI)
 	sec_delay(100);
@@ -3027,7 +3028,7 @@ static int zt_ts_close(struct device *dev)
 			info->aot_enable, info->singletap_enable, info->plat_data->prox_power_off,
 			info->plat_data->pocket_mode, info->plat_data->ed_enable);
 
-	atomic_set(&info->plat_data->enabled, 0);
+	info->plat_data->enabled = false;
 
 #if 0 //IS_ENABLED(CONFIG_TRUSTONIC_TRUSTED_UI)
 	sec_delay(100);
@@ -8228,8 +8229,8 @@ static int init_sec_factory(struct zt_ts_info *info)
 		goto err_alloc;
 	}
 
-	ret = sec_cmd_init(&info->sec, &info->client->dev, sec_cmds,
-			ARRAY_SIZE(sec_cmds), SEC_CLASS_DEVT_TSP, &touchscreen_attr_group);
+	ret = sec_cmd_init(&info->sec, sec_cmds,
+			ARRAY_SIZE(sec_cmds), SEC_CLASS_DEVT_TSP);
 	if (ret < 0) {
 		input_err(true, &info->client->dev,
 				"%s: Failed to sec_cmd_init\n", __func__);
@@ -8907,7 +8908,7 @@ static void zt_run_rawdata(struct zt_ts_info *info)
 }
 
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_DUMP_MODE)
-#include "../../../sec_input/sec_tsp_dumpkey.h"
+#include "../../../sec_input_v2/sec_tsp_dumpkey.h"
 static struct delayed_work *p_ghost_check;
 
 static void zt_check_rawdata(struct work_struct *work)
@@ -9460,7 +9461,7 @@ static int zt_ts_probe(struct i2c_client *client,
 		sec_secure_touch_register(info, &info->client->dev, info->pdata->ss_touch_num, &info->input_dev->dev.kobj);
 #endif
 
-	atomic_set(&info->plat_data->enabled, 1);
+	info->plat_data->enabled = true;
 
 	input_log_fix();
 	return 0;

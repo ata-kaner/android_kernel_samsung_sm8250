@@ -27,7 +27,7 @@
 #endif
 
 #include <linux/mutex.h>
-#include <../../../sec_input/sec_input.h>
+#include <../../../sec_input_v2/sec_input.h>
 #include <linux/firmware.h>
 
 #include "nt36xxx_mem_map.h"

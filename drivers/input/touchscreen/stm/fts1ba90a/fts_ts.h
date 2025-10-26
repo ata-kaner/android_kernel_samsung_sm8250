@@ -28,7 +28,7 @@
 #include <linux/of_gpio.h>
 #include <linux/input/mt.h>
 
-#include "../../../sec_input/sec_input.h"
+#include "../../../sec_input_v2/sec_input.h"
 
 #if IS_ENABLED(CONFIG_SPU_VERIFY)
 #include <linux/spu-verify.h>
@@ -38,7 +38,7 @@
 #if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 #include <linux/pm_runtime.h>
 #include <linux/atomic.h>
-#include "../../../sec_input/sec_secure_touch.h"
+#include "../../../sec_input_v2/sec_secure_touch.h"
 #endif
 
 #if IS_ENABLED(CONFIG_VBUS_NOTIFIER)
@@ -48,7 +48,7 @@
 #define USE_OPEN_CLOSE
 
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_DUMP_MODE)
-#include "../../../sec_input/sec_tsp_dumpkey.h"
+#include "../../../sec_input_v2/sec_tsp_dumpkey.h"
 extern struct tsp_dump_callbacks dump_callbacks;
 #endif
 

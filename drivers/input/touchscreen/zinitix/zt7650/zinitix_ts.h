@@ -26,8 +26,8 @@
 #include <linux/cpuidle.h>
 #endif
 #if IS_ENABLED(CONFIG_VBUS_NOTIFIER)
-#include <linux/muic/common/muic.h>
-#include <linux/muic/common/muic_notifier.h>
+#include <linux/muic/muic.h>
+#include <linux/muic/muic_notifier.h>
 #endif
 #if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
 #include <linux/completion.h>
@@ -42,7 +42,7 @@
 #include <linux/input/stui_inf.h>
 #endif
 #if IS_ENABLED(CONFIG_INPUT_SEC_SECURE_TOUCH)
-#include "../../../sec_input/sec_secure_touch.h"
+#include "../../../sec_input_v2/sec_secure_touch.h"
 #endif
 
 //#define SPU_FW_SIGNED
@@ -50,7 +50,7 @@
 #include <linux/spu-verify.h>
 #endif
 
-#include "../../../sec_input/sec_input.h"
+#include "../../../sec_input_v2/sec_input.h"
 
 #define ZINITIX_REG_ADDR_LENGTH	2
 
@@ -66,7 +66,7 @@
 #endif
 
 #if IS_ENABLED(CONFIG_INPUT_TOUCHSCREEN_TCLMV2)
-#include "../../../sec_input/sec_tclm_v2.h"
+#include "../../../sec_input_v2/sec_tclm_v2.h"
 #define TCLM_CONCEPT
 #endif
 
@@ -257,7 +257,7 @@
 
 #define VCMD_UPGRADE_PART_ERASE_START			0x01DA
 
-#if IS_ENABLED(CONFIG_TOUCHSCREEN_ZINITIX_ZT7650M)
+#if defined(CONFIG_TOUCHSCREEN_ZINITIX_ZT7650) || defined(CONFIG_TOUCHSCREEN_ZINITIX_ZT7650M)
 #define VCMD_UPGRADE_INIT_FLASH				0x20F0
 #define VCMD_UPGRADE_WRITE_FLASH			0x21F0
 #define VCMD_UPGRADE_READ_FLASH				0x22F0
