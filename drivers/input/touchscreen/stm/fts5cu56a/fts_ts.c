@@ -92,38 +92,6 @@ static int fts_resume(struct i2c_client *client);
 #endif
 int fts_systemreset(struct fts_ts_info *info, unsigned int msec);
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-static int fts_panel_state_notifier(struct notifier_block *nb,
-	unsigned long val, void *data)
-{
-    struct panel_state_data *evdata = (struct panel_state_data *)data;
-    struct fts_ts_info *info = container_of(nb, struct fts_ts_info, panel_notif);
-    unsigned int panel_state;
-
-    if (val != PANEL_EVENT_STATE_CHANGED)
-    	return 0;
-
-    if(evdata)
-    	panel_state = evdata->state;
-    else
-        return 0;
-
-    switch (panel_state) {
-    case PANEL_ON:
-        fts_set_lowpowermode(info, TO_TOUCH_MODE);
-        break;
-    case PANEL_OFF:
-    case PANEL_LPM:
-        fts_set_lowpowermode(info, TO_LOWPOWER_MODE);
-        break;
-    default:
-        break;
-    }
-
-	return NOTIFY_OK;
-}
-#endif
-
 #if defined(CONFIG_INPUT_SEC_SECURE_TOUCH)
 static irqreturn_t fts_filter_interrupt(struct fts_ts_info *info);
 
@@ -3237,10 +3205,6 @@ static int fts_probe(struct i2c_client *client, const struct i2c_device_id *idp)
 	info->ss_drv = sec_secure_touch_register(info, info->board->ss_touch_num, &info->input_dev->dev.kobj);
 #endif
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	info->panel_notif.notifier_call = fts_panel_state_notifier;
-	ss_panel_notifier_register(&info->panel_notif);
-#endif
 	info->psy = power_supply_get_by_name("battery");
 	if (!info->psy)
 		input_err(true, &info->client->dev, "%s: Cannot find power supply\n", __func__);
@@ -3277,9 +3241,6 @@ err_register_input_dev_proximity:
 		info->input_dev_pad = NULL;
 	}
 err_register_input_pad:
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	ss_panel_notifier_unregister(&info->panel_notif);
-#endif
 	input_unregister_device(info->input_dev);
 	info->input_dev = NULL;
 	info->input_dev_touch = NULL;
@@ -3384,9 +3345,6 @@ static int fts_remove(struct i2c_client *client)
 
 	info->input_dev = info->input_dev_touch;
 	input_mt_destroy_slots(info->input_dev);
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	ss_panel_notifier_unregister(&info->panel_notif);
-#endif
 	input_unregister_device(info->input_dev);
 	info->input_dev = NULL;
 	info->input_dev_touch = NULL;

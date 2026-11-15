@@ -30,10 +30,6 @@
 #include <linux/input/sec_secure_touch.h>
 #endif
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-#include "../../../../techpack/display/msm/samsung/ss_panel_notify.h"
-#endif
-
 #define FTS_SUPPORT_SPONGELIB
 #define USE_OPEN_CLOSE
 #define SEC_TSP_FACTORY_TEST
@@ -1012,10 +1008,6 @@ struct fts_ts_info {
 	int rawcap_min;
 	int rawcap_min_tx;
 	int rawcap_min_rx;
-
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	struct notifier_block panel_notif;
-#endif
 
 	int (*stop_device)(struct fts_ts_info *info);
 	int (*start_device)(struct fts_ts_info *info);
