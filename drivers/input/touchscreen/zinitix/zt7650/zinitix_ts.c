@@ -81,10 +81,6 @@ extern unsigned int lpcharge;
 #include "stui_inf.h"
 #endif
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-#include "../../../../techpack/display/msm/samsung/ss_panel_notify.h"
-#endif
-
 #define ZINITIX_DEBUG					0
 #define PDIFF_DEBUG					1
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
@@ -787,9 +783,6 @@ struct zt_ts_info {
 	bool tsp_pwr_enabled;
 #ifdef CONFIG_VBUS_NOTIFIER
 	struct notifier_block vbus_nb;
-#endif
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	struct notifier_block panel_notif;
 #endif
 	u8 cover_type;
 	bool flip_enable;
@@ -2367,38 +2360,6 @@ int tsp_vbus_notification(struct notifier_block *nb,
 #endif
 	zt_set_optional_mode(info, DEF_OPTIONAL_MODE_USB_DETECT_BIT, g_ta_connected);
 	return 0;
-}
-#endif
-
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-static int zt_panel_state_notify(struct notifier_block *nb,
-	unsigned long val, void *data)
-{
-    struct panel_state_data *evdata = (struct panel_state_data *)data;
-    struct zt_ts_info *info = container_of(nb, struct zt_ts_info, panel_notif);
-    unsigned int panel_state;
-
-    if (val != PANEL_EVENT_STATE_CHANGED)
-    	return 0;
-
-    if(evdata)
-    	panel_state = evdata->state;
-    else
-        return 0;
-
-    switch (panel_state) {
-    case PANEL_ON:
-        zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, 0);
-        break;
-    case PANEL_OFF:
-    case PANEL_LPM:
-        zt_set_lp_mode(info, ZT_SPONGE_MODE_PRESS, 1);
-        break;
-    default:
-        break;
-    }
-
-	return NOTIFY_OK;
 }
 #endif
 
@@ -10160,11 +10121,6 @@ static int zt_ts_probe(struct i2c_client *client,
 #endif
 	device_init_wakeup(&client->dev, true);
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	info->panel_notif.notifier_call = zt_panel_state_notify;
-	ss_panel_notifier_register(&info->panel_notif);
-#endif
-
 #ifdef CONFIG_TRUSTONIC_TRUSTED_UI
 	tui_tsp_info = info;
 #endif
@@ -10214,9 +10170,6 @@ err_input_proximity_register_device:
 		info->input_dev_pad = NULL;
 	}
 err_input_pad_register_device:
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	ss_panel_notifier_unregister(&info->panel_notif);
-#endif
 	input_unregister_device(info->input_dev);
 	info->input_dev = NULL;
 err_input_register_device:
@@ -10307,9 +10260,6 @@ static int zt_ts_remove(struct i2c_client *client)
 		input_unregister_device(info->input_dev_proximity);
 	}
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
-	ss_panel_notifier_unregister(&info->panel_notif);
-#endif
 	input_unregister_device(info->input_dev);
 	input_free_device(info->input_dev);
 	mutex_unlock(&info->work_lock);
