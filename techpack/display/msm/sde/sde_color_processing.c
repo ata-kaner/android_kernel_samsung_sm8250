@@ -1458,10 +1458,8 @@ static void sde_cp_crtc_setfeature(struct sde_cp_node *prop_node,
 			pcc_cfg = blob->data;
 			if (pcc_cfg->r.c == 0 && pcc_cfg->b.c == 0 && pcc_cfg->g.c == 0) {
 				cstate->color_invert_on = false;
-				if (cstate->fod_enabled) {
-					hw_cfg.payload = NULL;
-					hw_cfg.len = 0;
-				}
+				hw_cfg.payload = NULL;
+				hw_cfg.len = 0;
 			} else
 				cstate->color_invert_on = true;
 		}
@@ -1795,20 +1793,6 @@ void sde_cp_crtc_apply_properties(struct drm_crtc *crtc)
 
 	mutex_lock(&sde_crtc->crtc_cp_lock);
 
-	/* A FOD transition changes where PCC is applied, even if its blob is unchanged. */
-	if (sde_crtc->cp_fod_enabled != sde_crtc_is_fod_enabled(crtc->state)) {
-		list_for_each_entry(prop_node, &sde_crtc->feature_list,
-				feature_list) {
-			if (prop_node->feature != SDE_CP_CRTC_DSPP_PCC)
-				continue;
-			list_del_init(&prop_node->active_list);
-			if (list_empty(&prop_node->dirty_list))
-				list_add_tail(&prop_node->dirty_list,
-						&sde_crtc->dirty_list);
-			break;
-		}
-	}
-
 	if (list_empty(&sde_crtc->dirty_list) &&
 			list_empty(&sde_crtc->ad_dirty) &&
 			list_empty(&sde_crtc->ad_active) &&
@@ -1836,8 +1820,6 @@ void sde_cp_crtc_apply_properties(struct drm_crtc *crtc)
 		else
 			set_lm_flush = true;
 	}
-
-	sde_crtc->cp_fod_enabled = sde_crtc_is_fod_enabled(crtc->state);
 
 	if (!list_empty(&sde_crtc->ad_active)) {
 		sde_cp_ad_set_prop(sde_crtc, AD_IPC_RESET);

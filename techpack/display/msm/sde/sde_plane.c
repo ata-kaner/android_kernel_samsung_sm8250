@@ -3409,10 +3409,6 @@ static inline void _sde_plane_set_csc_pcc(struct sde_plane *psde,
 	const struct drm_msm_pcc *pcc_cfg = sde_cp_crtc_get_pcc_cfg(crtc);
 	struct sde_crtc_state *cstate = to_sde_crtc_state(crtc->state);
 
-	/* Only move display color correction into the planes during FOD. */
-	if (!cstate->fod_enabled)
-		pcc_cfg = NULL;
-
 	if (!pcc_cfg && psde->fod_dim_alpha)
 		pcc_cfg = &sde_identity_pcc_cfg;
 
