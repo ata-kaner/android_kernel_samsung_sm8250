@@ -855,42 +855,6 @@
 		>;
 
 		/*
-		 * FOD background dimming, estimated from the candela table:
-		 * alpha = 255 * (1 - pow(normal_cd / 500, 1 / 2.2)).
-		 * Fingerprint HBM clamps to 500 cd/m2. Above normal brightness,
-		 * dsi_panel_set_fod_hbm retains the current level: no dimming.
-		 */
-		samsung,fod-dim-lut = <
-			/* brightness, alpha */
-			0	0xEA
-			1	0xE6
-			2	0xE0
-			4	0xD8
-			6	0xD4
-			8	0xCE
-			12	0xC5
-			16	0xBE
-			24	0xB2
-			32	0xA8
-			48	0x97
-			64	0x88
-			80	0x7C
-			96	0x71
-			112	0x67
-			128	0x5E
-			144	0x52
-			160	0x47
-			176	0x3D
-			192	0x34
-			208	0x2B
-			224	0x23
-			240	0x1B
-			255	0x13
-			256	0x00
-			355	0x00
-		>;
-
-		/*
 		 * ************************************************************************************************************************
 		 *  FD Settings
 		 * ************************************************************************************************************************
