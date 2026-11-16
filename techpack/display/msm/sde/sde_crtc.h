@@ -442,7 +442,6 @@ struct sde_crtc_state {
 	struct sde_core_perf_params new_perf;
 	int secure_session;
 	bool color_invert_on;
-	bool fod_enabled;
 	u8 fod_dim_alpha;
 };
 
